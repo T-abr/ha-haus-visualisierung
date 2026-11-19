@@ -53,6 +53,7 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
     assert lay["links"][1]["embed"] is False
     assert ev["event"]["layout"] == lay
     assert lay["alerts"]["builtin"]["contacts"] is True and lay["alerts"]["rules"] == []
+    assert lay["show_trends"] is True  # 1.1.0: Verlauf auf Raumseiten, Standard an
 
     await client.send_json({"id": 4, "type": f"{DOMAIN}/save", "layout": {"alerts": {
         "builtin": {"battery": True, "contacts": "ja"}, "contacts_min": 999,
@@ -63,6 +64,14 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
     assert al["builtin"]["battery"] is True and al["builtin"]["contacts"] is True and al["contacts_min"] == 240
     assert len(al["rules"]) == 2 and al["rules"][0]["minutes"] == 0 and al["rules"][0]["level"] == "alarm"
     assert al["rules"][1]["op"] == "on" and al["rules"][1]["level"] == "warn" and al["rules"][1]["enabled"] is True
+
+    await client.send_json({"id": 5, "type": f"{DOMAIN}/save", "layout": {"show_trends": False, "floor_order": ["kg", "eg", 3]}})
+    got = [await client.receive_json(), await client.receive_json()]
+    lay5 = next(m for m in got if m["id"] == 5 and m["type"] == "result")["result"]["layout"]
+    assert lay5["show_trends"] is False and lay5["floor_order"] == ["kg", "eg"]
+    await client.send_json({"id": 6, "type": f"{DOMAIN}/save", "layout": {"show_trends": "nein"}})
+    got = [await client.receive_json(), await client.receive_json()]
+    assert next(m for m in got if m["id"] == 6 and m["type"] == "result")["result"]["layout"]["show_trends"] is True
 
     # Optionen ändern → Panel neu registriert
     result = await hass.config_entries.options.async_init(entry.entry_id)

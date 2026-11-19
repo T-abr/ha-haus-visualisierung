@@ -4,6 +4,37 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.1.0 – 2026-11-19
+
+### Neu – Verlauf auf Raumseiten
+- **Temperatur und Luftfeuchte der letzten 24 Stunden** als Verlaufskarte auf jeder Raumseite (Kompakt und Komfort), direkt unter dem Raumkopf. Beide Linien in einer Fläche, eigene Skalen links (°C) und rechts (%), Zeitachse mit 0, 6, 12 und 18 Uhr bis „jetzt“.
+- Legende mit aktuellem Wert und Tages-Spanne (min – max); Tipp auf die Legende öffnet die Details des Sensors.
+- Maus über dem Verlauf bzw. Antippen am Handy zeigt Uhrzeit, Temperatur und Feuchte an dieser Stelle (am Handy verschwindet die Anzeige nach 2,5 s).
+- Ausfälle (Sensor nicht erreichbar, Lücken über 1 Stunde) erscheinen als Lücke statt als gerade Linie. Ohne Recorder-Daten steht ein Hinweis statt einer leeren Fläche.
+- Daten aus dem Recorder: zuerst die 5-Minuten-Statistik (Sensoren mit `state_class`), sonst der Verlauf, auf 5 Minuten verdichtet. Neue Werte schreibt die Seite selbst fort.
+- Abschaltbar: Einstellungen → Darstellung → „Verlauf auf Raumseiten“ (neue Option `show_trends`, Standard an).
+
+### Neu – Einstellungen mit Reitern und Sortieren per Ziehen
+- **Reiter** Räume (Etagen & Bereiche, Favoriten) · Alarme (Hausmodus, Warnungen, Eskalation und Aktionen) · Meldungen (Push, Klingel) · Darstellung (Darstellung, Energie auf dem Dach, Verknüpfungen). Der zuletzt gewählte Reiter bleibt je Gerät; die Adresse `…/einstellungen/alarme` öffnet einen Reiter direkt.
+- Ein Punkt am Reiter zeigt ungespeicherte Änderungen. Der Entwurf gilt über alle Reiter, gespeichert wird weiter gemeinsam.
+- **Sortieren per Ziehen** am Griff: Etagen, Räume innerhalb ihrer Etage, Raum-Pins, Favoriten, Verknüpfungen (Reihenfolge in der Navigation) und Aktionen. Funktioniert mit Maus und Finger, die Seite scrollt am Rand mit. Pins und Favoriten zieht man am Chip selbst.
+- Etagen lassen sich innerhalb ihrer Gruppe ziehen: Geschosse, Keller, Außen. Der Hausschnitt zeigt Keller und Außen immer unten. Vorher sprang ein Keller, den man über das Erdgeschoss schob, beim Neuaufbau zurück.
+- Tastatur: Griff fokussieren, Pfeiltasten verschieben um eine Stelle.
+
+### Geändert
+- Die Pfeil-Knöpfe zum Verschieben von Etagen und Räumen entfallen (ersetzt durch Ziehen und Pfeiltasten).
+- Auswahllisten für Entitäten werden nur im Reiter gebaut, der sie braucht (weniger DOM auf der Einstellungsseite).
+
+### Tests
+- Bedienung: 41 neue Prüfungen (281 Prüfungen). Verlauf: Statistik vs. Verlauf, Fortschreiben ohne Abfrage und ohne Neuaufbau, Speicher beim Zurückblättern, Lücke bei „nicht erreichbar“, ohne Recorder, Zeiger mit Maus und Finger, abschaltbar. Einstellungen: Reiter per Adresse und gemerkt, Ziehen von Etagen, Pins, Favoriten, Verknüpfungen und Aktionen, Pfeiltasten mit Fokus, Räume nur innerhalb ihrer Etage, Entwurf über Reiter hinweg, Markierung ungespeicherter Reiter, alle Reiter bei 390 px ohne Überbreite.
+- Backend: Option `show_trends` wird geprüft und gespeichert (14 Backend-Tests).
+- Test-Harness: nachgebauter Recorder (`recorder/statistics_during_period`, `history/history_during_period`).
+
+### Performance
+- Panel unverändert: Übersicht 13–14 ms Aufbau, 0 Neuaufbauten, hass-Setter Ø 18–21 µs; Raumseite mit Verlauf 7,9 ms Aufbau, Ø 22 µs; Licht 34,5 ms, Ø 33 µs; Alarme 4,6 ms (großes Testhaus).
+- Verlauf: genau eine Recorder-Abfrage beim Öffnen einer Raumseite, ≈ 290 Punkte je Linie aus der 5-Minuten-Statistik. Danach keine Abfragen, auch nicht beim Blättern zwischen Räumen (Speicher 10 Min.). Eine Wertänderung samt Neuzeichnen kostet ≈ 0,5 ms (gemessen inklusive Test-Harness); fremde Sensoren lösen nichts aus.
+- Einstellungen: Aufbau 7–16 ms je Reiter statt 29,5 ms für die ganze Seite; 270–1290 statt 2550 Elemente (großes Testhaus).
+
 ## 1.0.0 – 2026-11-19
 
 **Erste stabile Version.** Keine Änderungen an Einstellungen oder Karten nötig – ein Update von 0.13.0 übernimmt alles.

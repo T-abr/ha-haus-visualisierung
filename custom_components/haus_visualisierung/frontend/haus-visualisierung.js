@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -27,7 +27,7 @@ const DEFAULT_LAYOUT = {
   ],
   show_energy_sensors: false, show_other: true, camera_interval: 10, glass: true,
   start_view: "overview", battery_critical: 15, battery_low: 35, density: "kompakt", header_style: "kompakt", overview_style: "auto",
-  confirm_quick: true,
+  confirm_quick: true, show_trends: true,
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
   alerts: {
@@ -1247,6 +1247,224 @@ function updateSatz(el, ctx) {
 
 const chipWatch = (el, c) => (el.dataset.k === "alerts" ? alertWatch(c._model, c._layout) : c._model.agg[CHIP_WATCH[el.dataset.k]] || []);
 
+/* ------------------------------------------------------------------------ */
+/*  Verlauf 24 h auf Raumseiten (Temperatur, Luftfeuchte)                     */
+/* ------------------------------------------------------------------------ */
+/* Daten kommen einmal beim Öffnen der Raumseite aus dem Recorder: zuerst die 5-Minuten-Statistik
+   (fertig gemittelt, 288 Werte je Sensor), für Sensoren ohne Statistik der Verlauf (auf 5 Minuten verdichtet).
+   Danach schreibt die Seite neue Werte aus hass.states selbst fort – keine weiteren Abfragen.
+   Der Speicher gilt für alle Raumseiten; nach 10 Minuten ohne Anzeige wird neu geladen. */
+const TREND_MS = 24 * 3600 * 1000;
+const TREND_BUCKET = 5 * 60 * 1000;
+const TREND_TTL = 10 * 60 * 1000;
+const TREND_GAP = 65 * 60 * 1000;
+const TREND = new Map(); // eid → { at, pts: [[ms, wert]], seen }
+
+const finite = (v) => typeof v === "number" && Number.isFinite(v);
+const tsMs = (v) => (typeof v === "number" ? (v < 1e11 ? v * 1000 : v) : Date.parse(v));
+
+/** Verlauf (Stufenfunktion) auf 5-Minuten-Mittelwerte verdichten. */
+function trendBucket(pts, start, end) {
+  const out = [];
+  let b = -1, sum = 0, n = 0;
+  for (const [t, v] of pts) {
+    if (t > end) break;
+    const k = Math.floor((Math.max(t, start) - start) / TREND_BUCKET);
+    if (k !== b) { if (n) out.push([start + b * TREND_BUCKET + TREND_BUCKET / 2, sum / n]); b = k; sum = 0; n = 0; }
+    if (finite(v)) { sum += v; n++; } else if (n) { out.push([start + b * TREND_BUCKET + TREND_BUCKET / 2, sum / n]); out.push([t, NaN]); sum = 0; n = 0; }
+  }
+  if (n) out.push([start + b * TREND_BUCKET + TREND_BUCKET / 2, sum / n]);
+  return out;
+}
+
+async function trendFetch(h, eids) {
+  const now = Date.now(), start = now - TREND_MS, iso = new Date(start).toISOString();
+  const out = {};
+  let stats = {};
+  try {
+    stats = (await h.callWS({ type: "recorder/statistics_during_period", start_time: iso, statistic_ids: eids, period: "5minute", types: ["mean"] })) || {};
+  } catch (err) { stats = {}; }
+  const miss = [];
+  for (const e of eids) {
+    const pts = (stats[e] || []).map((r) => [tsMs(r.start) + TREND_BUCKET / 2, r.mean]).filter(([t, v]) => finite(t) && finite(v));
+    if (pts.length >= 3) out[e] = pts; else miss.push(e);
+  }
+  if (miss.length) {
+    try {
+      const hist = (await h.callWS({ type: "history/history_during_period", start_time: iso, entity_ids: miss, minimal_response: true, no_attributes: true, significant_changes_only: false })) || {};
+      for (const e of miss) {
+        const raw = (hist[e] || []).map((x) => [tsMs(x.lu ?? x.last_updated ?? x.lc), parseFloat(x.s ?? x.state)]).filter(([t]) => finite(t));
+        out[e] = trendBucket(raw, start, now);
+      }
+    } catch (err) { for (const e of miss) out[e] = []; }
+  }
+  return out;
+}
+
+/** Aktuellen Wert anhängen (nur wenn neu) und Werte älter als 24 h abschneiden. */
+function trendPush(rec, st) {
+  const v = num(st);
+  const t = st ? Date.parse(st.last_updated || st.last_changed) || Date.now() : Date.now();
+  const p = rec.pts;
+  if (st && rec.seen !== st) {
+    rec.seen = st;
+    const last = p[p.length - 1];
+    if (!last || t > last[0]) {
+      // innerhalb von 5 Minuten zusammenfassen, damit schnelle Sensoren die Liste nicht aufblähen
+      if (last && finite(last[1]) && last.live && t - last.t0 < TREND_BUCKET) { last[0] = t; last[1] = v === null ? NaN : (last[1] * last.n + v) / (last.n + 1); last.n++; }
+      else { const q = [t, v === null ? NaN : v]; q.live = true; q.t0 = t; q.n = 1; p.push(q); }
+    }
+  }
+  const cut = Date.now() - TREND_MS;
+  let i = 0;
+  while (i < p.length - 1 && p[i + 1][0] < cut) i++;
+  if (i) p.splice(0, i);
+}
+
+function trendScale(vals, minSpan) {
+  let lo = Infinity, hi = -Infinity;
+  for (const v of vals) if (finite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (lo === Infinity) return null;
+  const mid = (lo + hi) / 2, span = Math.max(hi - lo, minSpan) * 1.15;
+  return { lo: mid - span / 2, hi: mid + span / 2, min: lo, max: hi };
+}
+
+/** SVG-Pfad mit Lücken bei fehlenden Werten oder Ausfällen über 65 Minuten. */
+function trendPath(pts, x, y) {
+  let d = "", pen = false, lastT = 0;
+  for (const [t, v] of pts) {
+    if (!finite(v) || (pen && t - lastT > TREND_GAP)) { pen = false; if (!finite(v)) continue; }
+    d += `${pen ? "L" : "M"}${x(t).toFixed(1)} ${y(v).toFixed(1)}`;
+    pen = true; lastT = t;
+  }
+  return d;
+}
+
+const TREND_KIND = [["t", "temperature", "Temperatur"], ["h", "humidity", "Luftfeuchte"]];
+const trendFmt = (k, v) => (k === "t" ? `${NF1.format(v)}°` : `${NF0.format(v)} %`);
+
+function trendCardHTML(a) {
+  if (!a || (!a.tempId && !a.humId)) return "";
+  const leg = (k, label, eid) => (eid ? `<button class="trl ${k}" data-act="more" data-eid="${esc(eid)}"><i></i><span>${label}</span><b></b><small></small></button>` : "");
+  return `<div class="glass trend" data-u="trend" data-area="${esc(a.id)}">
+    <div class="trh"><span class="trt">${icon("mdi:chart-line")}Verlauf 24 h</span>${leg("t", "Temperatur", a.tempId)}${leg("h", "Luftfeuchte", a.humId)}</div>
+    <div class="trc"><svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="trg-${esc(a.id)}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--hv-heat)" stop-opacity=".28"/><stop offset="1" stop-color="var(--hv-heat)" stop-opacity="0"/></linearGradient></defs>
+      <g class="trgrid"></g><path class="tra" fill="url(#trg-${esc(a.id)})"/><path class="trp h"/><path class="trp t"/></svg>
+      <span class="ty t hi"></span><span class="ty t lo"></span><span class="ty h hi"></span><span class="ty h lo"></span>
+      <div class="trx"></div><div class="trcur"><i class="t"></i><i class="h"></i></div><div class="trtip"></div>
+      <div class="trmsg">${icon("mdi:loading", "spin")}Lade Verlauf …</div></div></div>`;
+}
+
+function updateTrend(el, ctx) {
+  const a = ctx._model.areas.get(el.dataset.area);
+  if (!a) return;
+  const h = ctx._hass, now = Date.now();
+  const ids = [a.tempId, a.humId].filter(Boolean);
+  const missing = ids.filter((e) => { const r = TREND.get(e); return !r || (!r.loading && now - r.at > TREND_TTL && !r.live); });
+  if (missing.length && h.callWS) {
+    for (const e of missing) TREND.set(e, { at: now, pts: [], loading: true, seen: null });
+    trendFetch(h, missing).then((res) => {
+      for (const e of missing) TREND.set(e, { at: Date.now(), pts: res[e] || [], loading: false, seen: null });
+    }).catch(() => { for (const e of missing) TREND.set(e, { at: Date.now(), pts: [], loading: false, seen: null }); })
+      .finally(() => { if (el.isConnected) updateTrend(el, ctx); });
+  }
+  const loading = ids.some((e) => TREND.get(e)?.loading);
+  const msg = el.querySelector(".trmsg");
+  if (loading) { setHidden(msg, false); return; }
+  const start = now - TREND_MS;
+  const x = (t) => ((t - start) / TREND_MS) * 1000;
+  const S = {};
+  for (const [k, , label] of TREND_KIND) {
+    const eid = k === "t" ? a.tempId : a.humId;
+    const rec = eid && TREND.get(eid);
+    if (!rec) continue;
+    rec.live = true; rec.at = now;
+    const st = h.states[eid];
+    const fromRecorder = rec.pts.some((p) => !p.live);
+    trendPush(rec, st);
+    const cur = num(st);
+    const pts = rec.pts.slice();
+    if (cur !== null && pts.length && pts[pts.length - 1][0] < now) pts.push([now, cur]);
+    const sc = trendScale(pts.filter(([t]) => t >= start).map((p) => p[1]), k === "t" ? 2 : 10);
+    // ohne Recorder: erst zeichnen, wenn die Seite selbst mindestens zwei Werte gesammelt hat
+    S[k] = { pts, sc: fromRecorder || rec.pts.length >= 2 ? sc : null, cur, label };
+  }
+  const has = Object.values(S).some((s) => s.sc && s.pts.length > 1);
+  if (!has) {
+    setHidden(msg, false);
+    msg.innerHTML = `${icon("mdi:chart-line-variant")}Noch kein Verlauf aufgezeichnet (Recorder).`;
+    el.classList.add("nodata");
+    return;
+  }
+  setHidden(msg, true);
+  el.classList.remove("nodata");
+  el._trend = { S, start };
+  const H = 100, pad = 8;
+  for (const [k] of TREND_KIND) {
+    const s = S[k], path = el.querySelector(`.trp.${k}`);
+    if (!path) continue;
+    if (!s || !s.sc) { path.setAttribute("d", ""); continue; }
+    const y = (v) => H - pad - ((v - s.sc.lo) / (s.sc.hi - s.sc.lo)) * (H - 2 * pad);
+    s.y = y;
+    const d = trendPath(s.pts, x, y);
+    path.setAttribute("d", d);
+    if (k === "t") {
+      // Fläche unter der Temperatur nur über das letzte zusammenhängende Stück
+      const last = d.lastIndexOf("M"), seg = d.slice(last);
+      const m = seg.match(/^M([\d.]+) /), e = seg.match(/L?([\d.]+) [\d.]+$/);
+      el.querySelector(".tra").setAttribute("d", m && e ? `${seg}L${e[1]} ${H}L${m[1]} ${H}Z` : "");
+    }
+    setText(el, `.ty.${k}.hi`, trendFmt(k, s.sc.max));
+    setText(el, `.ty.${k}.lo`, trendFmt(k, s.sc.min));
+    setText(el, `.trl.${k} b`, s.cur !== null ? trendFmt(k, s.cur) : "–");
+    setText(el, `.trl.${k} small`, `${trendFmt(k, s.sc.min)} – ${trendFmt(k, s.sc.max)}`);
+  }
+  if (!S.t || !S.t.sc) el.querySelector(".tra").setAttribute("d", "");
+  // Zeitachse: volle 6 Stunden (0, 6, 12, 18 Uhr)
+  const hour = Math.floor(now / 3600000);
+  if (el._hour !== hour) {
+    el._hour = hour;
+    const ticks = [];
+    const d0 = new Date(start); d0.setMinutes(0, 0, 0);
+    for (let t = d0.getTime() + 3600000; t < now; t += 3600000) if (new Date(t).getHours() % 6 === 0) ticks.push(t);
+    el.querySelector(".trgrid").innerHTML = ticks.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
+    el.querySelector(".trx").innerHTML = ticks.filter((t) => x(t) < 900).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
+  }
+  if (el._hover !== undefined) trendHover(el, el._hover);
+}
+
+/** Wert an einer Stelle (0…1) suchen – binäre Suche je Reihe. */
+function trendAt(pts, t) {
+  let lo = 0, hi = pts.length - 1;
+  if (hi < 0) return null;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (pts[mid][0] < t) lo = mid + 1; else hi = mid; }
+  const a = pts[Math.max(0, lo - 1)], b = pts[lo];
+  const p = Math.abs(a[0] - t) < Math.abs(b[0] - t) ? a : b;
+  return Math.abs(p[0] - t) <= TREND_GAP && finite(p[1]) ? p : null;
+}
+
+function trendHover(el, frac) {
+  const T = el._trend, tip = el.querySelector(".trtip"), cur = el.querySelector(".trcur");
+  if (!T || frac === null) { el._hover = undefined; cur.classList.remove("on"); tip.classList.remove("on"); return; }
+  el._hover = frac;
+  const t = T.start + frac * TREND_MS;
+  const parts = [];
+  for (const [k] of TREND_KIND) {
+    const s = T.S[k], dot = cur.querySelector(`i.${k}`);
+    const p = s && s.sc ? trendAt(s.pts, t) : null;
+    if (!p) { dot.style.display = "none"; continue; }
+    dot.style.display = "";
+    dot.style.top = `${s.y(p[1])}%`;
+    parts.push(`<b class="${k}">${trendFmt(k, p[1])}</b>`);
+  }
+  const clock = new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  tip.innerHTML = `<span>${clock}</span>${parts.join("")}`;
+  cur.style.left = `${frac * 100}%`;
+  tip.style.left = `${Math.min(Math.max(frac * 100, 12), 88)}%`;
+  cur.classList.add("on"); tip.classList.add("on");
+}
+
 const UPD = {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
   alarmpage: { watch: (el, c) => alertWatch(c._model, c._layout), run: (el, c) => c._renderAlarmPage(el) },
@@ -1266,6 +1484,7 @@ const UPD = {
   weather: { watch: (el) => [el.dataset.eid], run: updateWeather },
   person: { watch: (el) => [el.dataset.eid], run: updatePerson },
   gcount: { watch: (el) => (el._eids = (el.dataset.eids || "").split(",").filter(Boolean)), run: updateGroupCount },
+  trend: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, a.humId].filter(Boolean) : []; }, run: updateTrend },
 };
 
 /* ------------------------------------------------------------------------ */
@@ -1499,6 +1718,25 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex;align-items:center;justify-cont
 .pin{display:inline-flex;align-items:center;gap:4px;padding:4px 4px 4px 10px;border-radius:999px;background:var(--hv-surface-2);font-size:12px}
 .pin button{width:22px;height:22px;border-radius:50%;display:grid;place-items:center}.pin button:hover{background:rgba(255,107,91,.35)}
 .pin ha-icon{--mdc-icon-size:14px}
+/* Einstellungen: Reiter und Sortieren */
+.stabs{margin:-6px 0 14px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.stabs::-webkit-scrollbar{display:none}
+.stab{flex:none;padding:8px 15px;font-size:13.5px;position:relative}
+.stab i{display:none;width:7px;height:7px;border-radius:50%;background:var(--hv-warm);margin-left:2px}
+.stab.dirty i{display:inline-block}
+.drag{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:32px;margin:0 -2px 0 -6px;border-radius:8px;color:var(--hv-faint);cursor:grab;touch-action:none}
+.drag:hover,.drag:focus-visible{color:var(--hv-text);background:var(--hv-surface)}
+.drag ha-icon{--mdc-icon-size:20px}
+.fl-title .drag{width:24px;height:24px;margin:0 -4px 0 -4px}.fl-title .drag ha-icon{--mdc-icon-size:18px}
+.sortl{position:relative}
+.sortl>.sitem+.sitem>.srow:first-child,.sortl>.srow.sitem+.srow.sitem{border-top:1px solid var(--hv-line)}
+.sitem.dragging{position:relative;z-index:5;cursor:grabbing;border-radius:12px;background:rgba(30,40,60,.92);box-shadow:0 10px 30px rgba(0,0,0,.45);transition:none}
+.sitem.dragging>.srow{border-top-color:transparent!important}
+.pin.sitem{cursor:grab;touch-action:pan-y;user-select:none}
+.pin.sitem.dragging{background:rgba(124,196,255,.3)}
+.actcard.dragging{background:rgba(30,40,60,.95)}
+.sorting .sitem:not(.dragging){transition:transform .12s}
+.flb+.flb{margin-top:4px}
 .fl-title{margin:14px 0 2px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--hv-dim);display:flex;align-items:center;gap:8px}
 .tgl{position:relative;width:44px;height:26px;flex:none}
 .tgl input{opacity:0;width:0;height:0}
@@ -2011,6 +2249,38 @@ details[open]>summary.shead{padding-bottom:2px}
 .narrow .ebar .ep b{margin-left:auto}
 .narrow .ebar .schip,.narrow .ebar .pbtn{display:flex;justify-content:center;min-width:0;overflow:hidden;padding:8px 10px;font-size:12.5px;border-radius:12px}
 .narrow .ebar .schip span,.narrow .ebar .pbtn span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Verlauf 24 h */
+.trend{padding:12px 16px 10px;margin-bottom:16px}
+.dense .trend{padding:9px 12px 8px;margin-bottom:12px;border-radius:16px}
+.trh{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;margin-bottom:8px}
+.trt{display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hv-dim);margin-right:auto}
+.trt ha-icon{--mdc-icon-size:16px}
+.trl{display:inline-flex;align-items:baseline;gap:6px;font-size:13px;color:var(--hv-dim);padding:2px 4px;border-radius:8px;font-variant-numeric:tabular-nums}
+.trl:hover{background:var(--hv-surface)}
+.trl i{width:10px;height:3px;border-radius:2px;align-self:center}.trl.t i{background:var(--hv-heat)}.trl.h i{background:var(--hv-cool)}
+.trl b{color:var(--hv-text);font-weight:500;font-size:15px}.trl small{font-size:11.5px;color:var(--hv-faint)}
+.trc{position:relative;height:120px;margin:0 34px 18px;touch-action:pan-y;cursor:crosshair}
+.dense .trc{height:92px}
+.trc svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.trgrid line{stroke:var(--hv-line);stroke-width:1;vector-effect:non-scaling-stroke}
+.trp{fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+.trp.t{stroke:var(--hv-heat)}.trp.h{stroke:var(--hv-cool);stroke-width:1.6;opacity:.9}
+.ty{position:absolute;white-space:nowrap;font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--hv-faint);line-height:1}
+.ty.t{right:calc(100% + 6px)}.ty.h{left:calc(100% + 6px)}.ty.hi{top:2px}.ty.lo{bottom:2px}
+.ty.t{color:rgba(255,138,61,.75)}.ty.h{color:rgba(99,199,255,.75)}
+.trx{position:absolute;left:0;right:0;top:calc(100% + 4px);height:12px;font-size:10.5px;color:var(--hv-faint)}
+.trx span{position:absolute;transform:translateX(-50%);white-space:nowrap}.trx .now{right:0;transform:none}
+.trcur{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35);display:none;pointer-events:none}
+.trcur.on{display:block}
+.trcur i{position:absolute;left:-4px;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;border:2px solid #0c111d}
+.trcur i.t{background:var(--hv-heat)}.trcur i.h{background:var(--hv-cool)}
+.trtip{position:absolute;top:-6px;transform:translate(-50%,-100%);display:none;gap:8px;align-items:baseline;padding:4px 9px;border-radius:9px;background:rgba(10,14,23,.92);border:1px solid var(--hv-line);font-size:12px;white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums;z-index:2}
+.trtip.on{display:flex}.trtip span{color:var(--hv-dim)}.trtip b.t{color:#ffb27a;font-weight:500}.trtip b.h{color:#8fd6ff;font-weight:500}
+.trmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--hv-dim);background:transparent}
+.trend.nodata .trc{height:48px}.trend.nodata .ty,.trend.nodata .trx{display:none}
+:host(.card) .trtip{background:var(--card-background-color,#222)}
+.narrow .trc{margin:0 30px 18px}
+.narrow .trl small{display:none}
 `;
 
 const LOGO = `<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="hvg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#9a86ff"/></linearGradient></defs>
@@ -2586,6 +2856,32 @@ class HausVisualisierungPanel extends HvBase {
       r.addEventListener("pointerup", () => this._alSwipeEnd());
       r.addEventListener("pointercancel", () => this._alSwipeEnd());
       r.addEventListener("click", (e) => { if (this._alSwiped && Date.now() - this._alSwiped < 400 && e.target.closest(".alrow")) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+      // Verlauf: Wert unter Maus oder Finger anzeigen
+      const trMove = (e) => {
+        const c = e.target.closest && e.target.closest(".trc");
+        if (!c) { if (this._trHover) { trendHover(this._trHover, null); this._trHover = null; } return; }
+        const el = c.closest(".trend"), b = c.getBoundingClientRect();
+        if (!el || !b.width) return;
+        clearTimeout(this._trHideT);
+        this._trHover = el;
+        trendHover(el, Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)));
+      };
+      r.addEventListener("pointermove", trMove);
+      r.addEventListener("pointerdown", trMove);
+      r.addEventListener("pointerout", (e) => {
+        if (!this._trHover || e.pointerType === "touch") return;
+        const to = e.relatedTarget;
+        if (!to || !to.closest || !to.closest(".trc")) { trendHover(this._trHover, null); this._trHover = null; }
+      });
+      r.addEventListener("pointerup", (e) => {
+        if (e.pointerType !== "touch" || !this._trHover) return;
+        const el = this._trHover;
+        clearTimeout(this._trHideT);
+        this._trHideT = setTimeout(() => { trendHover(el, null); if (this._trHover === el) this._trHover = null; }, 2500);
+      });
+      // Einstellungen: Sortieren per Ziehen
+      r.addEventListener("pointerdown", (e) => this._sortStart(e));
+      r.addEventListener("keydown", (e) => this._sortKey(e));
     }
     this._ro = new ResizeObserver(() => this._updateNarrow());
     this._onWinResize = () => this._updateNarrow();
@@ -3165,6 +3461,7 @@ class HausVisualisierungPanel extends HvBase {
             <button class="pbtn" data-act="area-covers" data-svc="close_cover" data-area="${esc(a.id)}">${icon("mdi:arrow-down")}Zu</button>` : ""}
         </div>
       </div></div>
+      ${this._layout.show_trends !== false ? trendCardHTML(a) : ""}
       ${sections.length ? `<div class="sections">${sections.join("")}</div>` : `<div class="glass empty">${icon("mdi:package-variant")}In diesem Bereich sind noch keine Geräte.</div>`}`;
   }
 
@@ -3354,6 +3651,7 @@ class HausVisualisierungPanel extends HvBase {
         ${next ? `<button class="iconbtn pn" data-act="go" data-to="raum/${esc(next.id)}" title="${esc(next.name)}">${icon("mdi:chevron-right")}</button>` : ""}
       </div></div>
       ${values.length ? `<div class="vstrip">${values.map((e) => vchipHTML(h, e, a)).join("")}</div>` : ""}
+      ${this._layout.show_trends !== false ? trendCardHTML(a) : ""}
       ${sec.length ? `<div class="sections">${sec.join("")}</div>` : (values.length ? "" : `<div class="glass empty">${icon("mdi:package-variant")}In diesem Bereich sind noch keine Geräte.</div>`)}`;
   }
 
@@ -3465,36 +3763,41 @@ class HausVisualisierungPanel extends HvBase {
     const m = buildModel(h, { ...D, hidden_areas: [] });
     const allIds = Object.keys(h.states).sort();
     const opt = (e) => `<option value="${esc(e)}">${esc(h.states[e].attributes.friendly_name || "")}</option>`;
-    const dlAll = `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>`;
-    const dlSensor = `<datalist id="dl-sensor">${allIds.filter((e) => e.startsWith("sensor.")).map(opt).join("")}</datalist>`;
-    const pinChips = (list, area) => list.map((e) => `<span class="pin">${esc(h.states[e] ? entName(h, e) : e)}<button data-act="s-pin-del" data-area="${esc(area)}" data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`).join("");
+    const tab0 = this._settingsTab();
+    const dlAll = tab0 === "raeume" || tab0 === "alarme" ? `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>` : "";
+    const dlSensor = tab0 === "darstellung" ? `<datalist id="dl-sensor">${allIds.filter((e) => e.startsWith("sensor.")).map(opt).join("")}</datalist>` : "";
+    const chip = (e, del) => `<span class="pin sitem" data-sort-id="${esc(e)}" data-drag title="Ziehen zum Sortieren">${esc(h.states[e] ? entName(h, e) : e)}<button ${del} data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`;
+    const pinChips = (list, area) => list.map((e) => chip(e, `data-act="s-pin-del" data-area="${esc(area)}"`)).join("");
 
-    const floorsHTML = m.floors.map((f, fi) => {
-      const rows = f.areas.map((a, ai) => {
+    const tab = this._settingsTab();
+    const floorBlock = (f) => {
+      const many = f.areas.length > 1;
+      const rows = f.areas.map((a) => {
         const hidden = D.hidden_areas.includes(a.id);
         const pins = D.pins[a.id] || [];
         const open = this._openArea === a.id;
-        return `<div class="srow${hidden ? " hiddenarea" : ""}">
-            ${icon(a.icon)}<span class="lbl">${esc(a.name)}<small>${a.lights.length} Lichter · ${a.covers.length} Rollos · ${pins.length} Pins</small></span>
-            <button class="sbtn" data-act="s-area-move" data-area="${esc(a.id)}" data-floor="${esc(f.id)}" data-dir="-1" ${ai === 0 ? "disabled" : ""} title="Nach vorn">${icon("mdi:arrow-up")}</button>
-            <button class="sbtn" data-act="s-area-move" data-area="${esc(a.id)}" data-floor="${esc(f.id)}" data-dir="1" ${ai === f.areas.length - 1 ? "disabled" : ""} title="Nach hinten">${icon("mdi:arrow-down")}</button>
+        return `<div class="sitem" data-sort-id="${esc(a.id)}"><div class="srow${hidden ? " hiddenarea" : ""}">
+            ${many ? dragHandle(`${a.name} verschieben`) : ""}${icon(a.icon)}<span class="lbl">${esc(a.name)}<small>${a.lights.length} Lichter · ${a.covers.length} Rollos · ${pins.length} Pins</small></span>
             <button class="sbtn${open ? " on" : ""}" data-act="s-area-open" data-area="${esc(a.id)}" title="Raum-Pins">${icon("mdi:pin")}</button>
             <button class="sbtn" data-act="s-area-hide" data-area="${esc(a.id)}" title="${hidden ? "Einblenden" : "Ausblenden"}">${icon(hidden ? "mdi:eye-off" : "mdi:eye")}</button>
           </div>
-          ${open ? `<div class="srow sub"><div class="pins">${pinChips(pins, a.id) || '<span class="lbl"><small>Noch keine Pins.</small></span>'}</div></div>
+          ${open ? `<div class="srow sub">${pins.length ? `<div class="pins sortl" data-sort="pins" data-area="${esc(a.id)}" data-axis="x">${pinChips(pins, a.id)}</div>` : '<span class="lbl"><small>Noch keine Pins.</small></span>'}</div>
             <div class="srow sub"><input class="inp w" list="dl-all" placeholder="Entität anheften, z. B. sensor.kamin_temperatur" data-pin-input="${esc(a.id)}">
-            <button class="pbtn" data-act="s-pin-add" data-area="${esc(a.id)}">${icon("mdi:plus")}Anheften</button></div>` : ""}`;
+            <button class="pbtn" data-act="s-pin-add" data-area="${esc(a.id)}">${icon("mdi:plus")}Anheften</button></div>` : ""}</div>`;
       }).join("");
-      const real = !f.virtual;
-      return `<div class="fl-title">${esc(f.name)}
-          ${real ? `<button class="sbtn" data-act="s-floor-move" data-floor="${esc(f.id)}" data-dir="-1" ${fi === 0 ? "disabled" : ""} title="Etage nach oben">${icon("mdi:arrow-up")}</button>
-          <button class="sbtn" data-act="s-floor-move" data-floor="${esc(f.id)}" data-dir="1" ${fi === m.floors.length - 1 ? "disabled" : ""} title="Etage nach unten">${icon("mdi:arrow-down")}</button>
-          <button class="sbtn${f.outdoor ? " on" : ""}" data-act="s-floor-outdoor" data-floor="${esc(f.id)}" title="Als Außenbereich darstellen">${icon("mdi:pine-tree")}</button>` : ""}
-        </div>${rows}`;
-    }).join("");
+      const real = !f.virtual, groupCount = m.floors.filter((x) => !x.virtual && floorGroup(x) === floorGroup(f)).length;
+      return `<div class="sitem flb" data-sort-id="${esc(f.id)}"><div class="fl-title">${real && groupCount > 1 ? dragHandle(`Etage ${f.name} verschieben`) : ""}${esc(f.name)}
+          ${real ? `<button class="sbtn${f.outdoor ? " on" : ""}" data-act="s-floor-outdoor" data-floor="${esc(f.id)}" title="Als Außenbereich darstellen">${icon("mdi:pine-tree")}</button>` : ""}
+        </div><div class="sortl" data-sort="areas" data-floor="${esc(f.id)}">${rows}</div></div>`;
+    };
+    // Der Hausschnitt hält Geschosse, Keller und Außen getrennt – gezogen wird innerhalb dieser Gruppen
+    const floorsHTML = tab !== "raeume" ? "" : ["upper", "lower", "outdoor"].map((g) => {
+      const fl = m.floors.filter((f) => !f.virtual && floorGroup(f) === g);
+      return fl.length ? `<div class="sortl" data-sort="floors" data-group="${g}">${fl.map(floorBlock).join("")}</div>` : "";
+    }).join("") + m.floors.filter((f) => f.virtual).map(floorBlock).join("");
 
     const favs = D.favorites || [];
-    const links = (D.links || []).map((l, i) => `<div class="srow">
+    const links = (D.links || []).map((l, i) => `<div class="srow sitem" data-sort-id="${i}">${D.links.length > 1 ? dragHandle("Verknüpfung verschieben") : ""}
         <input class="inp" style="width:130px" data-set="links.${i}.title" value="${esc(l.title)}" placeholder="Titel">
         <input class="inp" style="width:190px" data-set="links.${i}.icon" value="${esc(l.icon)}" placeholder="mdi:solar-power-variant">
         <input class="inp w" data-set="links.${i}.path" value="${esc(l.path)}" placeholder="/solar-visualisierung">
@@ -3506,32 +3809,28 @@ class HausVisualisierungPanel extends HvBase {
       <input class="inp w" list="dl-sensor" data-set="header.${key}" value="${esc(D.header[key] || "")}" placeholder="sensor.…"></div>`;
     const views = [["overview", "Übersicht"], ...NAV.slice(1).map(([k, t]) => [k, t])];
 
-    return `${dlAll}${dlSensor}
-      <div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span></div>
+    const tabs = SET_TABS.map(([k, t, i]) => `<button class="altab stab${tab === k ? " on" : ""}${this._tabDirty(k) ? " dirty" : ""}" data-act="s-tab" data-tab="${k}">${icon(i)}<span>${t}</span><i></i></button>`).join("");
+    let body = "";
+    if (tab === "raeume") body = `${dlAll}
       <div class="set glass"><h2>${icon("mdi:floor-plan")}Etagen & Bereiche</h2>
-        <p class="hint">Die Struktur kommt aus Home Assistant (Einstellungen → Bereiche, Etagen & Labels). Hier legst du nur Reihenfolge, Sichtbarkeit und Raum-Pins fest. Entitäten mit dem Label <b>no-dboard</b> werden ausgeblendet.</p>
+        <p class="hint">Die Struktur kommt aus Home Assistant (Einstellungen → Bereiche, Etagen & Labels). Hier legst du nur Reihenfolge (am Griff ziehen), Sichtbarkeit und Raum-Pins fest. Keller und Außenbereiche bleiben im Hausschnitt unten. Entitäten mit dem Label <b>no-dboard</b> werden ausgeblendet.</p>
         ${floorsHTML || '<p class="hint">Keine Bereiche vorhanden.</p>'}</div>
       <div class="set glass"><h2>${icon("mdi:star")}Favoriten</h2>
         <p class="hint">Erscheinen auf der Übersicht unter dem Hausschnitt.</p>
-        <div class="srow"><div class="pins" style="padding-left:0">${favs.map((e) => `<span class="pin">${esc(h.states[e] ? entName(h, e) : e)}<button data-act="s-fav-del" data-eid="${esc(e)}">${icon("mdi:close")}</button></span>`).join("") || '<span class="lbl"><small>Noch keine Favoriten.</small></span>'}</div></div>
-        <div class="srow"><input class="inp w" list="dl-all" placeholder="Entität hinzufügen" data-fav-input="1"><button class="pbtn" data-act="s-fav-add">${icon("mdi:plus")}Hinzufügen</button></div></div>
+        <div class="srow">${favs.length ? `<div class="pins sortl" style="padding-left:0" data-sort="favorites" data-axis="x">${favs.map((e) => chip(e, 'data-act="s-fav-del"')).join("")}</div>` : '<span class="lbl"><small>Noch keine Favoriten.</small></span>'}</div>
+        <div class="srow"><input class="inp w" list="dl-all" placeholder="Entität hinzufügen" data-fav-input="1"><button class="pbtn" data-act="s-fav-add">${icon("mdi:plus")}Hinzufügen</button></div></div>`;
+    else if (tab === "alarme") body = `${dlAll}
       ${this._setMode(D)}
       ${this._setAlerts(D)}
-      ${this._setActions(D)}
+      ${this._setActions(D)}`;
+    else if (tab === "meldungen") body = `
       ${this._setPush(D)}
-      ${this._setBell(D)}
-      <div class="set glass"><h2>${icon("mdi:solar-power-variant")}Energie auf dem Dach</h2>
-        <p class="hint">Diese Werte stehen im Dach des Hausschnitts. Ein Tipp aufs Dach öffnet die erste Verknüpfung (z. B. die Solar Visualisierung).</p>
-        ${ent("pv", "PV-Leistung", "z. B. sensor.growatt_modbus_…_pv_power")}
-        ${ent("battery", "Akku-Ladestand", "in %")}
-        ${ent("power", "Hausverbrauch", "z. B. dein AC-seitig berechneter Verbrauch")}
-        ${ent("grid", "Netz", "Bezug/Einspeisung")}</div>
-      <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
-        <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
-        ${links}<div class="srow"><button class="pbtn" data-act="s-link-add">${icon("mdi:plus")}Verknüpfung hinzufügen</button></div></div>
+      ${this._setBell(D)}`;
+    else body = `${dlSensor}
       <div class="set glass"><h2>${icon("mdi:tune-variant")}Darstellung</h2>
         ${sw("confirm_quick", "Schnellzugriff bestätigen", "Abfrage vor „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff")}
         ${sw("glass", "Glas-Effekt", "Weichzeichner hinter Karten; auf schwachen Tablets ausschalten")}
+        ${sw("show_trends", "Verlauf auf Raumseiten", "Temperatur und Luftfeuchte der letzten 24 Stunden aus dem Recorder")}
         ${sw("show_energy_sensors", "Energie-Sensoren in Räumen", "Leistung, Energie, Strom, Spannung")}
         ${sw("show_other", "Bereich „Weitere“", "Auswahlen, Zahlen und Tasten")}
         <div class="srow"><span class="lbl">Darstellung<small>Kompakt: mehr auf einen Blick · Komfort: große Kacheln fürs Wandpanel</small></span><select class="inp" data-set="density"><option value="kompakt" ${D.density !== "komfort" ? "selected" : ""}>Kompakt</option><option value="komfort" ${D.density === "komfort" ? "selected" : ""}>Komfort</option></select></div>
@@ -3543,6 +3842,19 @@ class HausVisualisierungPanel extends HvBase {
           <input class="inp s" type="number" min="1" max="99" data-set="battery_critical" data-num="1" value="${D.battery_critical}">
           <input class="inp s" type="number" min="1" max="99" data-set="battery_low" data-num="1" value="${D.battery_low}"></div>
         <div class="srow"><span class="lbl">Ausblende-Labels<small>Label-IDs, durch Komma getrennt</small></span><input class="inp w" data-set="hide_labels" data-csv="1" value="${esc((D.hide_labels || []).join(", "))}"></div></div>
+      <div class="set glass"><h2>${icon("mdi:solar-power-variant")}Energie auf dem Dach</h2>
+        <p class="hint">Diese Werte stehen im Dach des Hausschnitts. Ein Tipp aufs Dach öffnet die erste Verknüpfung (z. B. die Solar Visualisierung).</p>
+        ${ent("pv", "PV-Leistung", "z. B. sensor.growatt_modbus_…_pv_power")}
+        ${ent("battery", "Akku-Ladestand", "in %")}
+        ${ent("power", "Hausverbrauch", "z. B. dein AC-seitig berechneter Verbrauch")}
+        ${ent("grid", "Netz", "Bezug/Einspeisung")}</div>
+      <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
+        <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
+        <div class="sortl" data-sort="links">${links}</div><div class="srow"><button class="pbtn" data-act="s-link-add">${icon("mdi:plus")}Verknüpfung hinzufügen</button></div></div>`;
+
+    return `<div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span><span class="sp"></span></div>
+      <div class="altabs stabs" role="tablist">${tabs}</div>
+      ${body}
       <div class="savebar glass"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>
         <button class="pbtn" data-act="s-reset">${icon("mdi:undo")}Verwerfen</button>
         <button class="pbtn primary" data-act="s-save">${icon("mdi:content-save")}Speichern</button></div>`;
@@ -3658,8 +3970,8 @@ class HausVisualisierungPanel extends HvBase {
         default: return "";
       }
     };
-    const acts = D.alarm_actions.map((a, i) => `<div class="actcard${a.enabled === false ? " off" : ""}">
-      <div class="actrow"><label class="tgl" title="aktiv"><input type="checkbox" data-set="alarm_actions.${i}.enabled" data-bool="1" ${a.enabled !== false ? "checked" : ""}><span></span></label>
+    const acts = D.alarm_actions.map((a, i) => `<div class="actcard sitem${a.enabled === false ? " off" : ""}" data-sort-id="${i}">
+      <div class="actrow">${D.alarm_actions.length > 1 ? dragHandle("Aktion verschieben") : ""}<label class="tgl" title="aktiv"><input type="checkbox" data-set="alarm_actions.${i}.enabled" data-bool="1" ${a.enabled !== false ? "checked" : ""}><span></span></label>
         <input class="inp" style="flex:1 1 160px" data-set="alarm_actions.${i}.name" value="${esc(a.name || "")}" placeholder="Name, z. B. KNX Sammelalarm">
         ${sel(`alarm_actions.${i}.type`, types, a.type)}${sel(`alarm_actions.${i}.when`, whens, a.when || "neu")}${sel(`alarm_actions.${i}.scope`, scopes, a.scope || "alarm", "wide")}
         ${mchips(`alarm_actions.${i}.modes`, a.modes && a.modes.length ? a.modes : allM)}
@@ -3675,7 +3987,7 @@ class HausVisualisierungPanel extends HvBase {
       <div class="srow"><span class="lbl">Für Stufen</span><span class="lvchips">${[["alarm", "Alarm"], ["warn", "Warnung"], ["info", "Hinweis"]].map(([k, t]) => `<button class="altab sm${(E.levels || []).includes(k) ? " on" : ""}" data-act="s-esc-level" data-lvl="${k}"><span>${t}</span></button>`).join("")}</span></div>
       <div class="srow"><span class="lbl">Erneut als kritische Push-Meldung<small>„Nicht quittiert: …“ an alle Empfänger, laut auch bei „Nicht stören“</small></span><label class="tgl"><input type="checkbox" data-set="escalation.push_critical" data-bool="1" ${E.push_critical !== false ? "checked" : ""}><span></span></label></div>
       <div class="fl-title">Aktionen</div>
-      ${acts || '<p class="hint">Noch keine Aktionen. Vorlagen unten – danach Gruppenadresse bzw. Entität eintragen und mit „Test“ prüfen.</p>'}
+      ${acts ? `<div class="sortl" data-sort="actions">${acts}</div>` : '<p class="hint">Noch keine Aktionen. Vorlagen unten – danach Gruppenadresse bzw. Entität eintragen und mit „Test“ prüfen.</p>'}
       <div class="srow"><button class="pbtn" data-act="s-act-add">${icon("mdi:plus")}Aktion hinzufügen</button>
         <span class="lbl" style="flex:0 0 auto;min-width:0"><small>Vorlagen:</small></span>
         ${tpl.map(([k, t]) => `<button class="pbtn sm" data-act="s-act-tpl" data-tpl="${k}">${t}</button>`).join("")}</div>
@@ -3720,6 +4032,138 @@ class HausVisualisierungPanel extends HvBase {
         ${tpl.map(([k, t]) => `<button class="pbtn sm" data-act="s-rule-tpl" data-tpl="${k}">${t}</button>`).join("")}</div>
       <p class="hint" style="margin-top:8px">„ab … min“ zählt ab der letzten Zustandsänderung – ideal für An/Aus und Offen/Zu (z. B. „Gerät seit 120 min an“). Bei Messwerten startet die Zeit mit jedem neuen Wert neu.</p>
     </div>`;
+  }
+
+  _settingsTab() {
+    // Adresse „einstellungen/<reiter>“ wählt den Reiter (z. B. aus einem Lesezeichen)
+    if (this._view === "einstellungen" && this._arg && this._arg !== this._setTabArg) {
+      this._setTabArg = this._arg;
+      if (SET_TABS.some(([k]) => k === this._arg)) this._setTabSel = this._arg;
+    }
+    if (!this._setTabSel) {
+      let t = null;
+      try { t = localStorage.getItem("hv-settings-tab"); } catch (err) { /* egal */ }
+      this._setTabSel = SET_TABS.some(([k]) => k === t) ? t : "raeume";
+    }
+    return this._setTabSel;
+  }
+
+  /** Hat der Reiter ungespeicherte Änderungen? */
+  _tabDirty(tab) {
+    const D = this._draft, L = this._layout;
+    if (!D || !this._dirtySettings) return false;
+    const own = SET_TAB_KEYS[tab] || Object.keys(D).filter((k) => !Object.values(SET_TAB_KEYS).flat().includes(k));
+    return own.some((k) => JSON.stringify(D[k] ?? null) !== JSON.stringify(L[k] ?? null));
+  }
+
+  /* Ziehen: das Element wandert live an die neue Stelle und folgt dem Zeiger; beim Loslassen wird die Reihenfolge übernommen. */
+  _sortStart(e) {
+    const hd = e.target.closest && e.target.closest("[data-drag]");
+    if (!hd || this._view !== "einstellungen" || e.button > 0) return;
+    if (e.target.closest("button:not([data-drag]), input, select")) return;
+    const item = hd.closest(".sitem"), list = item && item.parentElement;
+    if (!list || !list.dataset.sort || sortIds(list).length < 2) return;
+    e.preventDefault();
+    const S = { item, list, hd, axis: list.dataset.axis || "y", x0: e.clientX, y0: e.clientY, dx: 0, dy: 0, moved: false, before: sortIds(list).join("\n") };
+    this._sort = S;
+    // Am Fenster lauschen: Beim Umsetzen im DOM geht ein Pointer-Capture verloren
+    const pid = e.pointerId;
+    const main = this.shadowRoot.querySelector(".main");
+    const move = (ev) => {
+      if (ev.pointerId !== pid) return;
+      if (!S.moved) {
+        if (Math.hypot(ev.clientX - S.x0, ev.clientY - S.y0) < 5) return;
+        S.moved = true;
+        item.classList.add("dragging"); list.classList.add("sorting");
+      }
+      S.px = ev.clientX; S.py = ev.clientY;
+      this._sortPlace(S);
+      if (main) {
+        const r = main.getBoundingClientRect();
+        S.scroll = ev.clientY < r.top + 56 ? -1 : ev.clientY > r.bottom - 56 ? 1 : 0;
+        if (S.scroll && !S.scrollT) S.scrollT = setInterval(() => { if (!S.scroll) return; main.scrollTop += S.scroll * 10; this._sortPlace(S); }, 16);
+      }
+    };
+    const up = (ev) => {
+      if (ev.pointerId !== pid) return;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      clearInterval(S.scrollT);
+      this._sort = null;
+      item.classList.remove("dragging"); list.classList.remove("sorting");
+      item.style.transform = "";
+      const ids = sortIds(list);
+      if (S.moved && ids.join("\n") !== S.before) this._applySort(list, ids);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
+
+  _sortPlace(S) {
+    const { item, list, axis } = S;
+    if (S.px === undefined) return;
+    const sibs = [...list.children].filter((c) => c !== item && c.classList.contains("sitem"));
+    let ref = null;
+    for (const c of sibs) {
+      const r = c.getBoundingClientRect();
+      if (axis === "x") {
+        // Zeilenweise: erst die Zeile, dann die Position darin
+        if (S.py < r.top) { ref = c; break; }
+        if (S.py <= r.bottom && S.px < r.left + r.width / 2) { ref = c; break; }
+      } else if (S.py < r.top + r.height / 2) { ref = c; break; }
+    }
+    if (ref !== item.nextElementSibling || (!ref && list.lastElementChild !== item)) {
+      if (ref) list.insertBefore(item, ref); else list.appendChild(item);
+    }
+    // Element folgt dem Zeiger: Abstand zur natürlichen Lage (ohne Verschiebung)
+    item.style.transform = "";
+    const r = item.getBoundingClientRect();
+    if (!S.grab) S.grab = [S.x0 - r.left, S.y0 - r.top];
+    const tx = axis === "x" ? S.px - S.grab[0] - r.left : 0, ty = S.py - S.grab[1] - r.top;
+    item.style.transform = `translate(${tx}px,${ty}px)`;
+  }
+
+  /** Tastatur: Pfeiltasten auf dem Griff verschieben um eine Stelle. */
+  _sortKey(e) {
+    const hd = e.target.closest && e.target.closest("[data-drag]");
+    if (!hd || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return;
+    const item = hd.closest(".sitem"), list = item && item.parentElement;
+    if (!list || !list.dataset.sort) return;
+    e.preventDefault();
+    const ids = sortIds(list), i = ids.indexOf(item.dataset.sortId), j = i + (e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 1);
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    const focus = { sort: list.dataset.sort, key: list.dataset.floor || list.dataset.area || "", pos: j };
+    this._applySort(list, ids);
+    const nl = [...this.shadowRoot.querySelectorAll(`[data-sort="${focus.sort}"]`)].find((l) => (l.dataset.floor || l.dataset.area || "") === focus.key);
+    const it = nl && nl.querySelectorAll(":scope > .sitem")[focus.pos];
+    const h2 = it && (it.matches("[data-drag]") ? it : it.querySelector("[data-drag]"));
+    if (h2) h2.focus();
+  }
+
+  _applySort(list, ids) {
+    const D = this._draft;
+    if (!D) return;
+    switch (list.dataset.sort) {
+      case "floors": D.floor_order = [...this.shadowRoot.querySelectorAll('[data-sort="floors"]')].flatMap((l) => sortIds(l)); break;
+      case "areas": {
+        // Nur die Räume dieser Etage tauschen ihre Plätze in der Gesamtreihenfolge
+        const m = buildModel(this._hass, { ...D, hidden_areas: [] });
+        const order = m.floors.flatMap((f) => f.areas.map((a) => a.id));
+        const mine = new Set(ids);
+        let k = 0;
+        D.area_order = order.map((id) => (mine.has(id) ? ids[k++] : id));
+        break;
+      }
+      case "pins": D.pins[list.dataset.area] = ids; break;
+      case "favorites": D.favorites = ids; break;
+      case "links": D.links = ids.map((i) => D.links[Number(i)]); break;
+      case "actions": D.alarm_actions = ids.map((i) => D.alarm_actions[Number(i)]); break;
+      default: return;
+    }
+    this._rerenderSettings();
   }
 
   _rerenderSettings() {
@@ -3813,27 +4257,6 @@ class HausVisualisierungPanel extends HvBase {
         o[key] = next.length === allM.length && path[1] !== "modes" ? [] : next;
         break;
       }
-      case "s-area-move": {
-        const m = buildModel(h, { ...D, hidden_areas: [] });
-        const order = m.floors.flatMap((f) => f.areas.map((a) => a.id));
-        const f = m.floors.find((x) => x.id === t.dataset.floor);
-        const ids = f.areas.map((a) => a.id);
-        const i = ids.indexOf(t.dataset.area), j = i + Number(t.dataset.dir);
-        if (j < 0 || j >= ids.length) return;
-        const gi = order.indexOf(ids[i]), gj = order.indexOf(ids[j]);
-        [order[gi], order[gj]] = [order[gj], order[gi]];
-        D.area_order = order;
-        break;
-      }
-      case "s-floor-move": {
-        const m = buildModel(h, { ...D, hidden_areas: [] });
-        const ids = m.floors.filter((f) => !f.virtual).map((f) => f.id);
-        const i = ids.indexOf(t.dataset.floor), j = i + Number(t.dataset.dir);
-        if (i < 0 || j < 0 || j >= ids.length) return;
-        [ids[i], ids[j]] = [ids[j], ids[i]];
-        D.floor_order = ids;
-        break;
-      }
       case "s-floor-outdoor": {
         const id = t.dataset.floor;
         D.outdoor_floors = D.outdoor_floors.includes(id) ? D.outdoor_floors.filter((x) => x !== id) : [...D.outdoor_floors, id];
@@ -3915,6 +4338,14 @@ class HausVisualisierungPanel extends HvBase {
       }
       case "s-link-add": D.links = [...(D.links || []), { title: "", icon: "mdi:link", path: "", embed: true, mode: "theme" }]; break;
       case "s-link-del": D.links = D.links.filter((_, i) => i !== Number(t.dataset.i)); break;
+      case "s-tab": {
+        this._setTabSel = t.dataset.tab;
+        try { localStorage.setItem("hv-settings-tab", t.dataset.tab); } catch (err) { /* egal */ }
+        this._dirty = true; this._flush();
+        const mn = this.shadowRoot.querySelector(".main");
+        if (mn) mn.scrollTop = 0;
+        return;
+      }
       case "s-reset": this._draft = null; this._dirtySettings = false; this._dirty = true; this._flush(); return;
       case "s-save": {
         try {
@@ -3938,11 +4369,12 @@ class HausVisualisierungPanel extends HvBase {
 
   _go(sub) {
     sub = sub || "";
-    if (this._view === "einstellungen" && sub !== "einstellungen" && this._dirtySettings) {
+    const toSettings = sub.split("/")[0] === "einstellungen";
+    if (this._view === "einstellungen" && !toSettings && this._dirtySettings) {
       this._toast("Ungespeicherte Änderungen verworfen");
       this._dirtySettings = false;
     }
-    if (sub !== "einstellungen") this._draft = null;
+    if (!toSettings) this._draft = null;
     this._navigate(sub ? `${this._base}/${sub}` : this._base);
     // Falls Home Assistant die Route nicht zurückmeldet (z. B. im Test), selbst umschalten.
     const [view, arg] = sub.split("/");
@@ -3956,6 +4388,17 @@ class HausVisualisierungPanel extends HvBase {
     if (m) m.scrollTop = 0;
   }
 }
+
+/* ---------- Einstellungen: Reiter und Sortieren ---------- */
+const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
+const SET_TAB_KEYS = {
+  raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
+  alarme: ["house_mode", "alerts", "escalation", "alarm_actions"],
+  meldungen: ["push", "doorbell"],
+};
+const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
+const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
+const sortIds = (list) => [...list.children].filter((c) => c.classList.contains("sitem")).map((c) => c.dataset.sortId);
 
 function pageEmpty(title, ic, text) {
   return `<div class="ptitle"><h1>${esc(title)}</h1></div><div class="glass empty">${icon(ic)}${esc(text)}<br><small>Prüfe, ob die Geräte einem Bereich zugeordnet sind.</small></div>`;
