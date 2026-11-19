@@ -1,0 +1,94 @@
+"""Backend-Test mit echtem Home Assistant (pytest tests/backend)."""
+from homeassistant import config_entries
+from homeassistant.components import frontend
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.setup import async_setup_component
+
+from custom_components.haus_visualisierung.const import DOMAIN, PANEL_URL_PATH, VERSION
+
+
+async def _setup(hass: HomeAssistant):
+    assert await async_setup_component(hass, "http", {})
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Haus", "icon": "mdi:home-variant", "require_admin": False}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    return hass.config_entries.async_entries(DOMAIN)[0]
+
+
+async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
+    entry = await _setup(hass)
+    panels = hass.data[frontend.DATA_PANELS]
+    assert PANEL_URL_PATH in panels
+    assert panels[PANEL_URL_PATH].config["_panel_custom"]["name"] == "haus-visualisierung-panel"
+
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/info"})
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"]["version"] == VERSION
+    assert msg["result"]["layout"]["camera_interval"] == 10
+
+    await client.send_json({"id": 2, "type": f"{DOMAIN}/subscribe"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    msg = await client.receive_json()
+    assert msg["type"] == "event" and msg["event"]["version"] == VERSION
+
+    await client.send_json({"id": 3, "type": f"{DOMAIN}/save", "layout": {
+        "hidden_areas": ["bad"], "camera_interval": 1, "evil": "x", "battery_critical": 40, "battery_low": 20,
+        "links": [{"title": "Solar", "path": "/solar-visualisierung"}, {"title": "kaputt"},
+                  {"title": "Alt", "path": "/dashboard-import", "embed": False}, {"title": "K", "path": "/x", "mode": "embed"}, {"title": "B", "path": "/y", "mode": "quatsch"}, {"title": "H", "path": "/z", "mode": "haus"}]}})
+    # Ereignis aus dem Abo und Ergebnis kommen in beliebiger Reihenfolge
+    got = [await client.receive_json(), await client.receive_json()]
+    res = next(m for m in got if m["id"] == 3 and m["type"] == "result")
+    ev = next(m for m in got if m["id"] == 2 and m["type"] == "event")
+    lay = res["result"]["layout"]
+    assert lay["hidden_areas"] == ["bad"] and lay["camera_interval"] == 3 and "evil" not in lay
+    assert lay["battery_low"] == 40 and len(lay["links"]) == 5 and lay["links"][0]["embed"] is True
+    assert [l["mode"] for l in lay["links"]] == ["theme", "open", "embed", "theme", "theme"]
+    assert lay["links"][1]["embed"] is False
+    assert ev["event"]["layout"] == lay
+    assert lay["alerts"]["builtin"]["contacts"] is True and lay["alerts"]["rules"] == []
+
+    await client.send_json({"id": 4, "type": f"{DOMAIN}/save", "layout": {"alerts": {
+        "builtin": {"battery": True, "contacts": "ja"}, "contacts_min": 999,
+        "rules": [{"title": "Kamin", "entity": "sensor.kamin", "op": "gt", "value": "85", "minutes": -5, "level": "alarm"},
+                  {"entity": "switch.x", "op": "quatsch", "level": "panik"}, "kaputt"]}}})
+    got = [await client.receive_json(), await client.receive_json()]
+    al = next(m for m in got if m["id"] == 4 and m["type"] == "result")["result"]["layout"]["alerts"]
+    assert al["builtin"]["battery"] is True and al["builtin"]["contacts"] is True and al["contacts_min"] == 240
+    assert len(al["rules"]) == 2 and al["rules"][0]["minutes"] == 0 and al["rules"][0]["level"] == "alarm"
+    assert al["rules"][1]["op"] == "on" and al["rules"][1]["level"] == "warn" and al["rules"][1]["enabled"] is True
+
+    # Optionen ändern → Panel neu registriert
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"name": "Zuhause", "icon": "mdi:home", "require_admin": True})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    p = hass.data[frontend.DATA_PANELS][PANEL_URL_PATH]
+    assert p.sidebar_title == "Zuhause" and p.require_admin
+
+    # Entladen entfernt das Panel
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert PANEL_URL_PATH not in hass.data[frontend.DATA_PANELS]
+
+
+async def test_single_instance(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert result["type"] is FlowResultType.ABORT
+
+
+async def test_layout_persists(hass: HomeAssistant, hass_ws_client, hass_storage) -> None:
+    hass_storage[DOMAIN] = {"version": 1, "key": DOMAIN, "data": {"favorites": ["light.x"], "header": {"pv": "sensor.pv"}}}
+    await _setup(hass)
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/info"})
+    msg = await client.receive_json()
+    assert msg["result"]["layout"]["favorites"] == ["light.x"]
+    assert msg["result"]["layout"]["header"]["pv"] == "sensor.pv"

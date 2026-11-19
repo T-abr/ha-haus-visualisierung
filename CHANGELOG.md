@@ -1,0 +1,440 @@
+# Changelog – Haus Visualisierung
+
+Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manifest.json`.
+
+## Unveröffentlicht
+
+## 1.0.0 – 2026-11-19
+
+**Erste stabile Version.** Keine Änderungen an Einstellungen oder Karten nötig – ein Update von 0.13.0 übernimmt alles.
+
+### Umfang von 1.0
+- Panel mit automatischem Aufbau aus Etagen, Bereichen und Geräten; Übersicht Hausschnitt, Cockpit, Etagen-Spalten, Aktiv-Fokus (automatisch nach Bildschirmgröße); Kompakt und Komfort; vier Kopfzeilen; Raum- und Sammelseiten; Einstellungen im Panel.
+- Eingebettete Panels und Dashboards mit fester Navigation und Haus-Farben.
+- Klingel-Overlay mit Kamera, Live-Bild und Türöffner.
+- Alarmmanager mit festen und eigenen Regeln, Leitstelle, Quittieren, Stummschalten, Protokoll, Fehlalarm-Auswertung, Push-Meldungen mit Aktionsknöpfen.
+- Hausmodus mit Automatik und Alarmo-Kopplung, Regeln je Modus.
+- Eskalation und Aktionen (KNX, Schalter, Sirene, Durchsage, Skript).
+- Entitäten `select.hausmodus`, `sensor.haus_alarme_aktiv`; Ereignisse für Automationen; Dashboard-Karten.
+
+### Abschlussprüfung
+- Rundgang über 138 Seitenaufrufe (alle Seiten in Kompakt und Komfort, alle Übersicht-Varianten mit allen Kopfzeilen, großes Testhaus) bei 1440, 1000 und 390 px: keine JavaScript-Fehler; am Handy keine Überlappungen und nichts breiter als der Bildschirm.
+- Code-Prüfung des Backends (ruff: Fehler, Bugbear, Vereinfachungen, Async) ohne Befund; kleine Aufräumarbeiten (contextlib.suppress, ungenutzte Variablen und Importe, Import-Reihenfolge).
+- 14 Backend-Tests, 240 Bedienprüfungen.
+
+### Geändert
+- Kennzahlen-Leiste in der Kopfzeile: am Handy läuft der rechte Rand weich aus, damit sichtbar ist, dass man wischen kann.
+- README mit Funktionsübersicht.
+
+### Performance
+- Übersicht 15–21 ms Aufbau, Raumseite 10 ms, Licht 26 ms, Alarme 7 ms; 0 Neuaufbauten bei Zustandsänderungen; hass-Setter Ø 20–31 µs (großes Testhaus: 24 Räume, ≈ 700 Entitäten, alle 250 ms eine Änderung).
+- Backend: Auswertung der Warnregeln 0,04 ms je Durchlauf, Neuaufbau des Modells 0,35 ms (Entwicklungsrechner; auf dem Pi etwa das 10- bis 20-Fache, also unter 10 ms).
+
+## 0.13.0 – 2026-11-19
+
+### Neu – Eskalation und Aktionen
+- **Eskalation:** Eine Meldung der gewählten Stufen (Standard: nur Alarme) ist nach X Minuten (Standard 5) noch nicht quittiert und nicht stumm → erneute **kritische Push-Meldung** „Nicht quittiert: …“ an alle Empfänger (auch bei „Nicht stören“) und Aktionen mit Auslöser „Eskalation“. Je Meldung einmal; im Alarmmanager als „eskaliert“ gekennzeichnet, im Protokoll mit Uhrzeit; Ereignis `haus_visualisierung_alarm` mit `type: eskaliert`.
+- **Aktionen** (Einstellungen → Eskalation und Aktionen), je Aktion: Auslöser „sofort bei neuer Meldung“ oder „bei Eskalation“, gilt für alle Alarme / Alarme und Warnungen / alle Meldungen / eine bestimmte feste oder eigene Regel, optional nur in bestimmten Hausmodi:
+  - **KNX-Telegramm** auf eine Gruppenadresse (Dienst `knx.send`, Wert und Rücksetzwert wählbar) – z. B. Sammelalarm an die KNX-Visualisierung oder einen Binäreingang.
+  - **Schalter / Licht** (z. B. KNX-Schaltaktor, Blitzleuchte, Außenbeleuchtung).
+  - **Sirene**.
+  - **Durchsage** über einen Lautsprecher (z. B. Sonos) mit Sprachausgabe, Lautstärke und Text mit Platzhaltern `{titel}`, `{stufe}`, `{detail}`, `{modus}` (als Ansage über laufende Musik, `announce`).
+  - **Skript** mit den Variablen titel, stufe, detail, key, modus – für alles Weitere.
+- **Zurücksetzen:** KNX, Schalter und Sirene werden zurückgesetzt (Rücksetzwert bzw. aus), sobald alle auslösenden Meldungen quittiert, stumm oder behoben sind (abschaltbar je Aktion).
+- **Test-Knopf** je Aktion: führt sie sofort aus – auch ungespeichert – und setzt schaltende Aktionen nach 3 s zurück.
+- Vorlagen: KNX-Sammelalarm, Sirene bei Eskalation, Sonos-Durchsage, Blitzleuchte bei Abwesenheit, Skript.
+- Ausgeführte und fehlgeschlagene Aktionen stehen im Protokoll und im Verlauf der Meldung.
+
+### Neu – Fehlalarm-Auswertung
+- „Häufigste Meldungen“ im Protokoll zeigt je Meldung durchschnittliche Dauer, wie oft sie nach weniger als 1 Minute wieder weg war und wie oft sie quittiert wurde. „prüfen“ (möglicher Fehlalarm) bei: häufig (ab 5×), mehrfach kurz (ab 3× unter 1 Min.) oder nie quittiert (ab 4×). Verdächtige Meldungen stehen oben.
+
+### Behoben
+- (während der Entwicklung) Test-Rücksetzen lief außerhalb der Ereignisschleife – vor der Auslieferung durch die Backend-Tests gefunden.
+
+### Tests
+- Backend: KNX 1/0, Durchsage mit Lautstärke und Text, Skript mit Variablen, Bereich je Regel, Aktion nur in Hausmodus, Eskalation einmalig mit kritischer Meldung und Sirene, Zurücksetzen bei Quittieren und Stumm, Fehlalarm-Statistik, Test über Websocket mit Rücksetzen nach 3 s, ungültige Gruppenadressen (14 Backend-Tests).
+- Bedienung: 12 neue Prüfungen (240 Prüfungen).
+
+### Performance
+- Panel unverändert: Übersicht 15–20 ms Aufbau, 0 Neuaufbauten, hass-Setter typisch 20–33 µs; Alarme-Seite 5,1 ms.
+- Backend: Aktionen laufen nur bei neuen/beendeten Meldungen; Eskalation wird im vorhandenen 30-s-Takt über die aktiven Meldungen geprüft (wenige Einträge). Dienstaufrufe laufen als eigene Aufgaben und blockieren die Auswertung nicht.
+
+## 0.12.0 – 2026-11-19
+
+### Neu – Hausmodus
+- **Hausmodus Zuhause, Nacht, Abwesend, Urlaub.** Umschalten im Alarmmanager (Karte „Hausmodus“ oben rechts), über die neue Entität `select.hausmodus` (Automationen, KNX-Logik, Sprachassistent) oder automatisch. Anzeige in der Kopfzeile (Tipp öffnet den Alarmmanager); am Handy nur als Symbol.
+- **Automatik:** Abwesend, wenn alle Personen weg sind (mit Verzögerung, Standard 10 Min., damit kurze Wege nicht umschalten); zurück auf Zuhause, sobald jemand heimkommt (auch aus Urlaub). Optional Nacht nach Uhrzeit (Standard 23:00–06:30, nur aus Zuhause).
+- **Kopplung mit der Alarmanlage (Alarmo)** in beide Richtungen, abschaltbar: je Modus wählbar, was die Anlage tut (unscharf, scharf zuhause/Nacht/abwesend/Urlaub, nicht ändern). Wird die Anlage direkt geschaltet (Alarmo-Panel, Keypad), folgt der Hausmodus. Optionaler Code wird nur im Backend gespeichert und nie an Browser geschickt. Schlägt das Schalten fehl, steht ein Hinweis im Protokoll. Umschalten auf einen Modus, der die Anlage scharf schaltet, fragt vorher nach.
+- **Regeln je Modus:** jede feste und eigene Regel lässt sich auf Modi beschränken (Symbole in Einstellungen → Warnungen).
+- **Neue feste Regeln:** „Bewegung erkannt, während niemand zu Hause ist“ (Alarm, Standard nur Abwesend und Urlaub) und „Alarmanlage ausgelöst“ (Alarm, z. B. Alarmo im Zustand „triggered“).
+- **Neue Entität `sensor.haus_alarme_aktiv`:** Anzahl aktiver (nicht stummer) Meldungen, Attribute alarme, warnungen, hinweise, neu, stumm, meldungen – z. B. für eine KNX-Statusanzeige.
+- Moduswechsel stehen im Protokoll (vorher/nachher, wer bzw. „Automatik“/„Alarmanlage“); Ereignis `haus_visualisierung_modus` (mode, previous, by, source).
+- Einstellungen → neuer Abschnitt „Hausmodus“.
+
+### Tests
+- Backend: Entitäten, Websocket, Bewegung nur bei Abwesend, eigene Regel nur Nacht, feste Regel eingeschränkt, Code nur im Backend; Automatik mit Verzögerung und „kurz weg“, Alarmo scharf/unscharf, Alarmo extern → Modus folgt ohne Rückkopplung, Nacht nach Uhrzeit, Urlaub bleibt, Hausmodus aus; Alarmanlage ausgelöst (12 Backend-Tests).
+- Bedienung: 18 neue Prüfungen (228 Prüfungen).
+
+### Performance
+- Hausmodus und Regeln je Modus kosten im Panel nichts Messbares: Übersicht 14–17 ms Aufbau, 0 Neuaufbauten; hass-Setter typisch 21–24 µs (einzelne Messläufe bis ~50 µs durch Schwankungen des Messrechners, je Seite unterschiedlich). Alarme-Seite 5,6 ms Aufbau.
+- Backend: Personen und Alarmanlage werden über den ohnehin vorhandenen Zustands-Listener beobachtet; Nacht-Zeiten nur mit zwei Zeit-Triggern, wenn eingeschaltet.
+
+## 0.11.0 – 2026-11-19
+
+### Neu – Alarmmanager
+- **Neue Seite „Alarme“** (Navigation, Glocke in der Kopfzeile, Kopf der Warnkarte). Layout „Leitstelle“: links die aktiven Meldungen (Alarme zuerst), in der Mitte die gewählte Meldung mit allen Aktionen, rechts „Heute“ (Zähler je Stufe), der Zustand der Alarmanlage (z. B. Alarmo) und der Verlauf des Tages. Tablet zweispaltig, Handy untereinander.
+- **Ablauf je Meldung: neu → quittiert → behoben.** Quittieren heißt „gesehen“: Die Meldung bleibt sichtbar, pulsiert nicht mehr, zählt nicht mehr im Navigationszähler und wird von allen Handys entfernt.
+- **Stummschalten:** 1 h, bis morgen 7 Uhr oder bis behoben. Stumme Meldungen verschwinden aus Warnkarte, Kopfzeile und Aktiv-Fokus und stehen im Alarmmanager unter „Stumm“; die Warnkarte zeigt „N stumm geschaltet“. Läuft die Zeit ab und besteht die Meldung noch, ist sie wieder offen und wird erneut gemeldet.
+- **Alle quittieren** mit einem Knopf.
+- **Handy:** nach rechts wischen = quittieren, nach links = 1 h stumm; Antippen öffnet die Details.
+- **Protokoll** (Reiter): alle Ereignisse der letzten 1, 7 oder 30 Tage nach Tagen gruppiert (aufgetreten, quittiert von …, stumm bis …, behoben nach …), Filter nach Stufe, dazu „Häufigste Meldungen“ mit Hinweis „prüfen“ ab 5 Meldungen (möglicher Fehlalarm).
+- **Push-Meldungen mit Aktionsknöpfen:** „Quittieren“ und „1 h stumm“, bei Schlössern zusätzlich „Verriegeln“. Wer quittiert, steht im Protokoll.
+- Zustände und Protokoll werden gespeichert (`.storage/haus_visualisierung_alarme`, 30 Tage) und überstehen einen Neustart.
+- Für Automationen: Ereignis `haus_visualisierung_alarm` bei jeder Änderung (`type`: neu, quittiert, stumm, stumm_aus, stumm_ende, behoben; dazu `key`, `level`, `title`, `status`, `user`).
+- Websocket: `haus_visualisierung/alarms_subscribe`, `/alarm_action` (ack, ack_all, mute, unmute), `/alarm_log`.
+
+### Geändert
+- Kopf der Warnkarte und Einträge darin öffnen den Alarmmanager (mit der Meldung ausgewählt) statt direkt den Raum; „Raum öffnen“ bzw. „Details“ gibt es dort.
+- Kopfzeilen-Glocke führt zu „Alarme“ statt „Sicherheit“.
+
+### Tests
+- Backend: Quittieren mit Benutzer, Entfernen vom Handy, Stummschaltung mit Ablauf und erneuter Meldung, stumm bis behoben, Aufheben, alle quittieren, Protokoll und Statistik, Push-Knöpfe Quittieren/Stumm/Verriegeln, Speichern, nächster Morgen (9 Backend-Tests).
+- Bedienung: 28 neue Prüfungen inkl. Wischen am Handy (210 Prüfungen).
+
+### Performance
+- Seite „Alarme“: Aufbau 7,3 ms, 0 Neuaufbauten, 57 DOM-Änderungen/min (nur Zeilen, deren Inhalt sich ändert; Seite wird über eine Signatur nur bei echten Änderungen neu geschrieben), hass-Setter Ø 41 µs.
+- Der Zähler an „Alarme“ beobachtet auf jeder Seite die Warnquellen (wie die Kopfzeilen-Glocke): Raumseite jetzt 336 statt 14 beobachtete Entitäten, hass-Setter Ø 21 µs (vorher 1 µs), Licht Ø 34 µs – unter der Grenze von 50 µs. Übersicht unverändert 20–21 µs, 0 Neuaufbauten.
+- Backend: Zustände nur bei Änderungen gespeichert (verzögert, 2 s), Protokoll auf 1000 Einträge / 30 Tage begrenzt; Live-Abo schickt nur die letzten 60 Einträge.
+
+## 0.10.3 – 2026-11-19
+
+### Behoben
+- **Sicherheit (und alle Kompakt-Seiten) auf dem Handy:** Bei langen Namen, z. B. von UniFi Protect, wurden die Felder breiter als der Bildschirm. Zustand und Knöpfe („Entriegelt“, „Verriegeln“, „Keine Bewegung“) waren rechts abgeschnitten. Ursache: Die Rasterspalte richtete sich nach dem längsten ungekürzten Namen. Jetzt passt jede Karte in die Breite, und Namen werden gekürzt.
+- Lange Zustände („Keine Bewegung · vor 7 Min.“) stehen auf dem Handy zweizeilig und nehmen höchstens knapp die Hälfte der Zeile ein.
+- Schlösser zeigen auf dem Handy den Zustand nicht doppelt: Symbol und Knopf zeigen ihn bereits, der Name hat mehr Platz.
+- Erdlinie im Hausschnitt ragt auf dem Handy nicht mehr über den Rand.
+
+### Tests
+- Neue Prüfungen bei 390 px mit langen Namen für Sicherheit, Licht, Beschattung, Klima, Batterien und Raumseiten (Kompakt und Komfort): nichts breiter als der Bildschirm, nichts überlappt; Schloss-Zeile und lange Zustände (182 Prüfungen).
+
+### Performance
+- Nur CSS; Übersicht 20–33 µs hass-Setter, Raumseite 1 µs, Licht 13 µs, 0 Neuaufbauten – unverändert.
+
+## 0.10.2 – 2026-11-19
+
+### Behoben
+- **Aktiv-Fokus auf dem Handy (iPhone):** Symbole lagen teilweise übereinander oder waren verschoben.
+  - Energieleiste: Ein dehnbarer Abstandshalter schob beim Umbrechen Szenen und Schnellzugriff nach rechts. Auf dem Handy jetzt ein festes Raster mit zwei Spalten: Energiewerte 2 × 2, darunter Szenen und Schnellzugriff gleich breit; zu lange Namen werden gekürzt.
+  - Untere Navigation passt immer in die Breite: Bei mehr als sechs Einträgen nur Symbole, der aktive Eintrag mit Beschriftung. Vorher liefen Einträge rechts aus dem Bild („Batt…“).
+  - Personen stehen auf dem Handy nebeneinander statt überlappend.
+  - Symbole haben eine feste Größe und schrumpfen nicht mehr; Raumnamen werden gekürzt, statt Hinweis-Symbole wegzuschieben; Safari vergrößert die Schrift nicht mehr automatisch.
+
+### Tests
+- Neue Handy-Prüfungen für den Aktiv-Fokus bei 390, 375 und 320 px (normales und großes Testhaus): keine überlappenden Symbole und Texte, Navigation vollständig sichtbar, Energieleiste ohne Verschiebung, Personen ohne Überlappung (166 Prüfungen).
+
+### Performance
+- Nur CSS; Aktiv-Fokus Aufbau 36,9 ms (großes Testhaus), hass-Setter Ø 26,9 µs, 0 Neuaufbauten – unverändert.
+
+## 0.10.1 – 2026-11-18
+
+### Geändert
+- **Verknüpfte Seiten in den Farben der Haus Visualisierung statt nachgebaut.** Die Nachbildung von Dashboards aus 0.10.0 entfällt. Verknüpfte Seiten bleiben in Layout und Inhalt wie im Original und übernehmen nur das Design der Haus Visualisierung:
+  - Hintergrund (Farbverlauf der Haus Visualisierung), Karten im Glas-Look (dunkles, halbdurchsichtiges Glas, 20 px Rundung, feine Linie, Weichzeichner je nach Einstellung „Glas-Effekt“), Text-, Linien-, Status- und Energiefarben, durchsichtige Kopfzeile.
+  - Umgesetzt über die Designvariablen von Home Assistant (`--ha-card-background`, `--primary-text-color` …). Wirkt bei direkt eingebetteten Dashboards, bei Dashboards im Rahmen (dort mit Vorrang vor dem eigenen Design von Home Assistant) und bei eigenen Panels, soweit sie diese Variablen nutzen; der Hintergrund eigener Panels wird durchsichtig.
+- Einstellungen → Verknüpfungen → Darstellung: **Haus-Farben** (Standard), **Original-Farben**, **Eigene Seite**. Werte aus 0.10.0 werden übernommen („Haus-Design“ → Haus-Farben, „Original eingebettet“ → Original-Farben).
+
+### Performance
+- Die Farben sind reine CSS-Variablen; kein zusätzlicher Abruf, kein Neuaufbau. Der Websocket-Abruf der Dashboard-Konfiguration aus 0.10.0 entfällt.
+- Messung unverändert: Übersicht 26–32 µs hass-Setter, Raumseite 1 µs, Licht 7 µs, 0 Neuaufbauten.
+
+## 0.10.0 – 2026-11-18
+
+### Neu
+- **Verknüpfte Dashboards im Haus-Design.** Verknüpfungen auf Lovelace-Dashboards (z. B. „Kamera“ → `/dashboard-import`) werden nicht mehr im Original-Look gezeigt, sondern aus der Dashboard-Konfiguration mit den Bausteinen der Haus Visualisierung neu aufgebaut:
+  - Ansichten des Dashboards → Reiter (Adresse `/haus-visualisierung/dash/<dashboard>/<ansicht>`).
+  - Karten mit Titel, Überschriften (Abschnitts-Ansichten), Stapel mit Titel und Abschnitte der Entitäten-Karte → eigene Gruppen; Karten ohne Titel werden zusammengefasst.
+  - Geräte → Zeilen (Kompakt) bzw. Kacheln (Komfort), bedienbar wie überall; eigene Namen aus dem Dashboard bleiben.
+  - Kameras (Picture-Glance, Picture-Entity, Advanced Camera Card u. ä.) → Kamerabild; Bereichskarten → Raumkachel; Badges → Wertechips; Markdown → Text (Vorlagen mit `{{ }}` werden ausgelassen).
+  - Custom-Karten werden übernommen, wenn sie `entity`, `entities` oder Kameras angeben (z. B. Mushroom).
+  - Was sich nicht nachbauen lässt (Karte, Verlauf, Bild, Energie …), nennt ein Hinweis unten; Knopf „Original“ zeigt das Dashboard eingebettet im Original.
+  - Automatisch erzeugte Dashboards (Strategie, Standard-Übersicht ohne eigene Konfiguration) → Hinweis mit Knopf „Im Original anzeigen“.
+- Einstellungen → Verknüpfungen: Statt „einbetten“ gibt es die Auswahl **Darstellung**: Haus-Design (Standard), Original eingebettet, Eigene Seite. Bisherige Einstellungen werden übernommen („einbetten“ aus → Eigene Seite). Eigene Panels wie Solar und Protect bleiben bei „Haus-Design“ eingebettet, sie haben ihr Design bereits.
+
+### Performance
+- Dashboard-Seite (Testdashboard, 10 Entitäten): Aufbau 4,3–4,8 ms, 0 Neuaufbauten bei Zustandsänderungen, hass-Setter Ø 5 µs; nur angezeigte Entitäten werden beobachtet.
+- Die Dashboard-Konfiguration wird beim Öffnen einmal per Websocket geholt und zwischengespeichert; beim erneuten Öffnen wird sie im Hintergrund geprüft und nur bei Änderungen neu aufgebaut.
+- Übrige Seiten unverändert (Übersicht 27–28 µs Setter, 0 Neuaufbauten).
+
+## 0.9.1 – 2026-11-18
+
+### Behoben
+- **Navigation fehlte bei Verknüpfungen auf Dashboards** (z. B. „Kamera“ → `/dashboard-import`). Bisher ließen sich nur eigene Panels einbetten; Dashboards öffneten sich als eigene Seite. Jetzt werden auch Dashboards und andere Seiten von Home Assistant eingebettet:
+  - Hat Home Assistant das Dashboard-Element schon geladen, wird es direkt eingebettet (wie ein eigenes Panel).
+  - Sonst wird die Seite in einem Rahmen geladen und die Seitenleiste von Home Assistant darin ausgeblendet; die Haus-Navigation bleibt.
+- **„Tür öffnen“ im Klingel-Overlay** funktionierte nur mit Schlössern (`lock.unlock`). Jetzt:
+  - Schloss mit Öffnen-Funktion → `lock.open` (Falle ziehen), sonst `lock.unlock`.
+  - Schalter, z. B. KNX-Türöffner → einschalten und nach einem einstellbaren Impuls (Standard 2 s, 0 = nur einschalten) wieder aus.
+  - Taste → drücken; Skript/Szene → ausführen.
+  - Rückmeldung „Türöffner ausgelöst“ bzw. Fehlermeldung.
+- „Overlay testen“ nutzt jetzt auch noch nicht gespeicherte Angaben der Klingel-Einstellungen.
+- Einstellungen → Verknüpfungen: Der Text „einbetten“ lag unter dem Löschen-Knopf.
+
+### Performance
+- Unverändert gegenüber 0.9.0 (0 Neuaufbauten, hass-Setter 24–34 µs). Ein im Rahmen eingebettetes Dashboard lädt Home Assistant ein zweites Mal im Browser (eigene Verbindung zum Pi), solange es offen ist; beim Verlassen wird der Rahmen entfernt. Direkt eingebettete Dashboards teilen sich die Verbindung.
+
+## 0.9.0 – 2026-11-18
+
+### Neu
+- **Warnungen im Aktiv-Fokus:**
+  - Die Warnkarte steht ganz oben (vor der Energieleiste) und bleibt auch mit „Alles in Ordnung“ sichtbar (dann einzeilig).
+  - Räume mit einer Warnung oder einem Alarm gelten als aktiv und erscheinen unter „Jetzt aktiv“ – z. B. der Eingang bei entriegelter Haustür. Die Warnung steht im Klartext in der Aktivitätszeile; die Kachel ist orange (Warnung) bzw. rot (Alarm) umrandet.
+  - Reihenfolge unter „Jetzt aktiv“: Alarm, dann Warnung, dann die übrigen aktiven Räume.
+- Warnkarte zählt Stufen getrennt, z. B. „1 Alarm · 2 Warnungen“.
+
+### Performance
+Messaufbau wie 0.1.0, Kompakt-Modus (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht Hausschnitt | 17,4 ms | 340 | 720 | 600 | 0 | 33,2 µs |
+| Übersicht Cockpit | 13,7 ms | 336 | 720 | 603 | 0 | 26,7 µs |
+| Übersicht Aktiv-Fokus | 14,2 ms | 340 | 720 | 600 | 0 | 26,5 µs |
+| Raumseite | 11,3 ms | 14 | 0 | 0 | 0 | 1,0 µs |
+| Licht | 23,1 ms | 144 | 360 | 840 | 0 | 11,3 µs |
+
+- Warnkarte, Glocke und Fokus-Kacheln teilen sich eine Auswertung je Zustandsänderung (Zwischenspeicher), statt sie mehrfach zu rechnen.
+
+## 0.8.0 – 2026-11-18
+
+### Neu
+- **Klingel-Overlay:** Klingelt es, legt sich das Kamerabild über die gerade offene Seite der Haus Visualisierung – auch über eingebettete Panels wie Solar.
+  - Klingel automatisch erkannt (Ereignis-Entität mit Klasse „doorbell“, z. B. `event.g6_entry_doorbell` von UniFi Protect); Binär-Sensoren gehen ebenfalls.
+  - Kamera automatisch vom selben Gerät, die Paketkamera wird übergangen.
+  - Standbild jede Sekunde; „Live“ zeigt den Stream von Home Assistant im Overlay (sonst Detaildialog).
+  - „Kameras öffnen“ öffnet die Protect Visualisierung eingebettet; optional „Tür öffnen“ mit zweitem Tipp zur Bestätigung.
+  - Schließt nach einstellbarer Zeit (Standard 60 s); nach „Live“ oder „Tür öffnen“ bleibt es offen. Erneutes Klingeln setzt die Zeit zurück. Esc oder ein Tipp daneben schließt.
+  - Einstellungen → Klingel: an/aus, Klingel, Kamera, Schloss, Zeit, „Overlay testen“.
+
+### Performance
+Messaufbau wie 0.1.0, Kompakt-Modus (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht Hausschnitt | 13,2 ms | 340 | 720 | 600 | 0 | 29,6 µs |
+| Übersicht Cockpit | 26,1 ms | 336 | 720 | 600 | 0 | 32,4 µs |
+| Übersicht Aktiv-Fokus | 13,0 ms | 340 | 720 | 600 | 0 | 37,0 µs |
+| Raumseite | 6,9 ms | 14 | 0 | 0 | 0 | 1,1 µs |
+| Licht | 40,9 ms | 144 | 360 | 840 | 0 | 7,7 µs |
+
+- Die Klingel-Erkennung kostet je Zustandsänderung einen Vergleich; die Klingel-Entität wird nur bei Registeränderungen neu gesucht.
+- Standbilder und Live-Stream laufen nur, solange das Overlay offen ist (Standbild pausiert bei verstecktem Tab). Die Aufbauzeiten schwanken zwischen Messläufen (Cockpit 13–26 ms, Licht 23–41 ms); 0 Neuaufbauten und alle Setter-Werte unter 50 µs.
+
+## 0.7.0 – 2026-11-18
+
+### Neu
+- **Push-Benachrichtigungen für Warnungen, Alarme und Hinweise.** Home Assistant wertet die Warnregeln jetzt auch im Hintergrund aus (`alerts.py`, gleiche Regeln wie im Panel) und schickt neue Meldungen über die Companion-App – auch wenn kein Panel offen ist.
+  - Empfänger: alle Handys mit der Companion-App (`notify.mobile_app_*`) oder eine Auswahl.
+  - Stufen einzeln an/aus; Alarme als kritische Meldung (iOS `interruption-level: critical` mit Ton, Android Kanal `alarm_stream`), Warnungen „time-sensitive“, Hinweise leise.
+  - Behobene Warnungen: Meldung vom Handy entfernen (Standard), Entwarnung senden oder nichts tun.
+  - Sperrzeit gegen Dauermeldungen (Standard 10 min, Alarme immer), Meldungen werden 1 s gesammelt.
+  - Nach einem Neustart werden bestehende Warnungen still übernommen; Alarme kommen trotzdem.
+  - Tipp auf die Meldung öffnet die passende Seite der Haus Visualisierung.
+  - Optional zusätzlich als Benachrichtigung in Home Assistant (Glocke in der Seitenleiste).
+  - Testmeldung aus den Einstellungen; Anzeige der im Hintergrund aktiven Warnungen.
+- **Abfrage im Schnellzugriff:** „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff (Cockpit, Energieleiste) fragen vorher nach („Alle Lichter ausschalten? 6 Lichter sind gerade an.“). Esc bricht ab, Enter bestätigt. Sind alle Lichter schon aus, kommt nur ein Hinweis. Abschaltbar unter Einstellungen → Darstellung → „Schnellzugriff bestätigen“.
+
+### Performance
+Messaufbau wie 0.1.0, Kompakt-Modus (`tests/perf/measure.py`, `tests/backend/test_push_perf.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht Hausschnitt | 12,7 ms | 340 | 720 | 600 | 0 | 27,2 µs |
+| Übersicht Cockpit | 13,1 ms | 336 | 720 | 603 | 0 | 30,9 µs |
+| Übersicht Aktiv-Fokus | 13,3 ms | 340 | 720 | 600 | 0 | 27,4 µs |
+| Raumseite | 7,5 ms | 14 | 0 | 0 | 0 | 1,0 µs |
+| Licht | 22,9 ms | 144 | 360 | 840 | 0 | 7,0 µs |
+
+**Hintergrund-Auswertung auf dem Pi (Python):** eine Auswertung aller Regeln 0,05 ms, Neuaufbau des Modells 0,31 ms (auf dem Entwicklungsrechner; auf dem Raspberry Pi etwa das 5–10-Fache, also deutlich unter 5 ms).
+- Zustandsänderungen werden nur für die 312 beteiligten Entitäten beachtet (Mengen-Abfrage), alle anderen kosten nichts.
+- Mehrere Änderungen innerhalb einer Sekunde lösen eine einzige Auswertung aus; zusätzlich alle 30 s für Regeln mit Mindestdauer.
+- Das Modell wird nur bei Änderungen an Bereichen, Geräten, Entitäten oder den Einstellungen neu aufgebaut.
+
+## 0.6.0 – 2026-11-18
+
+### Neu
+- **Warnungen individuell konfigurierbar** (Einstellungen → Warnungen):
+  - **Feste Regeln** einzeln an/aus: Fenster/Tür offen, Fenster offen beim Heizen, Melder ausgelöst (Alarm), Schloss entriegelt, Garagentor/Tor offen, Batterien kritisch, Geräte nicht erreichbar (Hinweis). Fenster und Türen optional erst nach einer Mindestdauer.
+  - **Eigene Regeln** für beliebige Entitäten: Bedingung (an/offen, aus/zu, größer als, kleiner als, ist gleich, ist nicht, nicht erreichbar), Wert, „ab … Minuten“, Stufe (Hinweis, Warnung, Alarm), einzeln abschaltbar.
+  - **Vorlagen:** Akku fast leer (mit dem Akku-Sensor vom Dach), Speicher kalt, Kamin sehr heiß, Hoher Netzbezug (mit dem Netz-Sensor), Gerät läuft lange, Gerät offline.
+- **Warnkarte** statt „Alles zu“: zeigt „Alles in Ordnung“ oder die aktiven Warnungen, sortiert nach Stufe (Alarm rot und pulsierend, Warnung orange, Hinweis blau); Tipp öffnet den Raum, die Batterieseite oder den Detaildialog. Im Cockpit, auf der Seite Sicherheit und – nur wenn etwas aktiv ist – über den anderen Übersichten.
+- **Glocke in der Kopfzeile** mit der Anzahl aktiver Warnungen und Alarme (ersetzt den bisherigen Melder-Chip).
+- „Fenster offen beim Heizen“ fasst Fenster und Heizung eines Raums zusammen; das Fenster erscheint dann nicht zusätzlich einzeln.
+
+### Performance
+Messaufbau wie 0.1.0, Kompakt-Modus (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht Hausschnitt | 17,5 ms | 340 | 720 | 600 | 0 | 27,5 µs |
+| Übersicht Cockpit | 12,6 ms | 336 | 720 | 603 | 0 | 28,0 µs |
+| Übersicht Aktiv-Fokus | 20,4 ms | 340 | 720 | 600 | 0 | 26,3 µs |
+| Raumseite | 6,9 ms | 14 | 0 | 0 | 0 | 1,4 µs |
+| Licht | 24,8 ms | 144 | 360 | 840 | 0 | 8,3 µs |
+
+- Warnkarte und Glocke werten die Regeln nur aus, wenn sich eine beteiligte Entität ändert, plus alle 30 s für Regeln mit Mindestdauer (nur bei sichtbarem Tab). Mehr Aktualisierer (+240/min), weiterhin 0 Neuaufbauten und unter 50 µs pro Zustandsänderung.
+- Die Liste der Warnkarte wird nur neu geschrieben, wenn sich ihr Inhalt ändert.
+
+## 0.5.0 – 2026-11-18
+
+### Neu
+- **Neue Kopfzeile „Kompakt“ (Standard):** Status als Symbol + Zahl (z. B. Licht 6, Heizen 1, Batterien 2), voller Text als Tooltip, Tipp öffnet die passende Seite; Warnungen rot hinterlegt. Am Desktop immer eine Zeile (46 px), auf dem Handy zwei kurze Zeilen.
+- **Kopfzeile wählbar** (Einstellungen → Darstellung → Kopfzeile, nur Kompakt-Modus): Kompakt, Chips mit Text (bisher), Satz + Hinweise (Zustand als Satz, nur Warnungen als Chips), Kennzahlen-Leiste (Glasleiste mit Wert und Beschriftung je Kennzahl).
+
+### Behoben
+- Kopfzeile: Wetter und Personen bleiben am Desktop immer in der ersten Zeile rechts; die Chips brechen nur noch innerhalb ihres Bereichs um. Personen-Bilder überlappen platzsparend.
+- Batterien von Geräten wurden nicht gezählt, wenn Home Assistant sie als Diagnose-Entität führt (der Normalfall). Chip „Batterien schwach“ und die Batterieseite zeigen jetzt alle Batterien.
+
+### Performance
+Messaufbau wie 0.1.0, Kompakt-Modus, Kopfzeile Kompakt (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht Hausschnitt | 14,9 ms | 340 | 480 | 480 | 0 | 26,9 µs |
+| Übersicht Cockpit | 14,7 ms | 336 | 480 | 480 | 0 | 29,9 µs |
+| Übersicht Aktiv-Fokus | 14,9 ms | 340 | 480 | 480 | 0 | 38,5 µs |
+| Raumseite | 8,3 ms | 14 | 0 | 0 | 0 | 1,0 µs |
+| Licht | 34,3 ms | 144 | 360 | 840 | 0 | 10,9 µs |
+
+- Mehr beobachtete Entitäten (+24), weil jetzt auch Diagnose-Batterien zählen; der hass-Setter bleibt unter der Grenze von 50 µs, weiterhin 0 Neuaufbauten.
+- Die Kompakt-Kopfzeile ändert Klasse und Tooltip nur, wenn sich der Wert wirklich ändert.
+
+## 0.4.1 – 2026-11-18
+
+### Behoben
+- **Navigation fehlte in der eingebetteten Protect-Ansicht.** Zwei Ursachen werden jetzt abgefangen, für alle eingebetteten Panels:
+  - Springt ein eingebettetes Panel auf seine eigene Adresse (z. B. `/protect-visualisierung/live` beim Start oder beim Umschalten zwischen Live/Ereignisse/Einstellungen), wird die Adresse auf die eingebettete umgeschrieben (`/haus-visualisierung/extern/protect-visualisierung/live`). Home Assistant bleibt in der Haus Visualisierung, die Unterseite kommt im Panel an.
+  - Feste Vollbild-Ebenen eines eingebetteten Panels (`position: fixed`) werden auf den Inhaltsbereich begrenzt und können die Navigation nicht mehr überdecken.
+
+### Performance
+- Unverändert gegenüber 0.4.0. Die Adress-Prüfung läuft nur bei einem Seitenwechsel und nur, solange ein Panel eingebettet ist.
+
+## 0.4.0 – 2026-11-18
+
+### Neu
+- **Panels einbetten:** Verknüpfungen zu eigenen Panels (z. B. Solar Visualisierung, Protect Visualisierung, Solarthermie) öffnen sich innerhalb der Haus Visualisierung, die Navigation links bzw. unten bleibt. Das Panel wird so geladen, wie Home Assistant es selbst tut (gleiches Element, `hass`, `narrow`, `route`, `panel`), also ohne iFrame und ohne zweite HA-Seitenleiste.
+  - Öffnen über die Navigation, die Energie-Karte bzw. Energieleiste (erste Verknüpfung) und den Kamera-Knopf auf der Sicherheitsseite.
+  - Adresse z. B. `/haus-visualisierung/extern/solar-visualisierung`; Unterseiten werden über `route` weitergereicht.
+  - Beim Verlassen wird das eingebettete Panel getrennt (es pausiert, z. B. stoppt Protect den Live-Stream) und beim Zurückkehren dieselbe Instanz wieder eingesetzt – ohne neues Laden.
+  - Je Verknüpfung abschaltbar („einbetten“ in den Einstellungen). Dashboards und Panels, die sich nicht einbetten lassen, öffnen sich wie bisher; bei direktem Aufruf erscheint ein Hinweis mit Knopf.
+
+### Performance
+Messaufbau wie 0.1.0, Kompakt-Modus (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht Hausschnitt | 17,5 ms | 316 | 480 | 360 | 0 | 19,8 µs |
+| Übersicht Cockpit | 12,0 ms | 312 | 480 | 363 | 0 | 17,6 µs |
+| Übersicht Aktiv-Fokus | 11,5 ms | 316 | 480 | 360 | 0 | 28,1 µs |
+| Raumseite | 8,0 ms | 13 | 0 | 0 | 0 | 0,8 µs |
+| Licht | 24,8 ms | 144 | 360 | 840 | 0 | 8,1 µs |
+
+- Eingebettete Panels werden erst beim ersten Öffnen geladen und danach im Speicher gehalten; im Hintergrund sind sie getrennt und arbeiten nicht.
+- Die Haus Visualisierung gibt `hass` nur an das gerade sichtbare eingebettete Panel weiter.
+
+## 0.3.2 – 2026-11-18
+
+### Geändert
+- **Seitenfüllend:** Das Panel füllt immer den ganzen sichtbaren Bereich – in der Höhe auch bei wenig Inhalt und in der Breite ohne Begrenzung (bisher max. 1440 px). Auf breiten Bildschirmen verteilen sich Raumseiten, Licht und Beschattung auf entsprechend mehr Spalten.
+- **Navigation links fest:** Gescrollt wird nur noch der Inhalt; die Navigationsleiste links bleibt stehen. Das gilt auch, wenn Home Assistant dem Panel keine feste Höhe gibt.
+
+### Performance
+- Unverändert gegenüber 0.3.1 (0 Neuaufbauten bei Zustandsänderungen). Oberkante und Höhe werden nur bei Größenänderungen des Fensters neu gesetzt.
+
+## 0.3.1 – 2026-11-18
+
+### Behoben
+- Schmale Ansicht (Handy): Die Navigationsleiste bleibt beim Scrollen dauerhaft unten sichtbar, auch wenn Home Assistant die ganze Seite statt des Panels scrollt. Sie richtet sich nach Lage und Breite des Panels und hat einen leicht durchscheinenden Hintergrund. Inhalte, Speicherleiste und Meldungen rücken so weit nach oben, dass die Leiste nichts verdeckt.
+
+### Performance
+- Unverändert gegenüber 0.3.0 (Messung `tests/perf/measure.py`: 0 Neuaufbauten, hass-Setter Übersicht ≈ 20 µs). Lage und Breite der Leiste werden nur bei Größenänderungen neu gesetzt, nicht beim Scrollen.
+
+## 0.3.0 – 2026-11-18
+
+### Neu
+- **Automatische Übersicht** (neuer Standard): Cockpit auf Desktop und Tablet, Aktiv-Fokus auf dem Handy (Grenze 760 px Breite). Wechselt beim Drehen oder Verkleinern des Fensters sofort.
+- **Übersicht in vier Varianten** zum festen Einstellen (Einstellungen → Darstellung → Übersicht, nur im Kompakt-Modus):
+  - **Hausschnitt** (bisher): Dach, Etagen, Erdlinie, Außenband.
+  - **Cockpit**: Etagen als Karten links, rechts eine Seitenleiste mit Sicherheitsstatus, Energie, Schnellzugriff (Alle Lichter aus, Rollos auf/zu, Szenen) und Favoriten.
+  - **Etagen-Spalten**: jede Etage eine Spalte mit Raum-Zeilen (Temperaturpunkt farbig, Hinweise, Licht-Knopf); Energieleiste mit Szenen und Schnellzugriff darüber.
+  - **Aktiv-Fokus**: oben nur Räume, in denen gerade etwas los ist (Licht, offenes Fenster, Heizen, Bewegung, Musik) mit Klartext, z. B. „Decke, Stehlampe an · ♪ Nachtflug“; alle übrigen Räume als Chips nach Etagen.
+
+### Performance
+Messaufbau wie 0.1.0, Kompakt-Modus (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht Hausschnitt | 12,1 ms | 316 | 480 | 360 | 0 | 21,2 µs |
+| Übersicht Cockpit | 11,8 ms | 312 | 480 | 363 | 0 | 21,1 µs |
+| Übersicht Aktiv-Fokus | 13,3 ms | 316 | 480 | 360 | 0 | 19,2 µs |
+| Raumseite | 5,6 ms | 13 | 0 | 0 | 0 | 0,8 µs |
+| Licht | 30,5 ms | 144 | 360 | 840 | 0 | 6,1 µs |
+
+- Aktiv-Fokus baut die Seite nur dann neu auf, wenn ein Raum von „ruhig“ zu „aktiv“ wechselt oder umgekehrt (ein Neuaufbau ≈ 13 ms); alle anderen Änderungen aktualisieren nur die betroffenen Kacheln. Im Messaufbau sind alle Räume dauerhaft aktiv, daher 0.
+- Der automatische Wechsel Cockpit ↔ Aktiv-Fokus löst nur beim Überschreiten der 760-px-Grenze einen Neuaufbau aus.
+
+## 0.2.0 – 2026-11-18
+
+### Neu
+- **Kompakt-Modus** (Standard, umschaltbar unter Einstellungen → Darstellung; „Komfort“ entspricht 0.1.0):
+  - Übersicht: einzeilige Kopfzeile mit Chips, flache Energieleiste statt hohem Dach, kleine Raum-Chips für Räume ohne Klimawerte, Außenbereiche als Chip-Leiste, schmale Etagenspalte, nur Abweichungen werden angezeigt.
+  - Handy: Etagen als Reiter.
+  - Raumseite: einzeiliger Kopf mit Szenen als Chips, Werte-Leiste für Sensoren, Kontakte und Melder, Geräte als Zeilen; Lichter per Wischen dimmen; „Weitere“ und Batterien eingeklappt.
+  - Licht und Beschattung als Listen pro Etage in Spalten, Filter „Nur eingeschaltete“.
+  - Klima als Tabelle (Raum · Ist · Feuchte · Thermostat).
+  - Sicherheit mit Zusammenfassung oben, Fenster & Türen eingeklappt; Batterien als Liste, „In Ordnung“ eingeklappt.
+  - Navigation am Desktop nur mit Symbolen.
+
+### Performance
+Messaufbau wie 0.1.0, gemessen im Kompakt-Modus (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht | 11,5 ms | 316 | 480 | 363 | 0 | 23,3 µs |
+| Raumseite | 5,1 ms | 13 | 0 | 0 | 0 | 1,3 µs |
+| Licht | 26,1 ms | 144 | 360 | 840 | 0 | 6,8 µs |
+
+- Zeilen nutzen dieselben Bindungen wie Kacheln; kein zusätzlicher Aufwand pro Zustandsänderung.
+- Wischen zum Dimmen schickt erst beim Loslassen einen Befehl (kein Dienstaufruf pro Bewegung).
+- Filter „Nur eingeschaltete“ und eingeklappte Bereiche arbeiten rein per CSS, ohne Neuaufbau.
+- Auf dem Handy wird nur die gewählte Etage aufgebaut.
+
+## 0.1.0 – 2026-11-18
+
+Erste Version.
+
+### Neu
+- Eigenes Panel „Haus“ in der Seitenleiste, das sich wie eine Dashboard-Strategy selbst aus **Etagen → Bereichen → Geräten** aufbaut. Neue Geräte erscheinen ohne Bearbeitung.
+- **Übersicht als Hausschnitt**: Dach mit PV-Feld und Energiewerten (PV, Akku, Haus, Netz), Etagen von oben nach unten, Erdlinie, Keller darunter, Außenbereiche als grünes Band.
+- **Raumkacheln** mit Temperatur, Luftfeuchte, warmem Leuchten bei eingeschaltetem Licht, Hinweisen für offene Fenster, Heizen und Präsenz, Licht-Knopf und Rollo-Status.
+- **Status-Chips**: Lichter an, offene Fenster und Türen, offene Rollos, Ø Innentemperatur, heizende Räume, Melder, schwache Batterien, nicht erreichbare Geräte.
+- **Raumseiten** mit automatisch gebildeten Blöcken (Licht, Beschattung, Klima, Medien, Schalter, Schlösser, Kameras, Fenster & Türen, Präsenz, Sicherheit, Sensoren, Szenen, Weitere), Raum-Pins, Blättern zum nächsten Raum.
+- **Sammelseiten** Licht, Beschattung, Klima, Sicherheit, Batterien – nach Etagen und Räumen gruppiert, mit „Alle aus“, „Etage aus“, „Auf/Zu“.
+- **Kacheln**: Tippen schaltet, langes Drücken (oder Rechtsklick) öffnet den Detaildialog. Helligkeits-Schieber, Rollo-Tasten, Soll-Temperatur ±, Medien, Schloss mit Bestätigung.
+- **Einstellungen im Panel** (nur Administratoren): Reihenfolge von Etagen und Bereichen, Bereiche ausblenden, Etage als Außenbereich, Raum-Pins, Favoriten, Energie-Entitäten fürs Dach, Verknüpfungen zu anderen Panels, Glas-Effekt, Startseite, Kamera-Intervall, Batterie-Schwellen, Ausblende-Labels. Gespeichert in `.storage/haus_visualisierung`, ohne Neustart, auf allen Geräten.
+- Filter wie bei der Simon42-Strategy: Label `no-dboard`, versteckte Entitäten und Konfigurations-/Diagnose-Entitäten werden ausgeblendet.
+- **Karten** `custom:haus-raum-card` und `custom:haus-hausschnitt-card` für eigene Dashboards (passen sich dem Design an).
+- Design aus den Panel-Optionen (z. B. „Frosted Glass Dark Lite“ samt Hintergrundbild), Versionsanzeige und Hinweis bei veraltetem Browser-Cache, Logo unter `brand/`.
+
+### Performance
+Messaufbau: 24 Räume auf 4 Etagen mit ≈ 400 Entitäten plus 300 fremde Sensoren, alle 250 ms eine Zustandsänderung (abwechselnd fremd / aus den Räumen), hochgerechnet auf eine Minute (`tests/perf/measure.py`).
+
+| Seite | Aufbau | beobachtete Entitäten | Aktualisierer/min | DOM-Änderungen/min | Neuaufbauten/min | hass-Setter Ø |
+| --- | --- | --- | --- | --- | --- | --- |
+| Übersicht | 12,8 ms | 316 | 480 | 360 | 0 | 18,8 µs |
+| Raumseite | 6,6 ms | 13 | 0 | 0 | 0 | 0,8 µs |
+| Licht | 23,3 ms | 144 | 360 | 960 | 0 | 5,8 µs |
+
+- Das Panel wird nur einmal aufgebaut; danach werden ausschließlich die Kacheln aktualisiert, deren Entität sich geändert hat (Bindungen pro Entität, gesammelt in einem Animationsframe).
+- Fremde Zustandsänderungen kosten nur einen Vergleich je beobachteter Entität, keine DOM-Arbeit.
+- Kein Polling auf dem Pi: Das Panel nutzt die Zustände, die Home Assistant ohnehin schickt. Kamera-Standbilder nur für sichtbare Kameras, nur bei sichtbarem Tab, im eingestellten Intervall.
+- Bei verstecktem Tab pausieren Uhr, Kameras und Aktualisierungen.

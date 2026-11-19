@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Haus Visualisierung",
+        "description": "Panel for rooms and floors. The layout is edited in the panel under “Einstellungen”.",
+        "data": {
+          "name": "Sidebar name",
+          "icon": "Icon",
+          "theme": "Theme",
+          "require_admin": "Admins only"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Haus Visualisierung is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Haus Visualisierung",
+        "description": "Panel options. Rooms, pins, favourites and energy are edited in the panel.",
+        "data": {
+          "name": "Sidebar name",
+          "icon": "Icon",
+          "theme": "Theme",
+          "require_admin": "Admins only"
+        }
+      }
+    }
+  }
+}

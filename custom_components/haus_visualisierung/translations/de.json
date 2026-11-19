@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Haus Visualisierung",
+        "description": "Panel für Räume und Etagen. Das Layout pflegst du später direkt im Panel unter „Einstellungen“.",
+        "data": {
+          "name": "Name in der Seitenleiste",
+          "icon": "Symbol",
+          "theme": "Design (z. B. Frosted Glass Dark Lite)",
+          "require_admin": "Nur für Administratoren"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Die Haus Visualisierung ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Haus Visualisierung",
+        "description": "Panel-Optionen. Räume, Pins, Favoriten und Energie stellst du im Panel unter „Einstellungen“ ein.",
+        "data": {
+          "name": "Name in der Seitenleiste",
+          "icon": "Symbol",
+          "theme": "Design (z. B. Frosted Glass Dark Lite)",
+          "require_admin": "Nur für Administratoren"
+        }
+      }
+    }
+  }
+}

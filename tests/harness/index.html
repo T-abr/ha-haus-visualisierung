@@ -1,0 +1,26 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Haus Visualisierung – Test</title>
+<style>html,body{margin:0;height:100%;background:#000;font-family:Roboto,system-ui,sans-serif}#host{height:100vh}</style></head>
+<body><div id="host"></div>
+<script type="module">
+await import("./ha-icon-stub.js");
+await import("./panel.js");
+const { makeHass } = await import("./mock-hass.js");
+const q = new URLSearchParams(location.search);
+const api = makeHass({ big: q.has("big"), komfort: q.has("komfort"), ov: q.get("ov") || "haus", hs: q.get("hs") || "kompakt" });
+window.__api = api;
+const p = document.createElement("haus-visualisierung-panel");
+p.panel = { url_path: "haus-visualisierung", config: { theme: "" } };
+p.route = { prefix: "/haus-visualisierung", path: q.get("view") ? "/" + q.get("view") : "" };
+window.__q = q;
+p.hass = { ...api.hass };
+api.onChange((h) => { const t0 = performance.now(); p.hass = h; window.__setterTimes = (window.__setterTimes || []); window.__setterTimes.push(performance.now() - t0); });
+p.addEventListener("hass-more-info", (e) => { window.__moreInfo = e.detail.entityId; });
+document.getElementById("host").appendChild(p);
+window.__panel = p;
+// Nachbau des HA-Routers: Adresse → route des Panels
+window.addEventListener("location-changed", () => {
+  if (location.pathname.startsWith("/haus-visualisierung")) p.route = { prefix: "/haus-visualisierung", path: location.pathname.slice("/haus-visualisierung".length) };
+  else window.__leftPanel = location.pathname;
+});
+</script></body></html>

@@ -1,0 +1,23 @@
+{
+  "domain": "haus_visualisierung",
+  "name": "Haus Visualisierung",
+  "after_dependencies": [
+    "mobile_app",
+    "notify"
+  ],
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom",
+    "persistent_notification",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "1.0.0"
+}

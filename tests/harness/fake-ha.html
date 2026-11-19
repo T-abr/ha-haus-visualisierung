@@ -1,0 +1,8 @@
+<!doctype html><html style="--primary-background-color:#fafafa;--card-background-color:#ffffff;--primary-text-color:#212121"><body style="margin:0;background:var(--primary-background-color);color:var(--primary-text-color)">
+<home-assistant></home-assistant>
+<script>
+// Nachbau der Struktur von Home Assistant: home-assistant → home-assistant-main → ha-drawer (Seitenleiste + Inhalt)
+customElements.define("ha-drawer", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = '<style>.mdc-drawer{width:256px;height:100vh;float:left;background:#333}.mdc-drawer-app-content{margin-left:256px}</style><aside class="mdc-drawer"><slot name="appContent-x"></slot></aside><div class="mdc-drawer-app-content"><slot></slot></div>'; } });
+customElements.define("home-assistant-main", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = '<ha-drawer><div id="panel" style="height:100px;background:var(--card-background-color)">Dashboard</div></ha-drawer><ha-sidebar style="display:block">Seitenleiste</ha-sidebar>'; } });
+customElements.define("home-assistant", class extends HTMLElement { constructor() { super(); setTimeout(() => { this.attachShadow({ mode: "open" }).innerHTML = "<home-assistant-main></home-assistant-main>"; }, 300); } });
+</script></body></html>

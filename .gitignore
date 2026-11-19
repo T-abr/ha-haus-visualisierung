@@ -1,0 +1,5 @@
+dist/
+__pycache__/
+*.pyc
+tests/harness/mdi.js
+node_modules/
