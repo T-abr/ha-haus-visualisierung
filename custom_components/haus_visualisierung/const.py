@@ -96,6 +96,16 @@ DEFAULT_LAYOUT: dict = {
     },
     "alarm_actions": [],           # Aktionen (KNX, Schalter, Sirene, Durchsage, Skript) – siehe actions.py
     "confirm_quick": True,         # Schnellzugriff vor dem Ausführen bestätigen
+    "heating": {                   # Technik: Karte „Heizung“ (leere Felder = automatisch erkannt)
+        "enabled": True, "area": "", "tank": [], "tank_min": 30, "tank_max": 65,
+        "stove": "", "stove_pump": "", "stove_hot": 50, "curve": "", "mixer": "", "flow": "", "outdoor": "",
+        "manual_curve": False,
+        "manual": {"slope": 0.3, "level": 0, "room": 20, "min": 22, "max": 40, "limit": 16},
+    },
+    "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
+        "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",
+        "energy": "", "connected": "", "charging": "", "range": "",
+    },
     "doorbell": {                  # Klingel-Overlay im Panel
         "enabled": True,
         "entity": "",                  # leer = automatisch (Ereignis „Klingel“ von UniFi Protect)
