@@ -169,6 +169,37 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       if (msg.type.endsWith("/push_info")) return { services: ["mobile_app_iphone_tobias", "mobile_app_pixel", "persistent_notification"], targets: ["mobile_app_iphone_tobias", "mobile_app_pixel"], active: [] };
       if (msg.type.endsWith("/push_test")) { api.log.push(["ws", "push_test", {}]); return { targets: (layout.push && layout.push.targets && layout.push.targets.length) ? layout.push.targets : ["mobile_app_iphone_tobias", "mobile_app_pixel"] }; }
       if (msg.type.endsWith("/save")) { layout = msg.layout; return { layout }; }
+      // Recorder: 5-Minuten-Statistik nur für Sensoren mit state_class, sonst Verlauf (wie Home Assistant)
+      if (msg.type === "recorder/statistics_during_period") {
+        api.log.push(["ws", "statistics", { ids: msg.statistic_ids, period: msg.period }]);
+        if (api.noRecorder) return {};
+        const t0 = Date.parse(msg.start_time), out = {};
+        for (const e of msg.statistic_ids) {
+          const st = hass.states[e];
+          if (!st || !st.attributes.state_class) continue;
+          const base = parseFloat(st.state);
+          out[e] = [];
+          for (let t = Math.ceil(t0 / 300000) * 300000; t < Date.now() - 300000; t += 300000) out[e].push({ start: t, end: t + 300000, mean: api.curve(e, base, t) });
+        }
+        return out;
+      }
+      if (msg.type === "history/history_during_period") {
+        api.log.push(["ws", "history", { ids: msg.entity_ids }]);
+        if (api.noRecorder) return {};
+        const t0 = Date.parse(msg.start_time), out = {};
+        for (const e of msg.entity_ids) {
+          const st = hass.states[e];
+          if (!st) continue;
+          const base = parseFloat(st.state);
+          out[e] = [];
+          for (let t = t0; t < Date.now(); t += 180000) {
+            // Bad-Feuchte: zwei Stunden nicht erreichbar (Lücke im Verlauf)
+            const gap = e === "sensor.bad_feuchte" && t > Date.now() - 10 * 3600000 && t < Date.now() - 8 * 3600000;
+            out[e].push({ s: gap ? "unavailable" : api.curve(e, base, t).toFixed(1), lu: t / 1000 });
+          }
+        }
+        return out;
+      }
       if (msg.type === "lovelace/config") {
         api.log.push(["ws", "lovelace/config", { url_path: msg.url_path }]);
         if (msg.url_path === null) { const e = new Error("No config found."); e.code = "config_not_found"; throw e; }
@@ -208,6 +239,12 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       api.hass = hass; listeners.forEach((l) => l({ ...hass }));
     },
     onChange(l) { listeners.push(l); },
+    /** Tagesverlauf für Testdaten: endet beim aktuellen Wert. */
+    curve(eid, base, t) {
+      const hum = /feuchte|humid/.test(eid), amp = hum ? 6 : 1.4;
+      const ph = (s) => Math.sin(((new Date(s).getHours() + new Date(s).getMinutes() / 60) - 9) / 24 * 2 * Math.PI);
+      return base + amp * (ph(t) - ph(Date.now())) + (hum ? 1.5 : 0.15) * Math.sin(t / 2.7e6);
+    },
     /* nachgebautes Alarm-Backend (alarms.py) */
     alarmSnap: (() => { try { const s = JSON.parse(sessionStorage.getItem("hv-alarms")); if (s) return s; } catch (e) { /* neu */ } return { rev: 0, alarms: {}, log: [], today: { alarm: 0, warn: 0, info: 0 }, mode: { mode: "zuhause", since: 0, by: "Automatik", panel: null, sync: false, code: false } }; })(),
     alarmPush() { api.alarmSnap = { ...api.alarmSnap, rev: api.alarmSnap.rev + 1 }; try { sessionStorage.setItem("hv-alarms", JSON.stringify(api.alarmSnap)); } catch (e) { /* egal */ } if (api.alarmCb) api.alarmCb(api.alarmSnap); },

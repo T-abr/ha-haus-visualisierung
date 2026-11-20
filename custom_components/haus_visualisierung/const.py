@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -45,6 +45,7 @@ DEFAULT_LAYOUT: dict = {
     ],
     "show_energy_sensors": False,  # Leistungs-/Energiesensoren in Räumen
     "show_other": True,            # Bereich „Weitere“ (select, number, button …)
+    "show_trends": True,           # Raumseiten: Verlauf 24 h (Temperatur, Luftfeuchte)
     "camera_interval": 10,         # Sekunden zwischen Standbildern
     "glass": True,                 # Glas-Effekt (backdrop-filter)
     "start_view": "overview",

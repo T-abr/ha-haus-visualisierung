@@ -217,7 +217,7 @@ def sanitize(raw: Any) -> dict:
             )
         result["links"] = links
 
-    for key in ("show_energy_sensors", "show_other", "glass"):
+    for key in ("show_energy_sensors", "show_other", "show_trends", "glass"):
         if isinstance(raw.get(key), bool):
             result[key] = raw[key]
 

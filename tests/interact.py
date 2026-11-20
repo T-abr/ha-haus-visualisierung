@@ -18,6 +18,24 @@ ok, fail = [], []
 def check(name, cond):
     (ok if cond else fail).append(name)
 
+
+def stab(pg, name):
+    """Reiter in den Einstellungen wählen."""
+    pg.locator(f"haus-visualisierung-panel .stab[data-tab={name}]").click(); pg.wait_for_timeout(200)
+
+
+def drag(handle, target, after=False, steps=12):
+    """Griff mit der Maus auf das Ziel ziehen (oberes bzw. unteres Viertel des Ziels)."""
+    # in die Mitte scrollen – unten liegt die Speichern-Leiste über dem Inhalt
+    target.evaluate("e => e.scrollIntoView({ block: 'center' })"); handle.page.wait_for_timeout(50)
+    h = handle.bounding_box(); t = target.bounding_box()
+    pg = handle.page
+    x0, y0 = h["x"] + h["width"] / 2, h["y"] + h["height"] / 2
+    x1, y1 = t["x"] + (t["width"] * (0.75 if after else 0.25) if t["height"] < 50 and t["width"] < 400 else 30), t["y"] + t["height"] * (0.8 if after else 0.2)
+    pg.mouse.move(x0, y0); pg.mouse.down()
+    for i in range(1, steps + 1): pg.mouse.move(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps); pg.wait_for_timeout(16)
+    pg.mouse.up(); pg.wait_for_timeout(200)
+
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
     pg = b.new_page(viewport={"width": 1440, "height": 1000})
@@ -71,7 +89,7 @@ with sync_playwright() as p:
     pg.locator(f"{P} .chip[data-k=lights]").click(); pg.wait_for_timeout(200)
     check("Chip öffnet Licht", pg.locator(f"{P} .ptitle h1").inner_text() == "Licht")
     # Einstellungen: Bereich ausblenden und speichern
-    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250)
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'raeume')
     check("Pins aus Layout geladen", "2 Pins" in pg.locator(f"{P} .srow", has_text="Wohnzimmer").first.inner_text())
     pg.locator(f'{P} [data-act=s-area-hide][data-area=gaste_wc]').click(); pg.wait_for_timeout(150)
     pg.locator(f'{P} [data-act=s-save]').click(); pg.wait_for_timeout(300)
@@ -80,8 +98,8 @@ with sync_playwright() as p:
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(250)
     check("Bereich in Übersicht weg", pg.locator(f"{P} .room[data-area=gaste_wc]").count() == 0)
     # Reihenfolge ändern
-    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250)
-    pg.locator(f'{P} [data-act=s-area-move][data-area=wohnzimmer][data-dir="-1"]').click(); pg.wait_for_timeout(150)
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'raeume')
+    drag(pg.locator(f'{P} .sitem[data-sort-id=wohnzimmer] .drag'), pg.locator(f'{P} .sitem[data-sort-id=kuche]'))
     pg.locator(f'{P} [data-act=s-save]').click(); pg.wait_for_timeout(300)
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(250)
     order = pg.evaluate(f"[...document.querySelector('{P}').shadowRoot.querySelectorAll('.floor[data-floor=eg] .room')].map(r => r.dataset.area)")
@@ -123,7 +141,7 @@ with sync_playwright() as p:
     check("K: Klima-Tabelle Soll +", last[1] == "set_temperature" and abs(last[2]["temperature"] - 21.5) < 0.01)
     pg.goto(dense + "?view=sicherheit"); pg.wait_for_timeout(500)
     check("K: Sicherheits-Zusammenfassung", pg.locator(f"{P} .acard .sst").inner_text() == "Schlafzimmer · Fenster offen")
-    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250)
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'darstellung')
     pg.locator(f"{P} select[data-set=density]").select_option("komfort"); pg.wait_for_timeout(100)
     pg.locator(f'{P} [data-act=s-save]').click(); pg.wait_for_timeout(300)
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(250)
@@ -269,7 +287,7 @@ with sync_playwright() as p:
     pg.evaluate("window.__api.set('binary_sensor.wohnzimmer_rauchmelder', 'off'); window.__api.set('binary_sensor.bad_fenster', 'off'); window.__api.set('binary_sensor.schlafzimmer_fenster', 'off')"); pg.wait_for_timeout(200)
     check("W: Alles in Ordnung", pg.locator(f"{A} .sst").inner_text() == "Alles in Ordnung" and "ok" in pg.locator(A).get_attribute("class") and pg.locator(f"{P} .kchip[data-k=alerts]").is_hidden())
     # eigene Regel per Vorlage anlegen
-    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(300)
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(300); stab(pg, 'alarme')
     pg.locator(f'{P} [data-act=s-rule-tpl][data-tpl=kamin]').click(); pg.wait_for_timeout(200)
     ent = pg.locator(f'{P} input[data-set="alerts.rules.0.entity"]'); ent.fill("sensor.kamin_temperatur"); ent.dispatch_event("change")
     val = pg.locator(f'{P} input[data-set="alerts.rules.0.value"]'); val.fill("60"); val.dispatch_event("change")
@@ -281,7 +299,7 @@ with sync_playwright() as p:
     pg.evaluate("window.__api.set('sensor.kamin_temperatur', 55)"); pg.wait_for_timeout(200)
     check("W: eigene Regel endet", pg.locator(f"{A} .sst").inner_text() == "Alles in Ordnung")
     # feste Regel abschalten + Mindestdauer
-    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(300)
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(300); stab(pg, 'alarme')
     mn = pg.locator(f'{P} input[data-set="alerts.contacts_min"]'); mn.fill("10"); mn.dispatch_event("change")
     pg.locator(f'{P} [data-act=s-save]').click(); pg.wait_for_timeout(300)
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
@@ -319,15 +337,19 @@ with sync_playwright() as p:
     n0 = len(log()); pg.locator(f'{P} .hero .schip').first.click(); pg.wait_for_timeout(150)
     check("Q: Szenen in Räumen ohne Abfrage", pg.locator(f"{P} .modal").count() == 0 and len(log()) == n0 + 1)
     # ---------- Push-Einstellungen ----------
-    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(600)
+    pg.goto(dense + "?view=einstellungen/meldungen"); pg.wait_for_timeout(600)
     check("P: Empfänger gelistet", pg.locator(f"{P} .tchip").count() == 2 and "Keine Auswahl = alle Handys" in pg.locator(f"{P} .set", has_text="Push-Benachrichtigungen").inner_text())
     pg.locator(f'{P} .tchip', has_text="mobile_app_pixel").click(); pg.wait_for_timeout(200)
     lv = pg.locator(f'{P} input[data-set="push.levels.info"]'); lv.evaluate("e => e.click()"); pg.wait_for_timeout(100)
     pg.locator(f'{P} select[data-set="push.resolved"]').select_option("notify"); pg.wait_for_timeout(100)
+    check("S: Reiter mit ungespeicherten Änderungen markiert", "dirty" in pg.locator(f"{P} .stab[data-tab=meldungen]").get_attribute("class") and "dirty" not in pg.locator(f"{P} .stab[data-tab=darstellung]").get_attribute("class"))
+    stab(pg, "darstellung")
+    check("S: Entwurf bleibt beim Reiterwechsel erhalten", pg.locator(f"{P} .savebar .msg").inner_text() == "Ungespeicherte Änderungen")
     pg.locator(f'{P} input[data-set="confirm_quick"]').evaluate("e => e.click()"); pg.wait_for_timeout(100)
     pg.locator(f'{P} [data-act=s-save]').click(); pg.wait_for_timeout(300)
     saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => [r.layout.push, r.layout.confirm_quick])")
     check("P: gespeichert", saved[0]["targets"] == ["mobile_app_pixel"] and saved[0]["levels"]["info"] is False and saved[0]["resolved"] == "notify" and saved[1] is False)
+    stab(pg, "meldungen")
     pg.locator(f'{P} [data-act=s-push-test]').click(); pg.wait_for_timeout(300)
     check("P: Testmeldung", "mobile_app_pixel" in pg.locator(f"{P} .toast").inner_text())
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
@@ -356,7 +378,7 @@ with sync_playwright() as p:
     pg.locator(f"{P} .bellbg [data-act=bell-protect]").click(); pg.wait_for_timeout(500)
     check("B: Kameras öffnen → Protect eingebettet, Overlay zu", pg.locator(f"{P} .bellbg").count() == 0 and pg.locator(f"{P} protect-test-panel").count() == 1)
     # Einstellungen: Schloss, Zeit, Test
-    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
+    pg.goto(dense + "?view=einstellungen/meldungen"); pg.wait_for_timeout(500)
     sec = pg.locator(f"{P} .set", has_text="Klingel")
     check("B: Automatik erkannt", "event.g6_entry_doorbell" in sec.inner_text() and "camera.g6_entry" in sec.inner_text())
     lk = pg.locator(f'{P} input[data-set="doorbell.lock"]'); lk.fill("lock.haustur"); lk.dispatch_event("change")
@@ -419,7 +441,7 @@ with sync_playwright() as p:
     pg.locator(f"{P} .bellbg [data-act=bell-protect]").click(); pg.wait_for_timeout(400)
     check("D: Klingel → Kamera-Dashboard eingebettet", pg.locator(f"{P} .extwrap ha-panel-lovelace").count() == 1 and pg.locator(f"{P} .bellbg").count() == 0)
     # ---------- Türöffner: Schalter, Taste, Test mit ungespeicherten Angaben ----------
-    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
+    pg.goto(dense + "?view=einstellungen/meldungen"); pg.wait_for_timeout(500)
     lk = pg.locator(f'{P} input[data-set="doorbell.lock"]'); lk.fill("switch.tueroeffner"); lk.dispatch_event("change"); pg.wait_for_timeout(200)
     check("T: Impuls-Feld für Schalter", pg.locator(f'{P} input[data-set="doorbell.pulse"]').count() == 1)
     pu = pg.locator(f'{P} input[data-set="doorbell.pulse"]'); pu.fill("1"); pu.dispatch_event("change")
@@ -438,6 +460,7 @@ with sync_playwright() as p:
     check("T: Taste gedrückt", log()[-1] == "button.press")
     pg.locator(f"{P} .bellbg .bacts [data-act=bell-close]").click(); pg.wait_for_timeout(150)
     # Einstellungen: Auswahl „Darstellung“ überlappt nicht mit dem Löschen-Knopf
+    stab(pg, "darstellung")
     ov = pg.evaluate(f"(() => {{ const R = document.querySelector('{P}').shadowRoot; const e = R.querySelector('.lmode').getBoundingClientRect(); const d = R.querySelector('[data-act=s-link-del]').getBoundingClientRect(); return e.right <= d.left; }})()")
     check("T: Darstellungs-Auswahl überlappt nicht", ov)
     # ---------- Verknüpfte Seiten in den Farben der Haus Visualisierung ----------
@@ -475,7 +498,7 @@ with sync_playwright() as p:
     pg.locator(f'{P} .nav[data-path="/dashboard-import"]').click(); pg.wait_for_timeout(400)
     check("TH: Glas-Effekt aus → Karten ohne Weichzeichner", css(".card", "backdropFilter") == "none")
     # Einstellungen
-    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
+    pg.goto(dense + "?view=einstellungen/darstellung"); pg.wait_for_timeout(500)
     check("TH: Auswahl Darstellung (Haus-Farben Standard)", pg.locator(f'{P} select[data-set="links.0.mode"]').input_value() == "theme" and pg.locator(f'{P} select[data-set="links.0.mode"] option').count() == 3)
     # ---------- Aktiv-Fokus auf dem Handy (iPhone 14 = 390 px, iPhone SE = 375/320 px) ----------
     OVL = (Path(__file__).parent / "overlap.js").read_text()
@@ -634,7 +657,7 @@ with sync_playwright() as p:
     ws2 = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"]
     check("HM: Abbrechen schaltet nicht", len(ws2) == len(ws) + 1)
     # Einstellungen
-    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(600)
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
     check("HM: Einstellungen „Hausmodus“ mit Automatik, Alarmanlage, Zuordnung je Modus", pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 1
           and pg.locator(f'{P} [data-set="house_mode.arm.abwesend"]').input_value() == "arm_away" and pg.locator(f'{P} [data-set="house_mode.auto_away"]').is_checked())
     chips = pg.locator(f'{P} .mchip[data-path="alerts.modes.presence_away"]')
@@ -660,7 +683,7 @@ with sync_playwright() as p:
     ctx.close()
     # ---------- Eskalation und Aktionen (0.13.0) ----------
     pg.set_viewport_size({"width": 1440, "height": 1000})
-    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(600)
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
     check("AC: Abschnitt „Eskalation und Aktionen“ mit Standard 5 Min., nur Alarme", pg.locator(f"{P} .set h2:has-text('Eskalation')").count() == 1
           and pg.locator(f'{P} [data-set="escalation.minutes"]').input_value() == "5" and pg.locator(f"{P} [data-act=s-esc-level].on").count() == 1)
     pg.locator(f"{P} [data-act=s-esc-level][data-lvl=warn]").click(); pg.wait_for_timeout(200)
@@ -702,6 +725,102 @@ with sync_playwright() as p:
     sr = pg.locator(f"{P} .alstatrow").first
     check("AC: Fehlalarm-Auswertung mit Dauer und Hinweis", "Ø 42 s" in sr.inner_text() and "5× unter 1 Min." in sr.inner_text() and "nie quittiert" in sr.inner_text()
           and "kurz" in (sr.locator(".fa").get_attribute("title") or ""))
+    # ---------- Verlauf 24 h auf Raumseiten (1.1.0) ----------
+    R = f"document.querySelector('{P}').shadowRoot"
+    wsl = lambda kind: [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == kind]
+    pg.goto(base + "&view=raum/wohnzimmer"); pg.wait_for_timeout(700)
+    tr = pg.locator(f"{P} .trend")
+    check("TR: Verlaufskarte auf der Raumseite (Komfort)", tr.count() == 1 and "Verlauf 24 h" in tr.locator(".trt").text_content())
+    dt = pg.evaluate(f"[...{R}.querySelectorAll('.trend .trp')].map(p => (p.getAttribute('d') || '').length)")
+    check("TR: Temperatur- und Feuchtelinie gezeichnet", len(dt) == 2 and all(n > 200 for n in dt))
+    st, hi = wsl("statistics"), wsl("history")
+    check("TR: Statistik (5 Minuten) für Temperatur, Verlauf nur für Feuchte ohne Statistik",
+          len(st) == 1 and st[0]["period"] == "5minute" and "sensor.wohnzimmer_temperatur" in st[0]["ids"] and len(hi) == 1 and hi[0]["ids"] == ["sensor.wohnzimmer_feuchte"])
+    check("TR: Legende mit aktuellem Wert und Spanne", "22,4°" in tr.locator(".trl.t").inner_text() and "47 %" in tr.locator(".trl.h").inner_text() and "–" in tr.locator(".trl.t small").inner_text())
+    check("TR: Zeitachse mit Uhrzeiten und „jetzt“", tr.locator(".trx span").count() >= 4 and tr.locator(".trx .now").inner_text() == "jetzt")
+    d0 = pg.evaluate(f"{R}.querySelector('.trend .trp.t').getAttribute('d')")
+    r0 = pg.evaluate(f"document.querySelector('{P}')._stats.renders")
+    pg.evaluate("window.__api.set('sensor.wohnzimmer_temperatur', '25.0')"); pg.wait_for_timeout(200)
+    d1 = pg.evaluate(f"{R}.querySelector('.trend .trp.t').getAttribute('d')")
+    check("TR: neuer Wert wird ohne Abfrage fortgeschrieben", d1 != d0 and "25,0°" in tr.locator(".trl.t b").inner_text() and len(wsl("statistics")) == 1 and len(wsl("history")) == 1)
+    check("TR: kein Neuaufbau durch den neuen Wert", pg.evaluate(f"document.querySelector('{P}')._stats.renders") == r0)
+    box = tr.locator(".trc").bounding_box()
+    pg.mouse.move(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2); pg.wait_for_timeout(100)
+    tip = tr.locator(".trtip")
+    check("TR: Zeiger zeigt Uhrzeit, Temperatur und Feuchte", "on" in tip.get_attribute("class") and ":" in tip.inner_text() and "°" in tip.inner_text() and "%" in tip.inner_text())
+    pg.mouse.move(box["x"] + box["width"] * 0.5, box["y"] + box["height"] + 120); pg.wait_for_timeout(100)
+    check("TR: Zeiger weg – Anzeige weg", "on" not in tip.get_attribute("class"))
+    tr.locator(".trl.t").click(); pg.wait_for_timeout(100)
+    check("TR: Legende öffnet Details des Sensors", pg.evaluate("window.__moreInfo") == "sensor.wohnzimmer_temperatur")
+    pg.locator(f"{P} .hero [data-act=go][data-to='raum/kuche'], {P} .hero [data-act=go][data-to^='raum/']").last.click(); pg.wait_for_timeout(400)
+    pg.locator(f"{P} .hero [data-act=go][data-to='raum/wohnzimmer']").first.click(); pg.wait_for_timeout(400)
+    check("TR: zurück zum Raum – Verlauf aus dem Speicher (keine neue Abfrage)", pg.locator(f"{P} .trend").count() == 1 and sum(1 for x in wsl("statistics") if "sensor.wohnzimmer_temperatur" in x["ids"]) == 1)
+    pg.goto(dense + "?view=raum/bad"); pg.wait_for_timeout(700)
+    dh = pg.evaluate(f"{R}.querySelector('.trend .trp.h').getAttribute('d')")
+    check("TR: Kompakt – Verlauf vorhanden, Lücke bei „nicht erreichbar“", pg.locator(f"{P} .trend").count() == 1 and dh.count("M") == 2)
+    pg.goto(dense + "?view=raum/flur"); pg.wait_for_timeout(500)
+    check("TR: Raum ohne Temperatur und Feuchte – keine Karte", pg.locator(f"{P} .trend").count() == 0)
+    pg.goto(dense + "?view=raum/kuche&norec"); pg.wait_for_timeout(700)
+    check("TR: ohne Recorder-Daten – Hinweis statt leerer Fläche", "Noch kein Verlauf" in pg.locator(f"{P} .trend").inner_text())
+    pg.goto(dense + "?view=raum/wohnzimmer"); pg.wait_for_timeout(400)
+    pg.evaluate(f"(() => {{ const p = document.querySelector('{P}'); p._layout = {{ ...p._layout, show_trends: false }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(200)
+    check("TR: abschaltbar (Darstellung → Verlauf auf Raumseiten)", pg.locator(f"{P} .trend").count() == 0)
+    # ---------- Einstellungen mit Reitern und Sortieren per Ziehen (1.1.0) ----------
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
+    check("ST: vier Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 4 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
+          and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 0)
+    stab(pg, "raeume")
+    check("ST: Reiter „Räume“ zeigt Etagen und Favoriten", pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Favoriten')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 0)
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
+    check("ST: zuletzt gewählter Reiter bleibt (je Gerät)", "on" in pg.locator(f"{P} .stab[data-tab=raeume]").get_attribute("class"))
+    D = lambda k: pg.evaluate(f"document.querySelector('{P}')._draft.{k}")
+    check("ST: Keller und Außen nicht zwischen die Geschosse ziehbar (eigene Gruppen)", pg.locator(f"{P} [data-sort=floors][data-group=upper] > .sitem").count() == 2 and pg.locator(f"{P} .sitem[data-sort-id=kg] .fl-title .drag").count() == 0)
+    drag(pg.locator(f"{P} [data-sort=floors] > .sitem[data-sort-id=og] .fl-title .drag"), pg.locator(f"{P} [data-sort=floors] > .sitem[data-sort-id=eg]"), after=True)
+    check("ST: Etage per Ziehen nach unten", D("floor_order")[:3] == ["eg", "og", "kg"])
+    check("ST: ungespeichert markiert (Leiste und Reiter)", pg.locator(f"{P} .savebar .msg").inner_text() == "Ungespeicherte Änderungen" and "dirty" in pg.locator(f"{P} .stab[data-tab=raeume]").get_attribute("class"))
+    pg.locator(f"{P} .sitem[data-sort-id=kuche] .drag").focus(); pg.keyboard.press("ArrowUp"); pg.wait_for_timeout(200)
+    eg = pg.evaluate(f"[...{R}.querySelectorAll('[data-sort=areas][data-floor=eg] > .sitem')].map(e => e.dataset.sortId)")
+    check("ST: Pfeiltaste auf dem Griff verschiebt um eine Stelle", eg.index("kuche") < eg.index("gaste_wc") and D("area_order").index("kuche") < D("area_order").index("gaste_wc"))
+    check("ST: Griff behält den Fokus", pg.evaluate(f"{R}.activeElement && {R}.activeElement.closest('.sitem').dataset.sortId") == "kuche")
+    drag(pg.locator(f"{P} .sitem[data-sort-id=terrasse] .drag"), pg.locator(f"{P} .sitem[data-sort-id=bad]"))
+    check("ST: Raum nur innerhalb seiner Etage verschiebbar", "terrasse" not in pg.evaluate(f"[...{R}.querySelectorAll('[data-sort=areas][data-floor=og] > .sitem')].map(e => e.dataset.sortId)"))
+    pg.locator(f"{P} [data-act=s-area-open][data-area=wohnzimmer]").click(); pg.wait_for_timeout(200)
+    drag(pg.locator(f'{P} [data-sort=pins] .pin[data-sort-id="sensor.kamin_pumpe_drehzahl"]'), pg.locator(f'{P} [data-sort=pins] .pin[data-sort-id="sensor.kamin_temperatur"]'))
+    check("ST: Raum-Pins per Ziehen sortieren", D("pins.wohnzimmer") == ["sensor.kamin_pumpe_drehzahl", "sensor.kamin_temperatur"])
+    drag(pg.locator(f'{P} [data-sort=favorites] .pin[data-sort-id="switch.waschmaschine"]'), pg.locator(f'{P} [data-sort=favorites] .pin[data-sort-id="scene.wohnzimmer_gemutlich"]'))
+    check("ST: Favoriten per Ziehen sortieren", D("favorites")[0] == "switch.waschmaschine" and len(D("favorites")) == 4)
+    pg.locator(f'{P} [data-sort=favorites] .pin[data-sort-id="lock.haustur"] button').click(); pg.wait_for_timeout(200)
+    check("ST: Entfernen-Knopf im Chip startet kein Ziehen", "lock.haustur" not in D("favorites"))
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout)")
+    check("ST: Sortierung gespeichert", saved["floor_order"][:3] == ["eg", "og", "kg"] and saved["favorites"][0] == "switch.waschmaschine" and saved["pins"]["wohnzimmer"][0] == "sensor.kamin_pumpe_drehzahl")
+    pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
+    fl = pg.evaluate(f"document.querySelector('{P}')._model.floors.map(f => f.id)")
+    check("ST: Übersicht folgt der neuen Etagen-Reihenfolge", fl.index("eg") < fl.index("og"))
+    pg.goto(dense + "?view=einstellungen/darstellung"); pg.wait_for_timeout(500)
+    drag(pg.locator(f"{P} [data-sort=links] > .sitem[data-sort-id='1'] .drag"), pg.locator(f"{P} [data-sort=links] > .sitem[data-sort-id='0']"))
+    check("ST: Verknüpfungen per Ziehen sortieren", [l["title"] for l in D("links")][:2] == ["Kameras", "Solar"])
+    check("ST: Darstellung – Schalter „Verlauf auf Raumseiten“", pg.locator(f'{P} input[data-set="show_trends"]').count() == 1)
+    stab(pg, "alarme")
+    for t in ("knx", "siren", "tts"):
+        pg.locator(f"{P} [data-act=s-act-tpl][data-tpl={t}]").click(); pg.wait_for_timeout(150)
+    drag(pg.locator(f"{P} [data-sort=actions] > .sitem[data-sort-id='2'] .drag"), pg.locator(f"{P} [data-sort=actions] > .sitem[data-sort-id='0']"))
+    check("ST: Aktionen per Ziehen sortieren", [a["type"] for a in D("alarm_actions")] == ["tts", "knx", "siren"])
+    check("ST: Entwurf über Reiter hinweg (Verknüpfungen weiter geändert)", [l["title"] for l in D("links")][:2] == ["Kameras", "Solar"])
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+    mp = ctx.new_page(); mp.on("pageerror", lambda e: errs.append(str(e)))
+    for t in ("raeume", "alarme", "meldungen", "darstellung"):
+        mp.goto(base.split("?")[0] + f"?view=einstellungen/{t}"); mp.wait_for_timeout(500)
+        wide = mp.evaluate(WIDE)
+        check(f"ST-Handy: Reiter {t} – nichts breiter als der Bildschirm", not wide)
+        if wide: print("     ", wide[:3])
+    mp.goto(base.split("?")[0] + "?view=raum/bad"); mp.wait_for_timeout(600)
+    bx = mp.locator(f"{P} .trend .trc").bounding_box()
+    mp.touchscreen.tap(bx["x"] + bx["width"] * 0.3, bx["y"] + bx["height"] / 2); mp.wait_for_timeout(150)
+    check("TR-Handy: Antippen zeigt den Wert", "on" in mp.locator(f"{P} .trend .trtip").get_attribute("class"))
+    mp.wait_for_timeout(2700)
+    check("TR-Handy: Anzeige verschwindet nach kurzer Zeit", "on" not in mp.locator(f"{P} .trend .trtip").get_attribute("class"))
+    ctx.close()
     check("Keine JS-Fehler", not errs)
     b.close()
 srv.shutdown()
