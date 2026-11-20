@@ -4,6 +4,28 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.3.0 – 2026-11-20
+
+### Neu – Wandpanel-Modus
+- **Je Gerät einschaltbar:** Einstellungen → Darstellung → Wandpanel → „Als Wandpanel nutzen“ oder die Adresse mit `?wandpanel=1` öffnen (z. B. im Kiosk-Browser; `?wandpanel=0` schaltet aus). Gilt nur für diesen Browser und sofort, ohne Speichern. Andere Geräte bleiben normal.
+- **Vollbild:** Die Seitenleiste von Home Assistant wird auf dem Wandpanel ausgeblendet und beim Ausschalten auf die vorherige Einstellung zurückgesetzt. Beim ersten Tippen geht der Browser in den Vollbildmodus. Beides ist abschaltbar.
+- **Bildschirmschoner** nach 5 Minuten ohne Berührung (einstellbar, 0 = nie): große Uhr, Datum, Wetter mit Außentemperatur, PV-Leistung, Hausmodus und der Zustand der Meldungen („Alles in Ordnung“ oder die wichtigste Meldung, Alarme pulsierend).
+  - Der Inhalt rückt jede Minute ein Stück weiter, damit nichts einbrennt.
+  - Nachts (Hausmodus Nacht oder 23–6 Uhr) ist er dunkler. Optional wird er nach weiteren Minuten ganz schwarz (für OLED-Bildschirme).
+- **Aufwecken:** Ein Tipp beendet den Schoner und löst nichts darunter aus. Die Klingel weckt immer und zeigt das Klingel-Overlay, ein neuer Alarm weckt (abschaltbar). Optional weckt ein Bewegungsmelder am Panel wie eine Berührung.
+- **Rückkehr zur Startseite** nach 2 Minuten ohne Berührung (einstellbar, 0 = nie). Nicht bei ungespeicherten Einstellungen und nicht während die Klingel offen ist.
+- Knopf **„Ruhe“** in der Navigation (nur auf Wandpanels) startet den Schoner sofort; „Bildschirmschoner zeigen“ in den Einstellungen zum Ausprobieren.
+- Neue Einstellung `wallpanel` (Zeiten, Schalter, Wetter-Entität, Bewegungsmelder).
+
+### Tests
+- Bedienung: 26 neue Prüfungen (342 Prüfungen). Einschalten per Adresse und je Gerät gemerkt, Seitenleiste, Rückkehr nach 2 Minuten, Schoner nach 5 Minuten mit allen Inhalten, Tipp weckt ohne Auslösen und der nächste Tipp wirkt wieder, schwarz, Nacht, Wecken durch Alarm, Klingel und Bewegungsmelder, keine Rückkehr bei ungespeicherten Einstellungen, Zeiten speichern, Ruhe-Knopf, Ausschalten, Handy 390 px.
+- Backend: Einstellung `wallpanel` wird geprüft (14 Backend-Tests).
+
+### Performance
+- Ohne Wandpanel kein zusätzlicher Takt und keine Listener.
+- Auf dem Wandpanel ein Takt alle 5 s, nur bei sichtbarem Tab: 0,8 µs wach, 3 µs mit Schoner. Der Inhalt des Schoners wird nur einmal je Minute bzw. bei neuen Meldungen neu gefüllt (≈ 0,4 ms).
+- Panel: Übersicht 13–21 ms Aufbau, 0 Neuaufbauten, hass-Setter Ø 23–33 µs. 1.2.0 direkt davor auf demselben Rechner: 26–34 µs.
+
 ## 1.2.0 – 2026-11-20
 
 ### Neu – Heizung im Heizungsraum
