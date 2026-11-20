@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -30,6 +30,7 @@ const DEFAULT_LAYOUT = {
   confirm_quick: true, show_trends: true,
   heating: { enabled: true, area: "", tank: [], tank_min: 30, tank_max: 65, stove: "", stove_pump: "", stove_hot: 50, curve: "", mixer: "", flow: "", outdoor: "",
     manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 } },
+  wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, weather: "", wake_entity: "" },
   wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
@@ -59,6 +60,7 @@ const withDefaults = (l) => {
     doorbell: { ...DEFAULT_LAYOUT.doorbell, ...((l && l.doorbell) || {}) },
     heating: { ...structuredClone(DEFAULT_LAYOUT.heating), ...((l && l.heating) || {}), manual: { ...DEFAULT_LAYOUT.heating.manual, ...((l && l.heating && l.heating.manual) || {}) } },
     wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}) },
+    wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },
   };
 };
@@ -1174,6 +1176,11 @@ function updateRoof(el, ctx) {
   const pv = powerW(h.states[H.pv]);
   el.classList.toggle("producing", pv !== null && pv > 20);
 }
+
+const WEATHER_ICON = { "clear-night": "mdi:weather-night", cloudy: "mdi:weather-cloudy", fog: "mdi:weather-fog", hail: "mdi:weather-hail", lightning: "mdi:weather-lightning",
+  "lightning-rainy": "mdi:weather-lightning-rainy", partlycloudy: "mdi:weather-partly-cloudy", pouring: "mdi:weather-pouring", rainy: "mdi:weather-rainy", snowy: "mdi:weather-snowy",
+  "snowy-rainy": "mdi:weather-snowy-rainy", sunny: "mdi:weather-sunny", windy: "mdi:weather-windy", "windy-variant": "mdi:weather-windy-variant", exceptional: "mdi:alert" };
+const setHtml = (n, html) => { if (n && n._h !== html) { n.innerHTML = html; n._h = html; } };
 
 function updateWeather(el, ctx) {
   const st = ctx._hass.states[el.dataset.eid];
@@ -2523,6 +2530,21 @@ details[open]>summary.shead{padding-bottom:2px}
 .narrow .ebar .ep b{margin-left:auto}
 .narrow .ebar .schip,.narrow .ebar .pbtn{display:flex;justify-content:center;min-width:0;overflow:hidden;padding:8px 10px;font-size:12.5px;border-radius:12px}
 .narrow .ebar .schip span,.narrow .ebar .pbtn span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Wandpanel: Bildschirmschoner */
+.saver{position:fixed;inset:0;z-index:40;background:#05070c;display:flex;align-items:center;justify-content:center;cursor:none;animation:mfade .6s ease;user-select:none}
+.svbox{display:flex;flex-direction:column;align-items:center;gap:10px;transition:transform 2s ease;color:#e9eef7;text-align:center;padding:24px}
+.svclock{font-size:clamp(72px,18vw,180px);font-weight:200;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.svdate{font-size:clamp(16px,2.6vw,26px);color:rgba(233,238,247,.7)}
+.svrow{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;margin-top:14px;font-size:clamp(16px,2.4vw,24px);color:rgba(233,238,247,.85)}
+.svrow span,.svstat span{display:inline-flex;align-items:center;gap:8px}
+.svrow ha-icon{--mdc-icon-size:1.3em;color:rgba(233,238,247,.6)}
+.svstat{margin-top:16px;font-size:clamp(14px,2vw,19px)}
+.svstat span{padding:8px 16px;border-radius:999px;background:rgba(255,255,255,.06)}
+.svstat .ok{color:#7fdcaa}.svstat .alarm{color:#fff;background:rgba(255,80,60,.35);animation:svpulse 1.6s ease-in-out infinite}.svstat .warn{color:#ffc277}.svstat .info{color:#8fd0ff}
+@keyframes svpulse{50%{background:rgba(255,80,60,.6)}}
+.saver.night .svbox{opacity:.4}
+.saver.black .svbox{opacity:0}
+.walldev.on .lbl{color:var(--hv-ok)}
 /* Technik: Heizung und Wallbox */
 .tech{padding:12px 16px 14px;margin-bottom:16px}
 .dense .tech{padding:10px 12px 12px;margin-bottom:12px;border-radius:16px}
@@ -3083,6 +3105,9 @@ class HausVisualisierungPanel extends HvBase {
       this._bell.el.classList.remove("again"); void this._bell.el.offsetWidth; this._bell.el.classList.add("again");
       return;
     }
+    // Klingel weckt das Wandpanel
+    this._saverHide();
+    this._wallActive = Date.now();
     this._closeConfirm(false);
     const lock = cfg.lock && h.states[cfg.lock] ? cfg.lock : "";
     const protect = (this._layout.links || []).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
@@ -3244,6 +3269,7 @@ class HausVisualisierungPanel extends HvBase {
       r.addEventListener("pointerdown", (e) => this._sortStart(e));
       r.addEventListener("keydown", (e) => this._sortKey(e));
     }
+    this._wallStart();
     this._ro = new ResizeObserver(() => this._updateNarrow());
     this._onWinResize = () => this._updateNarrow();
     window.addEventListener("resize", this._onWinResize);
@@ -3253,6 +3279,14 @@ class HausVisualisierungPanel extends HvBase {
     super.disconnectedCallback();
     clearInterval(this._clockT);
     clearInterval(this._alertT);
+    clearInterval(this._wallT); this._wallT = 0;
+    if (this._wallWired) {
+      window.removeEventListener("pointerdown", this._onWallAct, true);
+      window.removeEventListener("click", this._onWallClick, true);
+      window.removeEventListener("keydown", this._onWallAct, true);
+      window.removeEventListener("wheel", this._onWallAct, { capture: true });
+      this._wallWired = false;
+    }
     this._closeBell();
     if (this._ro) this._ro.disconnect();
     window.removeEventListener("resize", this._onWinResize);
@@ -3340,6 +3374,167 @@ class HausVisualisierungPanel extends HvBase {
     setText(r, ".greet", hr < 5 ? "Gute Nacht" : hr < 11 ? "Guten Morgen" : hr < 17 ? "Guten Tag" : hr < 22 ? "Guten Abend" : "Gute Nacht");
   }
 
+  /* ---------- Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite ---------- */
+  /* Ob ein Gerät ein Wandpanel ist, gilt je Browser (localStorage, auch per Adresse ?wandpanel=1 bzw. =0).
+     Zeiten und Inhalte gelten für alle Wandpanels (Einstellungen → Darstellung). Ein Takt von 5 s prüft
+     die Ruhezeit – nur bei sichtbarem Tab und nur auf Wandpanels. */
+  _wallIsOn() {
+    if (this._wallFlag === undefined) {
+      let v = null;
+      try {
+        const q = new URLSearchParams(location.search).get("wandpanel");
+        if (q !== null) { v = q !== "0" && q !== "false"; localStorage.setItem("hv-wallpanel", v ? "1" : "0"); }
+        else v = localStorage.getItem("hv-wallpanel") === "1";
+      } catch (err) { v = false; }
+      this._wallFlag = !!v;
+    }
+    return this._wallFlag;
+  }
+
+  _wallSet(on) {
+    this._wallFlag = !!on;
+    try { localStorage.setItem("hv-wallpanel", on ? "1" : "0"); } catch (err) { /* egal */ }
+    if (on) this._wallStart(); else this._wallStop();
+    this._dirty = true; this._flush();
+  }
+
+  _wallCfg() { return { ...DEFAULT_LAYOUT.wallpanel, ...(this._layout.wallpanel || {}) }; }
+
+  _wallStart() {
+    if (!this._wallIsOn() || !this._connected) return;
+    const W = this._wallCfg();
+    this._wallActive = this._wallActive || Date.now();
+    if (!this._wallWired) {
+      this._wallWired = true;
+      this._onWallAct = (e) => {
+        if (!this._wallIsOn()) return;
+        this._wallActive = Date.now();
+        this._wallReturned = false;
+        if (e && e.type === "pointerdown") this._saverSwallow = false;
+        if (this._saverOn) {
+          // Tipp weckt nur auf: sein Klick wird verschluckt, der nächste Tipp wirkt wieder normal
+          if (e && e.type === "pointerdown") { e.stopPropagation(); e.preventDefault(); this._saverSwallow = true; }
+          this._saverHide();
+        }
+        if (e && e.type === "pointerdown" && this._wallCfg().fullscreen && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      };
+      this._onWallClick = (e) => { if (this._saverSwallow) { this._saverSwallow = false; e.stopPropagation(); e.preventDefault(); } };
+      window.addEventListener("pointerdown", this._onWallAct, true);
+      window.addEventListener("click", this._onWallClick, true);
+      window.addEventListener("keydown", this._onWallAct, true);
+      window.addEventListener("wheel", this._onWallAct, { capture: true, passive: true });
+    }
+    if (W.hide_sidebar && !this._wallDocked) {
+      this._wallDocked = true;
+      try { if (!localStorage.getItem("hv-wall-prev-dock")) localStorage.setItem("hv-wall-prev-dock", localStorage.getItem("dockedSidebar") || '"docked"'); } catch (err) { /* egal */ }
+      this.dispatchEvent(new CustomEvent("hass-dock-sidebar", { detail: { dock: "always_hidden" }, bubbles: true, composed: true }));
+    }
+    clearInterval(this._wallT);
+    this._wallT = setInterval(() => this._wallTick(), 5000);
+  }
+
+  _wallStop() {
+    clearInterval(this._wallT); this._wallT = 0;
+    this._saverHide();
+    if (this._wallWired) {
+      window.removeEventListener("pointerdown", this._onWallAct, true);
+      window.removeEventListener("click", this._onWallClick, true);
+      window.removeEventListener("keydown", this._onWallAct, true);
+      window.removeEventListener("wheel", this._onWallAct, { capture: true });
+      this._wallWired = false;
+    }
+    if (this._wallDocked && !this._wallIsOn()) {
+      this._wallDocked = false;
+      let prev = "docked";
+      try { prev = JSON.parse(localStorage.getItem("hv-wall-prev-dock") || '"docked"'); localStorage.removeItem("hv-wall-prev-dock"); } catch (err) { /* egal */ }
+      this.dispatchEvent(new CustomEvent("hass-dock-sidebar", { detail: { dock: prev === "always_hidden" ? "docked" : prev }, bubbles: true, composed: true }));
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  _wallTick() {
+    if (document.hidden || !this._wallIsOn() || !this._hass) return;
+    const W = this._wallCfg(), now = Date.now();
+    // Bewegungsmelder am Panel weckt wie eine Berührung
+    const ws = W.wake_entity && this._hass.states[W.wake_entity];
+    if (ws && isOn(ws) && Date.parse(ws.last_changed) > (this._wallWakeSeen || 0)) {
+      this._wallWakeSeen = Date.parse(ws.last_changed);
+      this._wallActive = now; this._wallReturned = false;
+      if (this._saverOn) this._saverHide();
+    }
+    const idle = (now - (this._wallActive || now)) / 60000;
+    if (W.return_min > 0 && idle >= W.return_min && !this._wallReturned) {
+      this._wallReturned = true;
+      const start = this._layout.start_view && this._layout.start_view !== "overview" ? this._layout.start_view : "";
+      const here = this._view ? `${this._view}${this._arg ? `/${this._arg}` : ""}` : "";
+      const dirtySettings = this._view === "einstellungen" && this._dirtySettings;
+      if (here !== start && !dirtySettings && !this._bell) this._go(start);
+    }
+    if (W.saver_min > 0 && idle >= W.saver_min && !this._saverOn && !this._bell) this._saverShow();
+    if (this._saverOn) this._saverUpdate(idle);
+  }
+
+  _saverShow() {
+    this._saverOn = true;
+    this._saverMount();
+  }
+
+  _saverHide() {
+    if (!this._saverOn) return;
+    this._saverOn = false;
+    const s = this.shadowRoot.querySelector(".saver");
+    if (s) s.remove();
+  }
+
+  /** Nach jedem Neuaufbau wieder einhängen (das Gerüst ersetzt den ganzen Inhalt). */
+  _saverMount() {
+    if (!this._saverOn || this.shadowRoot.querySelector(".saver")) return;
+    const d = document.createElement("div");
+    d.className = "saver";
+    d.setAttribute("role", "button");
+    d.setAttribute("aria-label", "Bildschirmschoner – tippen zum Aufwecken");
+    d.innerHTML = `<div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svstat"></div></div>`;
+    this.shadowRoot.appendChild(d);
+    this._saverMin = null;
+    this._saverUpdate((Date.now() - (this._wallActive || Date.now())) / 60000, true);
+  }
+
+  _saverUpdate(idle, force = false) {
+    const el = this.shadowRoot.querySelector(".saver");
+    if (!el || !this._hass) return;
+    const W = this._wallCfg(), h = this._hass, now = new Date();
+    const black = W.black_min > 0 && idle >= W.saver_min + W.black_min;
+    const night = W.night_dim && (curMode() === "nacht" || now.getHours() >= 23 || now.getHours() < 6);
+    el.classList.toggle("black", black);
+    el.classList.toggle("night", night && !black);
+    const minute = Math.floor(now.getTime() / 60000);
+    if (!force && this._saverMin === minute && !this._saverDirty) return;
+    this._saverMin = minute; this._saverDirty = false;
+    setText(el, ".svclock", now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }));
+    setText(el, ".svdate", now.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" }));
+    const wid = W.weather || Object.keys(h.states).find((e) => e.startsWith("weather."));
+    const wst = wid && h.states[wid];
+    const out = this._model && this._model.tech && this._model.tech.heat && this._model.tech.heat.outdoor;
+    const outT = num(h.states[out || ""]) ?? (wst && finite(wst.attributes.temperature) ? wst.attributes.temperature : null);
+    const pv = powerW(h.states[this._layout.header.pv || ""]);
+    const md = curMode();
+    const parts = [];
+    if (wst) parts.push(`<span>${icon(WEATHER_ICON[wst.state] || "mdi:weather-cloudy")}${outT !== null ? `${NF1.format(outT)}°` : ""}</span>`);
+    else if (outT !== null) parts.push(`<span>${icon("mdi:thermometer")}${NF1.format(outT)}°</span>`);
+    if (pv !== null && pv > 50) parts.push(`<span>${icon("mdi:solar-power-variant")}${pv >= 1000 ? `${NF1.format(pv / 1000)} kW` : `${NF0.format(pv)} W`}</span>`);
+    parts.push(`<span>${icon(MODE_ICON[md])}${MODE_NAME[md]}</span>`);
+    setHtml(el.querySelector(".svrow"), parts.join(""));
+    const al = this._model ? evalAlerts(h, this._model, this._layout) : [];
+    const top = al.length ? al.reduce((a, b) => (LEVELS[b.level] > LEVELS[a.level] ? b : a)) : null;
+    setHtml(el.querySelector(".svstat"), top ? `<span class="${top.level}">${icon(LEVEL_ICON[top.level])}${al.length === 1 ? esc(top.title) : `${al.length} Meldungen · ${esc(top.title)}`}</span>` : `<span class="ok">${icon("mdi:shield-check")}Alles in Ordnung</span>`);
+    // gegen Einbrennen: jede Minute ein Stück versetzen
+    const box = el.querySelector(".svbox");
+    const k = minute % 9, dx = ((k % 3) - 1) * 6, dy = (Math.floor(k / 3) - 1) * 5;
+    box.style.transform = `translate(${dx}vw,${dy}vh)`;
+  }
+
   /* ---------- Gerüst ---------- */
   _render() {
     const h = this._hass;
@@ -3376,12 +3571,14 @@ class HausVisualisierungPanel extends HvBase {
           ${nav}
           ${links ? `<hr>${links}` : ""}
           <div class="grow"></div>
+          ${this._wallIsOn() ? `<button class="nav wallbtn" data-act="saver" title="Bildschirmschoner">${icon("mdi:power-sleep")}<span>Ruhe</span></button>` : ""}
           ${isAdmin ? `<button class="nav${active === "einstellungen" ? " active" : ""}" data-act="go" data-to="einstellungen" title="Einstellungen">${icon("mdi:cog")}<span>Einstellungen</span></button>` : ""}
         </nav>
         <main class="main${view === "extern" ? " ext" : ""}"><div class="wrap">${view === "extern" ? "" : verNote}${body}</div></main>
       </div>`;
     const main = this.shadowRoot.querySelector(".main");
     if (keepScroll) main.scrollTop = keepScroll;
+    this._saverMount();
     this._wire(this.shadowRoot);
     this._tickClock();
     this._updateNarrow();
@@ -3651,6 +3848,13 @@ class HausVisualisierungPanel extends HvBase {
   }
 
   _onAlarms(snap) {
+    // Neuer Alarm weckt das Wandpanel
+    if (this._saverOn && this._wallCfg().wake_alarm) {
+      const neu = (s) => new Set(Object.values((s && s.alarms) || {}).filter((a) => a.status === "neu" && a.level === "alarm").map((a) => a.key));
+      const old = neu(ALARMS);
+      if ([...neu(snap)].some((k) => !old.has(k))) { this._wallActive = Date.now(); this._saverHide(); }
+    }
+    if (this._saverOn) this._saverDirty = true;
     const mutedKeys = (s) => Object.values((s && s.alarms) || {}).filter((a) => a.status === "stumm").map((a) => a.key).sort().join("|");
     const before = mutedKeys(ALARMS);
     setAlarms(snap);
@@ -4197,6 +4401,7 @@ class HausVisualisierungPanel extends HvBase {
       ${this._setPush(D)}
       ${this._setBell(D)}`;
     else body = `${dlSensor}
+      ${this._setWall(D)}
       <div class="set glass"><h2>${icon("mdi:tune-variant")}Darstellung</h2>
         ${sw("confirm_quick", "Schnellzugriff bestätigen", "Abfrage vor „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff")}
         ${sw("glass", "Glas-Effekt", "Weichzeichner hinter Karten; auf schwachen Tablets ausschalten")}
@@ -4228,6 +4433,33 @@ class HausVisualisierungPanel extends HvBase {
       <div class="savebar glass"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>
         <button class="pbtn" data-act="s-reset">${icon("mdi:undo")}Verwerfen</button>
         <button class="pbtn primary" data-act="s-save">${icon("mdi:content-save")}Speichern</button></div>`;
+  }
+
+  _setWall(D) {
+    const W = D.wallpanel, on = this._wallIsOn(), h = this._hass;
+    const ids = Object.keys(h.states);
+    const tg = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><label class="tgl"><input type="checkbox" data-set="wallpanel.${key}" data-bool="1" ${W[key] ? "checked" : ""}><span></span></label></div>`;
+    const nm = (key, label, hint, max) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><input class="inp s" type="number" min="0" max="${max}" data-set="wallpanel.${key}" data-num="1" value="${W[key]}"></div>`;
+    const autoW = ids.find((e) => e.startsWith("weather."));
+    return `<div class="set glass"><h2>${icon("mdi:tablet-dashboard")}Wandpanel</h2>
+      <p class="hint">Für ein Tablet an der Wand: Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr, Wetter, Hausmodus und Meldungen, und nach einer Weile ohne Berührung zurück zur Startseite. Klingel, neue Alarme und ein Bewegungsmelder wecken das Panel.</p>
+      <div class="srow walldev${on ? " on" : ""}"><span class="lbl">Dieses Gerät ist ein Wandpanel<small>gilt nur für diesen Browser und sofort – ohne Speichern; alternativ Adresse mit <code>?wandpanel=1</code> öffnen (z. B. im Kiosk-Browser)</small></span>
+        <button class="pbtn${on ? " primary" : ""}" data-act="s-wall-device">${icon(on ? "mdi:check" : "mdi:tablet")}${on ? "Wandpanel an" : "Als Wandpanel nutzen"}</button></div>
+      <div class="fl-title">Zeiten</div>
+      ${nm("saver_min", "Bildschirmschoner nach", "Minuten ohne Berührung; 0 = nie", 240)}
+      ${nm("black_min", "Danach schwarz nach", "weitere Minuten; 0 = nie (schont OLED-Bildschirme)", 600)}
+      ${nm("return_min", "Zurück zur Startseite nach", "Minuten ohne Berührung; 0 = nie. Nicht bei ungespeicherten Einstellungen", 240)}
+      <div class="fl-title">Verhalten</div>
+      ${tg("fullscreen", "Vollbild", "beim ersten Tippen; Kiosk-Browser wie Fully Kiosk erledigen das selbst")}
+      ${tg("hide_sidebar", "Seitenleiste von Home Assistant ausblenden", "nur auf Wandpanels; wird beim Ausschalten zurückgesetzt")}
+      ${tg("wake_alarm", "Bei neuem Alarm aufwecken", "Klingel weckt immer")}
+      ${tg("night_dim", "Nachts dunkler", "im Hausmodus Nacht und von 23 bis 6 Uhr")}
+      <div class="srow"><span class="lbl">Wetter<small>leer = automatisch${autoW ? ` (${esc(autoW)})` : ""}</small></span><input class="inp w" list="dl-weather" data-set="wallpanel.weather" value="${esc(W.weather || "")}" placeholder="weather.…"></div>
+      <div class="srow"><span class="lbl">Bewegungsmelder am Panel<small>weckt wie eine Berührung, z. B. binary_sensor.flur_bewegung</small></span><input class="inp w" list="dl-motion" data-set="wallpanel.wake_entity" value="${esc(W.wake_entity || "")}" placeholder="binary_sensor.…"></div>
+      <div class="srow"><button class="pbtn" data-act="s-saver-test">${icon("mdi:power-sleep")}Bildschirmschoner zeigen</button><span class="lbl"><small>Tippen beendet ihn wieder.</small></span></div>
+      <datalist id="dl-weather">${ids.filter((e) => e.startsWith("weather.")).map((e) => `<option value="${esc(e)}">`).join("")}</datalist>
+      <datalist id="dl-motion">${ids.filter((e) => e.startsWith("binary_sensor.") && PRESENCE_DC.has(dc(h.states[e]))).map((e) => `<option value="${esc(e)}">`).join("")}</datalist>
+    </div>`;
   }
 
   _setTech(D) {
@@ -4638,6 +4870,9 @@ class HausVisualisierungPanel extends HvBase {
       case "menu": this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true })); return;
       case "bell-close": case "bell-live": case "bell-protect": case "bell-unlock": this._bellAction(act, t); return;
       case "s-bell-test": this._closeBell(); this._showBell(true, this._draft ? this._draft.doorbell : null); return;
+      case "saver": this._saverShow(); return;
+      case "s-wall-device": this._wallSet(!this._wallIsOn()); this._toast(this._wallIsOn() ? "Dieses Gerät ist jetzt ein Wandpanel" : "Wandpanel-Modus aus"); return;
+      case "s-saver-test": { const prev = this._layout; this._layout = { ...prev, wallpanel: { ...this._wallCfg(), ...((this._draft && this._draft.wallpanel) || {}) } }; this._saverShow(); this._layout = prev; this._wallActive = Date.now(); return; }
       case "ftab": this._floorTab = t.dataset.floor; this._dirty = true; this._flush(); return;
       case "al-open-page": if (t.dataset.key) this._alSel = t.dataset.key; this._alTab = "leitstelle"; if (this._view === "alarme") this._alRefresh(); else this._go("alarme"); return;
       case "al-sel": this._alSel = t.dataset.key || null; this._alRefresh(); if (this._isNarrow && this._alSel) { const d = this.shadowRoot.querySelector(".aldetail"); if (d && d.scrollIntoView) d.scrollIntoView({ behavior: "smooth", block: "nearest" }); } return;

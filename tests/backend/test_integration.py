@@ -88,6 +88,15 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
     assert he["manual"]["slope"] == 3.0 and he["manual"]["level"] == -3 and he["manual"]["max"] == 35 and "evil" not in he["manual"]
     assert wb["mode"] == "select.evcc_lp1_mode" and wb["power"] == "" and wb["enabled"] is True
 
+    # 1.3.0: Wandpanel
+    await client.send_json({"id": 8, "type": f"{DOMAIN}/save", "layout": {"wallpanel": {
+        "saver_min": 0, "black_min": 9999, "return_min": -3, "fullscreen": False, "night_dim": "ja",
+        "weather": "sensor.kein_wetter", "wake_entity": "binary_sensor.flur_bewegung", "evil": 1}}})
+    got = [await client.receive_json(), await client.receive_json()]
+    wp = next(m for m in got if m["id"] == 8 and m["type"] == "result")["result"]["layout"]["wallpanel"]
+    assert wp["saver_min"] == 0 and wp["black_min"] == 600 and wp["return_min"] == 0 and wp["fullscreen"] is False
+    assert wp["night_dim"] is True and wp["weather"] == "" and wp["wake_entity"] == "binary_sensor.flur_bewegung" and "evil" not in wp
+
     # Optionen ändern → Panel neu registriert
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(

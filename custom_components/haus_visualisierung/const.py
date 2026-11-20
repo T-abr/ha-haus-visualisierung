@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -101,6 +101,10 @@ DEFAULT_LAYOUT: dict = {
         "stove": "", "stove_pump": "", "stove_hot": 50, "curve": "", "mixer": "", "flow": "", "outdoor": "",
         "manual_curve": False,
         "manual": {"slope": 0.3, "level": 0, "room": 20, "min": 22, "max": 40, "limit": 16},
+    },
+    "wallpanel": {                 # Wandpanel (welches Gerät eins ist, merkt sich der Browser)
+        "saver_min": 5, "black_min": 0, "return_min": 2, "fullscreen": True, "hide_sidebar": True,
+        "wake_alarm": True, "night_dim": True, "weather": "", "wake_entity": "",
     },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",

@@ -216,6 +216,21 @@ def _wallbox(raw: dict) -> dict:
     return out
 
 
+def _wallpanel(raw: dict) -> dict:
+    """Wandpanel: Zeiten in Minuten (0 = nie), Schalter, Wetter und Bewegungsmelder."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["wallpanel"])
+    out["saver_min"] = _int(raw.get("saver_min"), 0, 240, out["saver_min"])
+    out["black_min"] = _int(raw.get("black_min"), 0, 600, out["black_min"])
+    out["return_min"] = _int(raw.get("return_min"), 0, 240, out["return_min"])
+    for key in ("fullscreen", "hide_sidebar", "wake_alarm", "night_dim"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    w = _entity(raw.get("weather"))
+    out["weather"] = w if w.startswith("weather.") else ""
+    out["wake_entity"] = _entity(raw.get("wake_entity"))
+    return out
+
+
 def _link_mode(link: dict) -> str:
     """theme = Original mit Haus-Farben, embed = Original-Farben, open = eigene Seite."""
     mode = link.get("mode")
@@ -303,6 +318,8 @@ def sanitize(raw: Any) -> dict:
         result["doorbell"] = out
     if isinstance(raw.get("heating"), dict):
         result["heating"] = _heating(raw["heating"])
+    if isinstance(raw.get("wallpanel"), dict):
+        result["wallpanel"] = _wallpanel(raw["wallpanel"])
     if isinstance(raw.get("wallbox"), dict):
         result["wallbox"] = _wallbox(raw["wallbox"])
     if isinstance(raw.get("confirm_quick"), bool):
