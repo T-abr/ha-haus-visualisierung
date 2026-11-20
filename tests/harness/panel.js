@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -1501,8 +1501,11 @@ function entArea(h, e) {
 function techCfg(h, L, areas) {
   const ids = Object.keys(h.states);
   const S = (e) => h.states[e];
-  const label = (e) => `${e} ${(S(e) && S(e).attributes.friendly_name) || ""}`;
-  const isTemp = (e) => e.startsWith("sensor.") && dc(S(e)) === "temperature";
+  const labels = new Map();
+  const label = (e) => { let l = labels.get(e); if (l === undefined) labels.set(e, (l = `${e} ${(S(e) && S(e).attributes.friendly_name) || ""}`)); return l; };
+  const temps = ids.filter((e) => e.startsWith("sensor.") && dc(S(e)) === "temperature");
+  const tempSet = new Set(temps);
+  const isTemp = (e) => tempSet.has(e);
   const pick = (v) => (v && S(v) ? v : "");
   const byAreaName = (re) => [...areas.values()].find((a) => re.test(a.name));
   const used = new Set();
@@ -1513,11 +1516,11 @@ function techCfg(h, L, areas) {
     const curve = pick(H.curve) || ids.find((e) => e.startsWith("sensor.") && S(e).attributes.slope !== undefined && (S(e).attributes.curve !== undefined || S(e).attributes.heating_limit !== undefined)) || "";
     const mixer = pick(H.mixer) || ids.find((e) => e.startsWith("sensor.") && S(e).attributes.feedforward !== undefined && S(e).attributes.status !== undefined) || "";
     const tank = (H.tank || []).filter((e) => S(e)).length ? H.tank.filter((e) => S(e))
-      : ids.filter((e) => isTemp(e) && TANK_RE.test(label(e)) && !/soll|target/i.test(label(e))).sort((a, b) => TANK_POS(label(a)) - TANK_POS(label(b)) || label(a).localeCompare(label(b), "de"));
-    const stove = pick(H.stove) || ids.find((e) => isTemp(e) && STOVE_RE.test(label(e))) || "";
+      : temps.filter((e) => TANK_RE.test(label(e)) && !/soll|target/i.test(label(e))).sort((a, b) => TANK_POS(label(a)) - TANK_POS(label(b)) || label(a).localeCompare(label(b), "de"));
+    const stove = pick(H.stove) || temps.find((e) => STOVE_RE.test(label(e))) || "";
     const pump = pick(H.stove_pump) || ids.find((e) => /^(sensor|switch|fan|binary_sensor|number)\./.test(e) && STOVE_RE.test(label(e)) && /pump/i.test(label(e))) || "";
-    const flow = pick(H.flow) || ids.find((e) => isTemp(e) && /vorlauf|flow/i.test(label(e)) && !/soll|target|prim/i.test(label(e))) || "";
-    const outdoor = pick(H.outdoor) || ids.find((e) => isTemp(e) && OUTDOOR_RE.test(label(e))) || "";
+    const flow = pick(H.flow) || temps.find((e) => /vorlauf|flow/i.test(label(e)) && !/soll|target|prim/i.test(label(e))) || "";
+    const outdoor = pick(H.outdoor) || temps.find((e) => OUTDOOR_RE.test(label(e))) || "";
     if (tank.length || stove || curve || H.manual_curve) {
       const area = (H.area && areas.get(H.area)) || byAreaName(HEAT_AREA_RE) || areas.get(entArea(h, tank[0] || curve || flow));
       heat = { area: area ? area.id : null, tank, stove, pump, curve, mixer, flow, outdoor };
@@ -4619,7 +4622,7 @@ class HausVisualisierungPanel extends HvBase {
     for (let i = 0; i < path.length - 1; i++) o = o[path[i]] = o[path[i]] ?? {};
     o[path[path.length - 1]] = v;
     this._dirtySettings = true;
-    if (/^alerts\.rules\.\d+\.op$/.test(t.dataset.set) || /^alarm_actions\.\d+\.type$/.test(t.dataset.set) || (t.dataset.set === "doorbell.lock" && e.type === "change")) { this._rerenderSettings(); return; }
+    if ((/^(heating|wallbox)\./.test(t.dataset.set) && e.type === "change" && !/\.manual\./.test(t.dataset.set)) || /^alerts\.rules\.\d+\.op$/.test(t.dataset.set) || /^alarm_actions\.\d+\.type$/.test(t.dataset.set) || (t.dataset.set === "doorbell.lock" && e.type === "change")) { this._rerenderSettings(); return; }
     const msg = this.shadowRoot.querySelector(".savebar .msg");
     if (msg) msg.textContent = "Ungespeicherte Änderungen";
   }
@@ -5007,4 +5010,4 @@ if (!window.customCards.some((c) => c.type === "haus-raum-card")) {
 }
 
 // Für Tests
-window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll };
+window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll, techCfg, curveFlow };

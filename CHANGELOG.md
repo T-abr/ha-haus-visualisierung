@@ -4,6 +4,38 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.2.0 – 2026-11-20
+
+### Neu – Heizung im Heizungsraum
+- **Karte „Heizung“** auf der Raumseite des Heizungsraums (Kompakt und Komfort) mit drei Feldern:
+  - **Speicher:** Schichtung als Farbverlauf von oben nach unten mit den Temperaturen der Fühler, dazu Ladung in % und Durchschnitt. Die Grenzen „kalt“ und „heiß“ sind einstellbar (Standard 30 und 65 °C).
+  - **Kamin:** Temperatur mit Zustand (heizt, kühlt ab, aus; ab 50 °C einstellbar), Pumpe mit Drehzahl oder an/aus und dem Hinweis „lädt den Speicher“, solange die Pumpe läuft.
+  - **Heizkurve:** Kurve über −20 bis +20 °C mit Minimum, Maximum, Heizgrenze und Betriebspunkt. Dazu Außentemperatur, Soll-Vorlauf, Ist-Vorlauf als Ring und Abweichung in Farbe (grün bis 1 K, gelb unter 3 K, rot darüber), Status „Heizbetrieb“ oder „über Heizgrenze“, Kurvenparameter und Mischer mit Stellgröße und Reglerstatus. Mit Maus oder Finger liest man den Vorlauf für jede Außentemperatur ab.
+- Passt zur Integration **„Heizkurve Fußbodenheizung“**: Sollwert, Kurvenpunkte (Attribut `curve`), Parameter und Mischer-Stellgröße werden automatisch erkannt. Ohne Integration rechnet das Panel die Kurve selbst, mit derselben Formel und eigenen Werten für Steilheit, Niveau, Raum, Minimum, Maximum und Heizgrenze.
+- Kopfzeile der Karte: Speicherladung, Kamin (wenn er heizt) und Soll-Vorlauf. Werte und Fühler öffnen die Details.
+
+### Neu – Wallbox in der Einfahrt
+- **Karte „Wallbox“** auf der Raumseite der Einfahrt mit Ladeleistung und Zustand (lädt, angesteckt, kein Fahrzeug), Ladestand des Autos mit Ziel-Markierung und Reichweite sowie der in der Sitzung geladenen Energie.
+- **Lademodus** per Knopf: Aus, Sofort, Min + PV, PV, bzw. die Optionen der Auswahl-Entität. **Ziel-Ladestand** mit − / +.
+- Erkennt die Entitäten von **EVCC** und vielen Wallboxen (go-e, easee, Wattpilot, openWB, KEBA …) am Namen.
+
+### Neu – Einstellungen → Technik
+- Neuer Reiter **Technik** mit den Abschnitten Heizung und Wallbox. Er zeigt, was erkannt wurde (z. B. „Raum Heizungsraum · 3 Speicherfühler · Kamin · Heizkurve …“); jedes leere Feld nennt die automatische Zuordnung. Jede Zuordnung lässt sich von Hand setzen, auch der Raum, in dem die Karte erscheint.
+- Speicherfühler per Ziehen von oben nach unten sortieren, hinzufügen, entfernen oder auf „Automatisch“ zurücksetzen. Beide Karten sind einzeln abschaltbar.
+
+### Geändert
+- Entitäten, die die Heizungs- oder Wallbox-Karte zeigt, stehen nicht noch einmal in den Blöcken bzw. Pins des Raums. Ist die Karte aus, erscheinen sie wie bisher.
+
+### Tests
+- Bedienung: 35 neue Prüfungen (316 Prüfungen). Speicher (Reihenfolge, Ladung), Kamin live ohne Neuaufbau, Heizkurve (Werte, Abweichung, Mischer, Zeiger), Formel gegen die Beispielwerte der Integration (−10 → 29,3 · 0 → 26,7 · 10 → 23,7 °C), Kurve ohne Kurvenpunkte, über Heizgrenze. Wallbox (Werte, Lademodus, Ziel +, angesteckt, kein Fahrzeug, keine Doppelung). Technik-Reiter (Erkanntes, Platzhalter, Ziehen der Fühler, Raum wählen, eigene Kurve, Automatisch, abschalten). Handy 390 px ohne Überbreite und Überlappung.
+- Backend: Einstellungen `heating` und `wallbox` werden geprüft (Entitäts-IDs, Grenzen, Minimum/Maximum, unbekannte Schlüssel) (14 Backend-Tests).
+- Test-Harness: Integration „Heizkurve Fußbodenheizung“ (Sollwert mit Kurvenpunkten, Mischer) und EVCC-Ladepunkt nachgebaut.
+
+### Performance
+- Panel: Übersicht 14–22 ms Aufbau, 0 Neuaufbauten; hass-Setter Ø 26–32 µs. Zum Vergleich 1.1.0 am selben Tag und Rechner: 22–32 µs. Der Unterschied zu den Zahlen von 1.1.0 liegt am Messrechner, der Setter ist unverändert.
+- Heizungsraum: Aufbau 9,6 ms, Wertänderung ≈ 0,5 ms; Einfahrt: 6,6 ms, ≈ 0,26 ms (inklusive Test-Harness). Beide Karten schreiben nur neu, wenn sich einer ihrer Werte ändert. Fremde Sensoren lösen nichts aus.
+- Erkennung von Heizung und Wallbox: 0,22 ms je Neuaufbau des Modells (großes Testhaus, ≈ 700 Entitäten; Modell 0,68 statt 0,56 ms). Sie läuft nur bei Änderungen an Bereichen, Geräten oder Entitäten, nicht bei Zustandsänderungen.
+
 ## 1.1.0 – 2026-11-19
 
 ### Neu – Verlauf auf Raumseiten
