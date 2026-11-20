@@ -318,17 +318,24 @@ class AlertMonitor:
                 for e in room.groups.get("climate", [])
             )
 
+        # „Erst melden nach … Minuten“ gilt für alle Meldungen über offene Fenster und Türen,
+        # auch für „Fenster offen beim Heizen“, die in heizenden Räumen an ihre Stelle tritt.
+        contacts_min = cfg.get("contacts_min", 0)
+
+        def open_long(e: str) -> bool:
+            st = get(e)
+            return is_on(st) and minutes_since(st) >= contacts_min
+
         contacts = [e for r in self._rooms for e in r.groups.get("contact", [])]
         if b.get("contacts", True) and mode_ok("contacts"):
             for e in contacts:
-                st = get(e)
                 if b.get("window_heating", True) and heating(self._area_of.get(e)):
                     continue
-                if is_on(st) and minutes_since(st) >= cfg.get("contacts_min", 0):
+                if open_long(e):
                     out.append(Alert(f"contact:{e}", "warn", f"{self._name(e)} offen"))
         if b.get("window_heating", True) and mode_ok("window_heating"):
             for r in self._rooms:
-                opened = [e for e in r.groups.get("contact", []) if is_on(get(e))]
+                opened = [e for e in r.groups.get("contact", []) if open_long(e)]
                 if opened and heating(r):
                     names = ", ".join(self._name(e).split(" · ", 1)[-1] for e in opened)
                     out.append(Alert(f"heat:{r.area_id}", "warn", f"Fenster offen beim Heizen · {r.name}",

@@ -133,6 +133,42 @@ async def test_push_flow(hass: HomeAssistant, hass_ws_client) -> None:
     assert len(calls) == n
 
 
+async def test_contacts_delay_also_when_heating(hass: HomeAssistant, hass_ws_client, freezer) -> None:
+    """„Erst melden nach … Minuten“ gilt auch für „Fenster offen beim Heizen“ (Fehler bis 1.3.0)."""
+    calls = async_mock_service(hass, "notify", "mobile_app_handy")
+    ids = await _house(hass)
+    await _setup(hass)
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/save", "layout": {"alerts": {"contacts_min": 10}}})
+    await client.receive_json()
+    await _tick(hass)
+    hass.states.async_set(ids["badheiz"], "heat", {"hvac_action": "heating"})
+    hass.states.async_set(ids["badfenster"], "on", {"device_class": "window", "friendly_name": "Bad Fenster"})
+    hass.states.async_set(ids["fenster"], "on", {"device_class": "window", "friendly_name": "Schlafzimmer Fenster"})
+    await _tick(hass)
+    assert calls == []  # weder „Fenster offen“ noch „Fenster offen beim Heizen“ sofort
+    freezer.tick(timedelta(minutes=9))
+    await _tick(hass, 31)
+    assert calls == []
+    freezer.tick(timedelta(minutes=2))
+    await _tick(hass, 31)  # 30-s-Takt wertet erneut aus
+    titles = [c.data.get("title") for c in calls]
+    assert "🏠 Fenster offen beim Heizen · Bad" in titles and "🏠 Schlafzimmer · Fenster offen" in titles
+    assert "🏠 Bad · Fenster offen" not in titles
+    # kurz gelüftet (unter 10 Minuten) → keine Meldung
+    hass.states.async_set(ids["badfenster"], "off", {"device_class": "window"})
+    hass.states.async_set(ids["fenster"], "off", {"device_class": "window"})
+    await _tick(hass)
+    n = len([c for c in calls if c.data.get("message") != "clear_notification"])
+    hass.states.async_set(ids["badfenster"], "on", {"device_class": "window", "friendly_name": "Bad Fenster"})
+    await _tick(hass)
+    freezer.tick(timedelta(minutes=5))
+    await _tick(hass, 31)
+    hass.states.async_set(ids["badfenster"], "off", {"device_class": "window"})
+    await _tick(hass)
+    assert len([c for c in calls if c.data.get("message") != "clear_notification"]) == n
+
+
 async def test_restart_baseline(hass: HomeAssistant) -> None:
     """Nach dem Start: offene Fenster still übernehmen, Alarme trotzdem melden."""
     calls = async_mock_service(hass, "notify", "mobile_app_handy")
