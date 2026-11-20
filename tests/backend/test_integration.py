@@ -73,6 +73,21 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
     got = [await client.receive_json(), await client.receive_json()]
     assert next(m for m in got if m["id"] == 6 and m["type"] == "result")["result"]["layout"]["show_trends"] is True
 
+    # 1.2.0: Technik – Heizung und Wallbox werden geprüft
+    await client.send_json({"id": 7, "type": f"{DOMAIN}/save", "layout": {
+        "heating": {"enabled": False, "tank": ["sensor.speicher_oben", "kaputt", 5, "sensor.speicher_unten"], "tank_min": 70, "tank_max": 40,
+                    "stove": "sensor.kamin", "curve": "<script>", "stove_hot": 999, "manual_curve": True,
+                    "manual": {"slope": 9, "level": -3, "min": 30, "max": 25, "evil": 1}, "evil": "x"},
+        "wallbox": {"mode": "select.evcc_lp1_mode", "power": "falsch", "enabled": "nein"}}})
+    got = [await client.receive_json(), await client.receive_json()]
+    lay7 = next(m for m in got if m["id"] == 7 and m["type"] == "result")["result"]["layout"]
+    he, wb = lay7["heating"], lay7["wallbox"]
+    assert he["enabled"] is False and he["tank"] == ["sensor.speicher_oben", "sensor.speicher_unten"]
+    assert he["tank_min"] == 70 and he["tank_max"] == 80 and he["stove"] == "sensor.kamin" and he["curve"] == ""
+    assert he["stove_hot"] == 120 and he["manual_curve"] is True and "evil" not in he
+    assert he["manual"]["slope"] == 3.0 and he["manual"]["level"] == -3 and he["manual"]["max"] == 35 and "evil" not in he["manual"]
+    assert wb["mode"] == "select.evcc_lp1_mode" and wb["power"] == "" and wb["enabled"] is True
+
     # Optionen ändern → Panel neu registriert
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(

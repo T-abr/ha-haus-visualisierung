@@ -68,6 +68,11 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     temp("sensor.speicher_oben", "Speicher oben", "heizungsraum", 61.3); temp("sensor.speicher_mitte", "Speicher mitte", "heizungsraum", 48.9);
     temp("sensor.speicher_unten", "Speicher unten", "heizungsraum", 34.2); temp("sensor.fbh_vorlauf", "FBH Vorlauf", "heizungsraum", 31.5);
     ent("sensor.fbh_vorlauf_soll", 32.0, { friendly_name: "FBH Vorlauf Soll", device_class: "temperature", unit_of_measurement: "°C" }, "heizungsraum");
+    // Integration „Heizkurve Fußbodenheizung“: Sollwert mit Kurvenpunkten, Mischer-Stellgröße
+    ent("sensor.heizkurve_soll_vorlauftemperatur", 27.6, { friendly_name: "Heizkurve Soll-Vorlauftemperatur", device_class: "temperature", unit_of_measurement: "°C",
+      outdoor_temperature: 6.8, heating_active: true, slope: 0.3, level: 0, room_temperature: 20, min_flow: 22, max_flow: 40, heating_limit: 16,
+      curve: Array.from({ length: 41 }, (_, i) => { const t = i - 20, d = t - 20; return { outdoor: t, flow: Math.round(Math.min(40, Math.max(22, 20 - 0.3 * d * (1.4347 + 0.021 * d + 247.9e-6 * d * d))) * 10) / 10 }; }) }, "heizungsraum");
+    ent("sensor.heizkurve_stellgrosse_mischer", 42, { friendly_name: "Heizkurve Stellgröße Mischer", unit_of_measurement: "%", status: "Regelt", feedforward: 30, enabled: true }, "heizungsraum");
     ent("binary_sensor.heizungsraum_wasser", "off", { friendly_name: "Heizungsraum Wassermelder", device_class: "moisture" }, "heizungsraum");
     light("light.heizungsraum", "Heizungsraum Licht", "heizungsraum", false, null);
     ent("switch.waschmaschine", "on", { friendly_name: "Waschmaschine", device_class: "outlet" }, "hauswirtschaftsraum");
@@ -85,6 +90,14 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     ent("camera.g6_einfahrt", "idle", { friendly_name: "G6 Einfahrt", access_token: "t" }, "einfahrt");
     cover("cover.garagentor", "Garagentor", "einfahrt", 0); states["cover.garagentor"].attributes.device_class = "garage";
     ent("sensor.evcc_ladeleistung", 7360, { friendly_name: "Wallbox Ladeleistung", device_class: "power", unit_of_measurement: "W" }, "einfahrt");
+    // EVCC (Ladepunkt 1) – Entitäten wie bei der EVCC-Integration
+    ent("select.evcc_lp1_mode", "pv", { friendly_name: "Wallbox Lademodus", options: ["off", "now", "minpv", "pv"] }, "einfahrt");
+    ent("sensor.evcc_lp1_vehicle_soc", 64, { friendly_name: "Auto Ladestand", device_class: "battery", unit_of_measurement: "%" }, "einfahrt");
+    ent("number.evcc_lp1_limit_soc", 80, { friendly_name: "Wallbox Ziel-Ladestand", min: 20, max: 100, step: 5, unit_of_measurement: "%" }, "einfahrt");
+    ent("sensor.evcc_lp1_session_energy", 12.34, { friendly_name: "Wallbox geladen (Sitzung)", device_class: "energy", unit_of_measurement: "kWh" }, "einfahrt");
+    ent("binary_sensor.evcc_lp1_connected", "on", { friendly_name: "Wallbox Fahrzeug angesteckt", device_class: "plug" }, "einfahrt");
+    ent("binary_sensor.evcc_lp1_charging", "on", { friendly_name: "Wallbox lädt", device_class: "battery_charging" }, "einfahrt");
+    ent("sensor.evcc_lp1_vehicle_range", 312, { friendly_name: "Auto Reichweite", device_class: "distance", unit_of_measurement: "km" }, "einfahrt");
     light("light.garten_wege", "Garten Wegebeleuchtung", "garten", false, null); temp("sensor.aussen_temperatur", "Außentemperatur", "garten", 6.8);
     ent("lawn_mower.luba", "docked", { friendly_name: "Mähroboter" }, "garten");
     light("light.terrasse", "Terrasse Licht", "terrasse", false, 50);

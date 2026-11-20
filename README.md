@@ -1,4 +1,4 @@
-# Haus Visualisierung 1.1
+# Haus Visualisierung 1.2
 
 Eigenes Home-Assistant-Panel, das sich wie eine Dashboard-Strategy aus Etagen, Bereichen und Geräten
 selbst aufbaut – mit eigenem Design, Alarmmanager und Hausmodus. Läuft auf einem Raspberry Pi ohne Last:
@@ -10,7 +10,10 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Desktop und Aktiv-Fokus am Handy; Darstellung Kompakt oder Komfort; vier Kopfzeilen.
 - **Raumseiten und Sammelseiten** (Licht, Beschattung, Klima, Sicherheit, Batterien) – Wischen zum Dimmen,
   langes Drücken für Details; auf Raumseiten Temperatur- und Feuchteverlauf der letzten 24 Stunden.
-- **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Darstellung) und Sortieren per Ziehen.
+- **Heizung** im Heizungsraum: Speicher mit Schichtung und Ladung, Kamin mit Pumpe, Heizkurve mit Betriebspunkt
+  und Mischer (passt zur Integration „Heizkurve Fußbodenheizung“).
+- **Wallbox** in der Einfahrt: Ladeleistung, Ladestand, Reichweite, Lademodus und Ziel (EVCC und andere).
+- **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Technik, Darstellung) und Sortieren per Ziehen.
 - **Eingebettete Panels** (Solar, Protect, Dashboards) mit fester Navigation und Haus-Farben.
 - **Klingel-Overlay** mit Kamera, Live-Bild und Türöffner (Schalter, Taste, Schloss).
 - **Alarmmanager**: Warnregeln (fest und eigene), Leitstelle, Quittieren, Stummschalten, Protokoll,

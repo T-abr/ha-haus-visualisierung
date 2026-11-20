@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -28,6 +28,9 @@ const DEFAULT_LAYOUT = {
   show_energy_sensors: false, show_other: true, camera_interval: 10, glass: true,
   start_view: "overview", battery_critical: 15, battery_low: 35, density: "kompakt", header_style: "kompakt", overview_style: "auto",
   confirm_quick: true, show_trends: true,
+  heating: { enabled: true, area: "", tank: [], tank_min: 30, tank_max: 65, stove: "", stove_pump: "", stove_hot: 50, curve: "", mixer: "", flow: "", outdoor: "",
+    manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 } },
+  wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
   alerts: {
@@ -54,6 +57,8 @@ const withDefaults = (l) => {
     alarm_actions: Array.isArray(l && l.alarm_actions) ? l.alarm_actions : [],
     house_mode: { ...structuredClone(DEFAULT_LAYOUT.house_mode), ...((l && l.house_mode) || {}), arm: { ...DEFAULT_LAYOUT.house_mode.arm, ...((l && l.house_mode && l.house_mode.arm) || {}) } },
     doorbell: { ...DEFAULT_LAYOUT.doorbell, ...((l && l.doorbell) || {}) },
+    heating: { ...structuredClone(DEFAULT_LAYOUT.heating), ...((l && l.heating) || {}), manual: { ...DEFAULT_LAYOUT.heating.manual, ...((l && l.heating && l.heating.manual) || {}) } },
+    wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}) },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },
   };
 };
@@ -418,9 +423,17 @@ function buildModel(h, L) {
     (area.groups[cat] = area.groups[cat] || []).push(eid);
   }
 
+  // Heizung und Wallbox: ihre Entitäten zeigt die eigene Karte, nicht noch einmal die Blöcke des Raums
+  const tech = techCfg(h, L, areas);
+  for (const c of [tech.heat, tech.wb]) {
+    const ar = c && c.area && areas.get(c.area);
+    if (ar) for (const k of Object.keys(ar.groups)) ar.groups[k] = ar.groups[k].filter((e) => !tech.used.has(e));
+  }
   const byName = (a) => (x, y) => entName(h, x, a).localeCompare(entName(h, y, a), "de");
   for (const a of areas.values()) {
-    a.pins = (L.pins[a.id] || []).filter((e) => h.states[e]);
+    // was die Heizungs- oder Wallbox-Karte dieses Raums zeigt, nicht zusätzlich als Pin
+    const techHere = [tech.heat, tech.wb].some((c) => c && c.area === a.id);
+    a.pins = (L.pins[a.id] || []).filter((e) => h.states[e] && !(techHere && tech.used.has(e)));
     const pinSet = new Set(a.pins);
     for (const k of Object.keys(a.groups)) {
       a.groups[k] = a.groups[k].filter((e) => !pinSet.has(e)).sort(byName(a));
@@ -506,7 +519,7 @@ function buildModel(h, L) {
   for (const b of batteries) if (b.areaId && areas.has(b.areaId)) eidArea.set(b.eid, areas.get(b.areaId));
   const _panelIds = Object.keys(h.entities || {}).filter((e) => e.startsWith("alarm_control_panel.") && h.states[e]);
   if (!_panelIds.length) for (const e in h.states) if (e.startsWith("alarm_control_panel.")) _panelIds.push(e);
-  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds };
+  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds, tech };
 }
 
 function shortFloor(name) {
@@ -1465,6 +1478,263 @@ function trendHover(el, frac) {
   cur.classList.add("on"); tip.classList.add("on");
 }
 
+/* ------------------------------------------------------------------------ */
+/*  Technik: Heizung (Speicher, Kamin, Heizkurve) und Wallbox (EVCC)          */
+/* ------------------------------------------------------------------------ */
+/* Alles wird aus vorhandenen Entitäten erkannt; in Einstellungen → Technik lässt sich jede Zuordnung
+   von Hand setzen. Die Karten erscheinen auf der Raumseite des Heizungsraums bzw. der Einfahrt. */
+const HEAT_AREA_RE = /(heiz|technik)/i;
+const WB_AREA_RE = /(einfahrt|garage|carport|stellplatz|auffahrt)/i;
+const TANK_RE = /(speicher|puffer|boiler|tank)/i;
+const STOVE_RE = /(kamin|ofen|stove|holz)/i;
+const WB_RE = /(evcc|wallbox|wall_box|go_?e|easee|wattpilot|openwb|keba|ladestation|ladepunkt|loadpoint|charger)/i;
+const TANK_POS = (s) => (/(oben|top|ober)/i.test(s) ? 0 : /(mitte|middle|mid)/i.test(s) ? 1 : /(unten|bottom|unter)/i.test(s) ? 2 : 1.5);
+const WB_MODES = { off: "Aus", now: "Sofort", minpv: "Min + PV", pv: "PV" };
+
+function entArea(h, e) {
+  const r = (h.entities || {})[e];
+  if (!r) return null;
+  return r.area_id || (r.device_id && h.devices && h.devices[r.device_id] && h.devices[r.device_id].area_id) || null;
+}
+
+/** Zuordnung für Heizung und Wallbox: Einstellungen zuerst, sonst automatisch. */
+function techCfg(h, L, areas) {
+  const ids = Object.keys(h.states);
+  const S = (e) => h.states[e];
+  const labels = new Map();
+  const label = (e) => { let l = labels.get(e); if (l === undefined) labels.set(e, (l = `${e} ${(S(e) && S(e).attributes.friendly_name) || ""}`)); return l; };
+  const temps = ids.filter((e) => e.startsWith("sensor.") && dc(S(e)) === "temperature");
+  const tempSet = new Set(temps);
+  const isTemp = (e) => tempSet.has(e);
+  const pick = (v) => (v && S(v) ? v : "");
+  const byAreaName = (re) => [...areas.values()].find((a) => re.test(a.name));
+  const used = new Set();
+  // ---- Heizung ----
+  const H = L.heating || {};
+  let heat = null;
+  if (H.enabled !== false) {
+    const curve = pick(H.curve) || ids.find((e) => e.startsWith("sensor.") && S(e).attributes.slope !== undefined && (S(e).attributes.curve !== undefined || S(e).attributes.heating_limit !== undefined)) || "";
+    const mixer = pick(H.mixer) || ids.find((e) => e.startsWith("sensor.") && S(e).attributes.feedforward !== undefined && S(e).attributes.status !== undefined) || "";
+    const tank = (H.tank || []).filter((e) => S(e)).length ? H.tank.filter((e) => S(e))
+      : temps.filter((e) => TANK_RE.test(label(e)) && !/soll|target/i.test(label(e))).sort((a, b) => TANK_POS(label(a)) - TANK_POS(label(b)) || label(a).localeCompare(label(b), "de"));
+    const stove = pick(H.stove) || temps.find((e) => STOVE_RE.test(label(e))) || "";
+    const pump = pick(H.stove_pump) || ids.find((e) => /^(sensor|switch|fan|binary_sensor|number)\./.test(e) && STOVE_RE.test(label(e)) && /pump/i.test(label(e))) || "";
+    const flow = pick(H.flow) || temps.find((e) => /vorlauf|flow/i.test(label(e)) && !/soll|target|prim/i.test(label(e))) || "";
+    const outdoor = pick(H.outdoor) || temps.find((e) => OUTDOOR_RE.test(label(e))) || "";
+    if (tank.length || stove || curve || H.manual_curve) {
+      const area = (H.area && areas.get(H.area)) || byAreaName(HEAT_AREA_RE) || areas.get(entArea(h, tank[0] || curve || flow));
+      heat = { area: area ? area.id : null, tank, stove, pump, curve, mixer, flow, outdoor };
+      [...tank, stove, pump, curve, mixer, flow].filter(Boolean).forEach((e) => used.add(e));
+    }
+  }
+  // ---- Wallbox ----
+  const W = L.wallbox || {};
+  let wb = null;
+  if (W.enabled !== false) {
+    const cand = ids.filter((e) => WB_RE.test(label(e)));
+    const find = (doms, re, not) => cand.find((e) => doms.includes(dom(e)) && re.test(label(e)) && !(not && not.test(label(e)))) || "";
+    const power = pick(W.power) || cand.find((e) => e.startsWith("sensor.") && dc(S(e)) === "power" && /(charg|lade|power|leistung)/i.test(label(e)) && !/(pv|grid|netz|home|haus)/i.test(e)) || "";
+    const mode = pick(W.mode) || cand.find((e) => /^(select|input_select)\./.test(e) && (S(e).attributes.options || []).some((o) => ["pv", "now", "minpv"].includes(String(o).toLowerCase()))) || find(["select", "input_select"], /(mode|modus)/i);
+    const soc = pick(W.soc) || find(["sensor"], /(soc|ladestand)/i, /(limit|min|target|ziel|max)/i);
+    const limit = pick(W.limit) || find(["number", "input_number", "select"], /(limit|target|ziel)/i);
+    const energy = pick(W.energy) || cand.find((e) => e.startsWith("sensor.") && dc(S(e)) === "energy" && /(session|charged|geladen|sitzung)/i.test(label(e))) || "";
+    const connected = pick(W.connected) || find(["binary_sensor"], /(connected|plugged|angesteckt|verbunden)/i);
+    const charging = pick(W.charging) || find(["binary_sensor"], /(charging|l(ä|ae)dt)/i);
+    const range = pick(W.range) || find(["sensor"], /(range|reichweite)/i);
+    if (power || mode) {
+      const area = (W.area && areas.get(W.area)) || areas.get(entArea(h, power || mode)) || byAreaName(WB_AREA_RE);
+      wb = { area: area ? area.id : null, power, mode, soc, limit, energy, connected, charging, range };
+      [power, mode, soc, limit, energy, connected, charging, range].filter(Boolean).forEach((e) => used.add(e));
+    }
+  }
+  return { heat, wb, used };
+}
+
+/* ---------- Heizkurve ---------- */
+/** Heizkurvenformel (wie die Integration „Heizkurve Fußbodenheizung“): DAR = Außen − Raum-Soll. */
+function curveFlow(ta, p) {
+  const dar = ta - p.room;
+  const v = p.room + p.level - p.slope * dar * (1.4347 + 0.021 * dar + 247.9e-6 * dar * dar);
+  return Math.min(p.max, Math.max(p.min, v));
+}
+
+function curveParams(h, cfg, L) {
+  const st = cfg.curve && h.states[cfg.curve];
+  const a = st ? st.attributes : {};
+  const M = (L.heating && L.heating.manual) || {};
+  const n = (v, d) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : d);
+  return { slope: n(a.slope, n(M.slope, 0.3)), level: n(a.level, n(M.level, 0)), room: n(a.room_temperature, n(M.room, 20)),
+    min: n(a.min_flow, n(M.min, 22)), max: n(a.max_flow, n(M.max, 40)), limit: n(a.heating_limit, n(M.limit, 16)), fromEntity: !!st };
+}
+
+/** Kurvenpunkte aus dem Attribut „curve“ (Liste oder Objekt), sonst aus der Formel. */
+function curvePoints(st, p) {
+  const c = st && st.attributes.curve;
+  let pts = [];
+  if (Array.isArray(c)) {
+    pts = c.map((q) => (Array.isArray(q) ? [parseFloat(q[0]), parseFloat(q[1])]
+      : q && typeof q === "object" ? [parseFloat(q.outdoor ?? q.outdoor_temperature ?? q.t ?? q.x ?? q.temp), parseFloat(q.flow ?? q.flow_temperature ?? q.target ?? q.y ?? q.v ?? q.value)] : [NaN, NaN]));
+  } else if (c && typeof c === "object") pts = Object.entries(c).map(([k, v]) => [parseFloat(k), parseFloat(v)]);
+  pts = pts.filter(([x, y]) => finite(x) && finite(y)).sort((x, y) => x[0] - y[0]);
+  if (pts.length >= 2) return pts;
+  const out = [];
+  for (let t = -20; t <= 20; t++) out.push([t, curveFlow(t, p)]);
+  return out;
+}
+
+const curveAt = (pts, t) => {
+  if (!pts.length) return null;
+  if (t <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) if (t <= pts[i][0]) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; return y0 + ((t - x0) / (x1 - x0)) * (y1 - y0); }
+  return pts[pts.length - 1][1];
+};
+
+/** Farbe einer Wassertemperatur: kalt blau → warm orange → heiß rot. */
+function tempColor(t, lo, hi) {
+  const f = Math.max(0, Math.min(1, (t - lo) / Math.max(1, hi - lo)));
+  // über Violett statt Grün: 215 (blau) → 270 → 330 → 15 (orange-rot)
+  return `hsl(${Math.round(215 + f * 160) % 360} 78% ${Math.round(58 - f * 4)}%)`;
+}
+
+const techWatch = (cfg) => (cfg ? Object.values(cfg).flat().filter((e) => typeof e === "string" && e.includes(".")) : []);
+const deg = (v, d = 1) => (v === null || v === undefined ? "–" : `${(d ? NF1 : NF0).format(v)}°`);
+
+function heatCardHTML(a) {
+  return `<div class="glass tech heat" data-u="heat" data-area="${esc(a.id)}"><div class="techh">${icon("mdi:heating-coil")}<span>Heizung</span><span class="techs"></span></div><div class="heatgrid"></div></div>`;
+}
+
+function updateHeat(el, ctx) {
+  const cfg = ctx._model.tech && ctx._model.tech.heat;
+  if (!cfg) return;
+  const h = ctx._hass, L = ctx._layout, H = L.heating || {};
+  const sig = techWatch(cfg).map((e) => { const s = h.states[e]; return s ? `${s.state}|${s.attributes.outdoor_temperature ?? ""}|${s.attributes.status ?? ""}|${s.attributes.heating_active ?? ""}` : ""; }).join(";") + ctx._isNarrow;
+  if (el._sig === sig) return;
+  el._sig = sig;
+  const parts = [], status = [];
+  // Speicher
+  if (cfg.tank.length) {
+    const lo = H.tank_min ?? 30, hi = H.tank_max ?? 65;
+    const vals = cfg.tank.map((e) => num(h.states[e]));
+    const ok = vals.filter((v) => v !== null);
+    const load = ok.length ? Math.round((ok.reduce((s, v) => s + Math.max(0, Math.min(1, (v - lo) / Math.max(1, hi - lo))), 0) / ok.length) * 100) : null;
+    const n = cfg.tank.length;
+    const stops = vals.map((v, i) => `<stop offset="${n === 1 ? 50 : Math.round((i / (n - 1)) * 100)}%" stop-color="${v === null ? "#555" : tempColor(v, lo, hi)}"/>`).join("");
+    const labels = cfg.tank.map((e, i) => `<button class="tkl" style="top:${n === 1 ? 50 : 12 + (i / (n - 1)) * 76}%" data-act="more" data-eid="${esc(e)}"><b>${deg(vals[i])}</b><small>${esc(entName(h, e).replace(TANK_RE, "").trim() || entName(h, e))}</small></button>`).join("");
+    parts.push(`<div class="hpanel tank"><div class="hpt">${icon("mdi:storage-tank-outline")}Speicher</div>
+      <div class="tkwrap"><svg viewBox="0 0 60 120" aria-hidden="true"><defs><linearGradient id="tkg-${esc(el.dataset.area)}" x1="0" y1="0" x2="0" y2="1">${stops}</linearGradient></defs>
+        <rect x="4" y="4" width="52" height="112" rx="22" fill="url(#tkg-${esc(el.dataset.area)})" opacity=".88"/><rect x="4" y="4" width="52" height="112" rx="22" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>
+        <rect x="12" y="12" width="7" height="96" rx="3.5" fill="rgba(255,255,255,.18)"/></svg><div class="tkls">${labels}</div></div>
+      <div class="hpf">${load !== null ? `Ladung <b>${load} %</b>` : ""}${ok.length ? ` · Ø ${deg(ok.reduce((s, v) => s + v, 0) / ok.length)}` : ""}</div></div>`);
+    if (load !== null) status.push(`Speicher ${load} %`);
+  }
+  // Kamin
+  if (cfg.stove) {
+    const t = num(h.states[cfg.stove]), hot = H.stove_hot ?? 50;
+    const ps = cfg.pump && h.states[cfg.pump];
+    const pv = ps ? (["on", "off"].includes(ps.state) ? (ps.state === "on" ? 100 : 0) : num(ps)) : null;
+    const burning = t !== null && t >= hot, warm = t !== null && !burning && t >= hot - 15;
+    const run = pv !== null && pv > 0;
+    parts.push(`<div class="hpanel stove${burning ? " burn" : warm ? " warm" : ""}"><div class="hpt">${icon("mdi:fireplace")}Kamin</div>
+      <button class="stv" data-act="more" data-eid="${esc(cfg.stove)}"><span class="flame">${icon(burning ? "mdi:fire" : warm ? "mdi:fire-circle" : "mdi:fire-off")}</span><b>${deg(t)}</b><small>${burning ? "Heizt" : warm ? "Kühlt ab" : "Aus"}</small></button>
+      ${ps ? `<button class="pump${run ? " run" : ""}" data-act="more" data-eid="${esc(cfg.pump)}"><span>${icon("mdi:pump")}Pumpe</span><i><em style="width:${Math.max(0, Math.min(100, pv ?? 0))}%"></em></i><b>${pv === null ? "–" : ["on", "off"].includes(ps.state) ? (run ? "an" : "aus") : `${NF0.format(pv)} %`}</b></button>
+        ${run && cfg.tank.length ? `<div class="hpf flowto">${icon("mdi:arrow-right-thin")}lädt den Speicher</div>` : ""}` : ""}</div>`);
+    if (burning) status.push(`Kamin ${deg(t, 0)}`);
+  }
+  // Heizkurve
+  if (cfg.curve || H.manual_curve) {
+    const st = cfg.curve && h.states[cfg.curve];
+    const p = curveParams(h, cfg, L);
+    const pts = curvePoints(st, p);
+    const ta = st && finite(parseFloat(st.attributes.outdoor_temperature)) ? parseFloat(st.attributes.outdoor_temperature) : num(h.states[cfg.outdoor]);
+    const soll = st ? num(st) : ta !== null ? curveFlow(ta, p) : null;
+    const ist = num(h.states[cfg.flow]);
+    const active = st && st.attributes.heating_active !== undefined ? st.attributes.heating_active !== false : ta === null || ta < p.limit;
+    const ys = [...pts.map((q) => q[1]), p.min, p.max, soll, ist].filter(finite);
+    const lo = Math.floor(Math.min(...ys) - 2), hi = Math.ceil(Math.max(...ys) + 2);
+    const X = (t) => ((t + 20) / 40) * 300, Y = (v) => 150 - ((v - lo) / (hi - lo)) * 140;
+    const path = pts.filter(([t]) => t >= -20 && t <= 20).map(([t, v], i) => `${i ? "L" : "M"}${X(t).toFixed(1)} ${Y(v).toFixed(1)}`).join("");
+    const dev = soll !== null && ist !== null ? ist - soll : null;
+    const mx = cfg.mixer && h.states[cfg.mixer];
+    const pct = (x, y) => `left:${(X(x) / 3).toFixed(2)}%;top:${(Y(y) / 1.6).toFixed(2)}%`;
+    const tac = ta === null ? null : Math.max(-20, Math.min(20, ta));
+    parts.push(`<div class="hpanel curve"><div class="hpt">${icon("mdi:chart-bell-curve")}Heizkurve<span class="chip${active ? " on" : ""}">${active ? "Heizbetrieb" : "über Heizgrenze"}</span></div>
+      <div class="hkv">
+        <button data-act="more" data-eid="${esc(cfg.outdoor || cfg.curve)}"><small>Außen</small><b>${deg(ta)}</b></button>
+        <button data-act="more" data-eid="${esc(cfg.curve)}"><small>Soll</small><b>${deg(soll)}</b></button>
+        ${cfg.flow ? `<button data-act="more" data-eid="${esc(cfg.flow)}"><small>Ist</small><b>${deg(ist)}</b></button>` : ""}
+        ${dev !== null ? `<span class="dev ${Math.abs(dev) <= 1 ? "ok" : Math.abs(dev) < 3 ? "mid" : "bad"}"><small>Abw.</small><b>${dev > 0 ? "+" : dev < 0 ? "−" : ""}${NF1.format(Math.abs(dev))} K</b></span>` : ""}
+      </div>
+      <div class="hcc" data-lo="${lo}" data-hi="${hi}" data-pts="${esc(JSON.stringify(pts.map(([t, v]) => [t, Math.round(v * 10) / 10])))}">
+        <svg viewBox="0 0 300 160" preserveAspectRatio="none" aria-hidden="true">
+          <line class="hcg" x1="${X(0)}" x2="${X(0)}" y1="0" y2="160"/>
+          <line class="hcm" x1="0" x2="300" y1="${Y(p.min).toFixed(1)}" y2="${Y(p.min).toFixed(1)}"/><line class="hcm" x1="0" x2="300" y1="${Y(p.max).toFixed(1)}" y2="${Y(p.max).toFixed(1)}"/>
+          ${p.limit > -20 && p.limit < 20 ? `<line class="hcl" x1="${X(p.limit).toFixed(1)}" x2="${X(p.limit).toFixed(1)}" y1="0" y2="160"/>` : ""}
+          <path class="hcp" d="${path}"/>
+          ${tac !== null ? `<line class="hcn" x1="${X(tac).toFixed(1)}" x2="${X(tac).toFixed(1)}" y1="0" y2="160"/>` : ""}
+        </svg>
+        ${tac !== null && soll !== null ? `<i class="hcpt soll" style="${pct(tac, soll)}"></i>` : ""}
+        ${tac !== null && ist !== null ? `<i class="hcpt ist" style="${pct(tac, ist)}"></i>` : ""}
+        <span class="hcy hi">${hi}°</span><span class="hcy lo">${lo}°</span>
+        <span class="hcx" style="left:0">−20°</span><span class="hcx" style="left:50%">0°</span><span class="hcx" style="right:0;left:auto">+20°</span>
+        <div class="hctip"></div>
+      </div>
+      <div class="hpf">Steilheit ${NF1.format(p.slope)} · Niveau ${p.level > 0 ? "+" : ""}${NF1.format(p.level)} K · Raum ${deg(p.room, 0)} · Grenze ${deg(p.limit, 0)}${mx ? ` · <button class="lnk" data-act="more" data-eid="${esc(cfg.mixer)}">Mischer ${num(mx) === null ? "–" : `${NF0.format(num(mx))} %`}${mx.attributes.status ? ` · ${esc(mx.attributes.status)}` : ""}</button>` : ""}</div></div>`);
+    if (soll !== null) status.push(`Vorlauf ${deg(soll, 0)}`);
+  }
+  el.querySelector(".heatgrid").innerHTML = parts.join("");
+  el.querySelector(".heatgrid").dataset.n = String(parts.length);
+  setText(el, ".techs", status.join(" · "));
+}
+
+/** Wert der Heizkurve unter dem Zeiger. */
+function heatHover(c, frac) {
+  const tip = c.querySelector(".hctip");
+  if (frac === null) { tip.classList.remove("on"); return; }
+  const pts = JSON.parse(c.dataset.pts || "[]"), t = Math.round(-20 + frac * 40);
+  const v = curveAt(pts, t);
+  if (v === null) return;
+  tip.innerHTML = `Außen <b>${t > 0 ? "+" : ""}${t}°</b> → Vorlauf <b>${NF1.format(v)}°</b>`;
+  tip.style.left = `${Math.min(80, Math.max(20, frac * 100))}%`;
+  tip.classList.add("on");
+}
+
+/* ---------- Wallbox ---------- */
+function wbCardHTML(a) {
+  return `<div class="glass tech wb" data-u="wallbox" data-area="${esc(a.id)}"><div class="techh">${icon("mdi:ev-station")}<span>Wallbox</span><span class="techs"></span></div><div class="wbbody"></div></div>`;
+}
+
+function updateWallbox(el, ctx) {
+  const cfg = ctx._model.tech && ctx._model.tech.wb;
+  if (!cfg) return;
+  const h = ctx._hass, S = (e) => (e ? h.states[e] : null);
+  const sig = techWatch(cfg).map((e) => { const s = h.states[e]; return s ? s.state : ""; }).join(";");
+  if (el._sig === sig) return;
+  el._sig = sig;
+  const pw = powerW(S(cfg.power));
+  const kw = pw === null ? null : pw / 1000;
+  const charging = cfg.charging ? isOn(S(cfg.charging)) : kw !== null && kw > 0.05;
+  const connected = cfg.connected ? isOn(S(cfg.connected)) || charging : null;
+  const soc = num(S(cfg.soc)), lim = num(S(cfg.limit)), range = num(S(cfg.range));
+  const en = S(cfg.energy), enV = num(en);
+  const enU = en ? en.attributes.unit_of_measurement || "kWh" : "";
+  const txt = charging ? `Lädt mit ${NF1.format(kw ?? 0)} kW` : connected ? "Angesteckt – lädt nicht" : connected === false ? "Kein Fahrzeug" : "Bereit";
+  const ms = S(cfg.mode);
+  const opts = ms ? (ms.attributes.options || []) : [];
+  const limSt = S(cfg.limit), limStep = limSt && limSt.attributes.step ? Number(limSt.attributes.step) : 5;
+  el.classList.toggle("charging", charging);
+  el.querySelector(".wbbody").innerHTML = `
+    <div class="wbmain">
+      <button class="wbpow" data-act="more" data-eid="${esc(cfg.power || cfg.mode)}"><span class="wbic">${icon(charging ? "mdi:ev-plug-type2" : connected ? "mdi:power-plug-outline" : "mdi:power-plug-off-outline")}</span>
+        <span><b>${kw === null ? "–" : NF1.format(kw)}</b> kW<small>${esc(txt)}</small></span></button>
+      ${cfg.soc ? `<button class="wbcar" data-act="more" data-eid="${esc(cfg.soc)}"><span class="wbct">${icon("mdi:car-electric")}<b>${soc === null ? "–" : `${NF0.format(soc)} %`}</b>${range !== null ? `<small>${NF0.format(range)} km</small>` : ""}${lim !== null ? `<small>Ziel ${NF0.format(lim)} %</small>` : ""}</span>
+        <i class="socbar"><em style="width:${Math.max(0, Math.min(100, soc ?? 0))}%"></em>${lim !== null ? `<u style="left:${Math.max(0, Math.min(100, lim))}%"></u>` : ""}</i></button>` : ""}
+      ${en ? `<button class="wbses" data-act="more" data-eid="${esc(cfg.energy)}"><small>Geladen</small><b>${enV === null ? "–" : `${NF1.format(enV)} ${esc(enU)}`}</b></button>` : ""}
+    </div>
+    ${opts.length ? `<div class="wbmodes" role="group" aria-label="Lademodus">${opts.map((o) => `<button class="altab sm${ms.state === o ? " on" : ""}" data-act="select-opt" data-eid="${esc(cfg.mode)}" data-opt="${esc(o)}"><span>${esc(WB_MODES[String(o).toLowerCase()] || o)}</span></button>`).join("")}
+      ${limSt && /^(number|input_number)\./.test(cfg.limit) ? `<span class="wblim"><small>Ziel</small><button class="sbtn" data-act="num-step" data-eid="${esc(cfg.limit)}" data-step="${-limStep}" title="Ziel senken">${icon("mdi:minus")}</button><b>${lim === null ? "–" : `${NF0.format(lim)} %`}</b><button class="sbtn" data-act="num-step" data-eid="${esc(cfg.limit)}" data-step="${limStep}" title="Ziel erhöhen">${icon("mdi:plus")}</button></span>` : ""}</div>` : ""}`;
+  setText(el, ".techs", charging ? `${NF1.format(kw ?? 0)} kW` : connected ? "angesteckt" : "");
+}
+
 const UPD = {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
   alarmpage: { watch: (el, c) => alertWatch(c._model, c._layout), run: (el, c) => c._renderAlarmPage(el) },
@@ -1484,6 +1754,8 @@ const UPD = {
   weather: { watch: (el) => [el.dataset.eid], run: updateWeather },
   person: { watch: (el) => [el.dataset.eid], run: updatePerson },
   gcount: { watch: (el) => (el._eids = (el.dataset.eids || "").split(",").filter(Boolean)), run: updateGroupCount },
+  heat: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.heat), run: updateHeat },
+  wallbox: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.wb), run: updateWallbox },
   trend: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, a.humId].filter(Boolean) : []; }, run: updateTrend },
 };
 
@@ -1737,6 +2009,8 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex;align-items:center;justify-cont
 .actcard.dragging{background:rgba(30,40,60,.95)}
 .sorting .sitem:not(.dragging){transition:transform .12s}
 .flb+.flb{margin-top:4px}
+.techfound{color:var(--hv-text)!important;background:var(--hv-surface);border-radius:10px;padding:7px 10px}
+.techman{gap:10px}.tml{display:flex;flex-direction:column;gap:3px}.tml small{font-size:11px;color:var(--hv-dim)}
 .fl-title{margin:14px 0 2px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--hv-dim);display:flex;align-items:center;gap:8px}
 .tgl{position:relative;width:44px;height:26px;flex:none}
 .tgl input{opacity:0;width:0;height:0}
@@ -2249,6 +2523,82 @@ details[open]>summary.shead{padding-bottom:2px}
 .narrow .ebar .ep b{margin-left:auto}
 .narrow .ebar .schip,.narrow .ebar .pbtn{display:flex;justify-content:center;min-width:0;overflow:hidden;padding:8px 10px;font-size:12.5px;border-radius:12px}
 .narrow .ebar .schip span,.narrow .ebar .pbtn span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Technik: Heizung und Wallbox */
+.tech{padding:12px 16px 14px;margin-bottom:16px}
+.dense .tech{padding:10px 12px 12px;margin-bottom:12px;border-radius:16px}
+.techh{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hv-dim);margin-bottom:10px}
+.techh ha-icon{--mdc-icon-size:17px;color:var(--hv-heat)}.wb .techh ha-icon{color:var(--hv-ok)}
+.techs{margin-left:auto;letter-spacing:0;text-transform:none;font-size:13px;color:var(--hv-text);font-variant-numeric:tabular-nums}
+.heatgrid{display:grid;grid-template-columns:minmax(170px,.8fr) minmax(170px,.8fr) minmax(300px,2fr);gap:12px}
+.heatgrid[data-n="2"]{grid-template-columns:minmax(170px,1fr) minmax(300px,2fr)}
+.heatgrid[data-n="1"]{grid-template-columns:minmax(0,1fr)}
+.hpanel{background:var(--hv-surface);border:1px solid var(--hv-line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.hpt{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}.hpt ha-icon{--mdc-icon-size:17px;color:var(--hv-dim)}
+.hpt .chip{margin-left:auto;font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--hv-surface-2);color:var(--hv-dim)}
+.hpt .chip.on{background:rgba(255,138,61,.2);color:#ffb27a}
+.hpf{font-size:12px;color:var(--hv-dim);font-variant-numeric:tabular-nums}.hpf b{color:var(--hv-text);font-weight:500}
+.hpf .lnk{color:var(--hv-text);text-decoration:underline dotted;text-underline-offset:3px}
+.tkwrap{position:relative;display:flex;gap:10px;align-items:stretch;flex:1;min-height:150px}
+.tkwrap svg{width:62px;flex:none;height:150px}
+.tkls{position:relative;flex:1}
+.tkl{position:absolute;left:0;transform:translateY(-50%);display:flex;align-items:baseline;gap:6px;text-align:left;white-space:nowrap}
+.tkl b{font-size:17px;font-weight:400;font-variant-numeric:tabular-nums}.tkl small{font-size:11.5px;color:var(--hv-dim)}
+.stv{display:flex;align-items:center;gap:10px;text-align:left}
+.stv .flame{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--hv-surface-2);color:var(--hv-faint)}
+.stv .flame ha-icon{--mdc-icon-size:28px}
+.stv b{font-size:26px;font-weight:300;font-variant-numeric:tabular-nums}.stv small{display:block;font-size:12px;color:var(--hv-dim)}
+.stove.burn .flame{background:rgba(255,120,50,.22);color:#ff9a4d;animation:hvflame 1.6s ease-in-out infinite}
+.stove.warm .flame{color:#ffb27a}
+@keyframes hvflame{0%,100%{box-shadow:0 0 0 0 rgba(255,120,50,.0)}50%{box-shadow:0 0 18px 2px rgba(255,120,50,.35)}}
+.pump{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;font-size:12.5px;color:var(--hv-dim);text-align:left}
+.pump span{display:flex;align-items:center;gap:4px}.pump ha-icon{--mdc-icon-size:16px}
+.pump i{height:6px;border-radius:3px;background:var(--hv-surface-2);overflow:hidden}.pump em{display:block;height:100%;background:var(--hv-cool);border-radius:3px}
+.pump.run em{background:repeating-linear-gradient(90deg,var(--hv-cool) 0 10px,#9adcff 10px 20px);background-size:40px 100%;animation:hvpump 1s linear infinite}
+.pump b{color:var(--hv-text);font-weight:500;font-variant-numeric:tabular-nums}
+@keyframes hvpump{to{background-position:40px 0}}
+.flowto{display:flex;align-items:center;gap:2px;color:var(--hv-cool)}.flowto ha-icon{--mdc-icon-size:18px}
+.hkv{display:flex;gap:6px 16px;flex-wrap:wrap}
+.hkv>*{display:flex;flex-direction:column;text-align:left}.hkv small{font-size:11px;color:var(--hv-dim)}
+.hkv b{font-size:18px;font-weight:400;font-variant-numeric:tabular-nums}
+.hkv .dev.ok b{color:var(--hv-ok)}.hkv .dev.mid b{color:var(--hv-warm)}.hkv .dev.bad b{color:var(--hv-alert)}
+.hcc{position:relative;height:150px;margin:2px 30px 16px;cursor:crosshair;touch-action:pan-y}
+.dense .hcc{height:120px}
+.hcc svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.hcp{fill:none;stroke:var(--hv-heat);stroke-width:2.2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.hcm{stroke:var(--hv-faint);stroke-dasharray:4 4;stroke-width:1;vector-effect:non-scaling-stroke}
+.hcl{stroke:var(--hv-cool);stroke-dasharray:3 5;stroke-width:1.2;vector-effect:non-scaling-stroke;opacity:.8}
+.hcg{stroke:var(--hv-line);stroke-width:1;vector-effect:non-scaling-stroke}
+.hcn{stroke:rgba(255,255,255,.3);stroke-width:1;vector-effect:non-scaling-stroke}
+.hcpt{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;pointer-events:none}
+.hcpt.soll{background:var(--hv-heat);box-shadow:0 0 0 3px rgba(255,138,61,.25)}
+.hcpt.ist{border:2px solid #fff;width:16px;height:16px;margin:-8px 0 0 -8px}
+.hcy{position:absolute;right:calc(100% + 6px);font-size:10.5px;color:var(--hv-faint);font-variant-numeric:tabular-nums}.hcy.hi{top:0}.hcy.lo{bottom:0}
+.hcx{position:absolute;top:calc(100% + 3px);font-size:10.5px;color:var(--hv-faint);transform:translateX(-50%)}
+.hcx[style*="left:0"]{transform:none}.hcx[style*="right:0"]{transform:none}
+.hctip{position:absolute;top:-4px;transform:translate(-50%,-100%);display:none;padding:4px 9px;border-radius:9px;background:rgba(10,14,23,.92);border:1px solid var(--hv-line);font-size:12px;white-space:nowrap;pointer-events:none;z-index:2}
+.hctip.on{display:block}.hctip b{font-weight:500}
+.wbmain{display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,1.4fr) minmax(110px,.6fr);gap:12px;align-items:stretch}
+.wbmain>button{background:var(--hv-surface);border:1px solid var(--hv-line);border-radius:14px;padding:10px 12px;text-align:left;min-width:0}
+.wbpow{display:flex;align-items:center;gap:12px}
+.wbic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--hv-surface-2);color:var(--hv-faint);flex:none}
+.wbic ha-icon{--mdc-icon-size:26px}
+.wb.charging .wbic{background:rgba(79,209,139,.2);color:var(--hv-ok);animation:hvcharge 2s ease-in-out infinite}
+@keyframes hvcharge{50%{box-shadow:0 0 16px 2px rgba(79,209,139,.35)}}
+.wbpow b{font-size:26px;font-weight:300;font-variant-numeric:tabular-nums}.wbpow small{display:block;font-size:12px;color:var(--hv-dim)}
+.wbcar{display:flex;flex-direction:column;justify-content:center;gap:8px}
+.wbct{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.wbct ha-icon{--mdc-icon-size:20px;color:var(--hv-dim);align-self:center}
+.wbct b{font-size:20px;font-weight:400;font-variant-numeric:tabular-nums}.wbct small{font-size:12px;color:var(--hv-dim)}
+.socbar{position:relative;height:8px;border-radius:4px;background:var(--hv-surface-2)}
+.socbar em{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#3fbf7f,var(--hv-ok))}
+.socbar u{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:#fff;border-radius:1px}
+.wbses{display:flex;flex-direction:column;justify-content:center}.wbses small{font-size:11.5px;color:var(--hv-dim)}.wbses b{font-size:18px;font-weight:400;font-variant-numeric:tabular-nums}
+.wbmodes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
+.wblim{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:13px}.wblim small{color:var(--hv-dim)}.wblim b{min-width:42px;text-align:center;font-variant-numeric:tabular-nums}
+.narrow .heatgrid,.narrow .heatgrid[data-n]{grid-template-columns:minmax(0,1fr)}
+.narrow .techs{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.narrow .wbmain{grid-template-columns:repeat(2,minmax(0,1fr))}.narrow .wbpow,.narrow .wbcar{grid-column:1/-1}
+.narrow .wblim{margin-left:0}
+@media (max-width:1100px){.heatgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.heatgrid .curve{grid-column:1/-1}.heatgrid[data-n="1"] .curve{grid-column:auto}}
 /* Verlauf 24 h */
 .trend{padding:12px 16px 10px;margin-bottom:16px}
 .dense .trend{padding:9px 12px 8px;margin-bottom:12px;border-radius:16px}
@@ -2579,6 +2929,14 @@ class HvBase extends HTMLElement {
         break;
       }
       case "cover": this._call("cover", t.dataset.svc, { entity_id: eid }); break;
+      case "select-opt": this._call(dom(eid), "select_option", { entity_id: eid, option: t.dataset.opt }); break;
+      case "num-step": {
+        const st = h.states[eid], v = num(st);
+        if (v === null) break;
+        const a = st.attributes, nv = Math.min(a.max ?? 100, Math.max(a.min ?? 0, v + Number(t.dataset.step)));
+        this._call(dom(eid), "set_value", { entity_id: eid, value: nv });
+        break;
+      }
       case "clim": {
         const st = h.states[eid];
         if (!st) return;
@@ -2858,6 +3216,9 @@ class HausVisualisierungPanel extends HvBase {
       r.addEventListener("click", (e) => { if (this._alSwiped && Date.now() - this._alSwiped < 400 && e.target.closest(".alrow")) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
       // Verlauf: Wert unter Maus oder Finger anzeigen
       const trMove = (e) => {
+        const hc = e.target.closest && e.target.closest(".hcc");
+        if (hc) { const b = hc.getBoundingClientRect(); this._hcHover = hc; heatHover(hc, Math.min(1, Math.max(0, (e.clientX - b.left) / b.width))); }
+        else if (this._hcHover) { heatHover(this._hcHover, null); this._hcHover = null; }
         const c = e.target.closest && e.target.closest(".trc");
         if (!c) { if (this._trHover) { trendHover(this._trHover, null); this._trHover = null; } return; }
         const el = c.closest(".trend"), b = c.getBoundingClientRect();
@@ -3461,8 +3822,14 @@ class HausVisualisierungPanel extends HvBase {
             <button class="pbtn" data-act="area-covers" data-svc="close_cover" data-area="${esc(a.id)}">${icon("mdi:arrow-down")}Zu</button>` : ""}
         </div>
       </div></div>
+      ${this._techCards(a)}
       ${this._layout.show_trends !== false ? trendCardHTML(a) : ""}
       ${sections.length ? `<div class="sections">${sections.join("")}</div>` : `<div class="glass empty">${icon("mdi:package-variant")}In diesem Bereich sind noch keine Geräte.</div>`}`;
+  }
+
+  _techCards(a) {
+    const T = this._model.tech || {};
+    return `${T.heat && T.heat.area === a.id ? heatCardHTML(a) : ""}${T.wb && T.wb.area === a.id ? wbCardHTML(a) : ""}`;
   }
 
   /* ---------- Kategorieseiten ---------- */
@@ -3651,6 +4018,7 @@ class HausVisualisierungPanel extends HvBase {
         ${next ? `<button class="iconbtn pn" data-act="go" data-to="raum/${esc(next.id)}" title="${esc(next.name)}">${icon("mdi:chevron-right")}</button>` : ""}
       </div></div>
       ${values.length ? `<div class="vstrip">${values.map((e) => vchipHTML(h, e, a)).join("")}</div>` : ""}
+      ${this._techCards(a)}
       ${this._layout.show_trends !== false ? trendCardHTML(a) : ""}
       ${sec.length ? `<div class="sections">${sec.join("")}</div>` : (values.length ? "" : `<div class="glass empty">${icon("mdi:package-variant")}In diesem Bereich sind noch keine Geräte.</div>`)}`;
   }
@@ -3764,7 +4132,7 @@ class HausVisualisierungPanel extends HvBase {
     const allIds = Object.keys(h.states).sort();
     const opt = (e) => `<option value="${esc(e)}">${esc(h.states[e].attributes.friendly_name || "")}</option>`;
     const tab0 = this._settingsTab();
-    const dlAll = tab0 === "raeume" || tab0 === "alarme" ? `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>` : "";
+    const dlAll = tab0 === "raeume" || tab0 === "alarme" || tab0 === "technik" ? `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>` : "";
     const dlSensor = tab0 === "darstellung" ? `<datalist id="dl-sensor">${allIds.filter((e) => e.startsWith("sensor.")).map(opt).join("")}</datalist>` : "";
     const chip = (e, del) => `<span class="pin sitem" data-sort-id="${esc(e)}" data-drag title="Ziehen zum Sortieren">${esc(h.states[e] ? entName(h, e) : e)}<button ${del} data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`;
     const pinChips = (list, area) => list.map((e) => chip(e, `data-act="s-pin-del" data-area="${esc(area)}"`)).join("");
@@ -3823,6 +4191,8 @@ class HausVisualisierungPanel extends HvBase {
       ${this._setMode(D)}
       ${this._setAlerts(D)}
       ${this._setActions(D)}`;
+    else if (tab === "technik") body = `${dlAll}
+      ${this._setTech(D)}`;
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
       ${this._setBell(D)}`;
@@ -3858,6 +4228,66 @@ class HausVisualisierungPanel extends HvBase {
       <div class="savebar glass"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>
         <button class="pbtn" data-act="s-reset">${icon("mdi:undo")}Verwerfen</button>
         <button class="pbtn primary" data-act="s-save">${icon("mdi:content-save")}Speichern</button></div>`;
+  }
+
+  _setTech(D) {
+    const h = this._hass, m = buildModel(h, { ...D, hidden_areas: [] }), T = m.tech;
+    // automatisch erkannte Zuordnung (ohne eigene Einträge) für die Platzhalter
+    const blankH = Object.fromEntries(Object.entries(D.heating).map(([k, v]) => [k, typeof v === "string" ? "" : k === "tank" ? [] : v]));
+    const blankW = Object.fromEntries(Object.entries(D.wallbox).map(([k, v]) => [k, typeof v === "string" ? "" : v]));
+    const auto = techCfg(h, { ...D, heating: { ...blankH, enabled: true }, wallbox: { ...blankW, enabled: true } }, m.areas);
+    const AH = auto.heat || {}, AW = auto.wb || {};
+    const areaName = (id) => (id && m.areas.get(id) ? m.areas.get(id).name : "–");
+    const areaSel = (path, cur, autoId) => `<select class="inp" data-set="${path}"><option value="">Automatisch (${esc(areaName(autoId))})</option>${[...m.areas.values()].sort((a, b) => a.name.localeCompare(b.name, "de")).map((a) => `<option value="${esc(a.id)}" ${cur === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>`;
+    const fld = (sec, key, label, hint, autoV) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span>
+      <input class="inp w" list="dl-all" data-set="${sec}.${key}" value="${esc(D[sec][key] || "")}" placeholder="${autoV ? `automatisch: ${esc(autoV)}` : "nicht gefunden – Entität eintragen"}"></div>`;
+    const tg = (path, on, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><label class="tgl"><input type="checkbox" data-set="${path}" data-bool="1" ${on ? "checked" : ""}><span></span></label></div>`;
+    const numf = (path, v, label, hint, min, max, step = 1) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><input class="inp s" type="number" min="${min}" max="${max}" step="${step}" data-set="${path}" data-num="1" value="${v}"></div>`;
+    const H = D.heating, W = D.wallbox, eh = T.heat, ew = T.wb;
+    const tank = eh ? eh.tank : [];
+    const found = (c, parts) => (c ? `Erkannt: ${parts.filter(Boolean).join(" · ")}` : "Nichts erkannt.");
+    const M = H.manual || {};
+    return `<div class="set glass"><h2>${icon("mdi:heating-coil")}Heizung</h2>
+      <p class="hint">Die Karte „Heizung“ erscheint auf der Raumseite des Heizungsraums: Speicher mit Schichtung und Ladung, Kamin mit Pumpe und die Heizkurve mit Betriebspunkt. Die Heizkurve kommt aus der Integration „Heizkurve Fußbodenheizung“ (Sensor mit Kurvenpunkten), sonst aus den Werten unten. Leere Felder = automatisch.</p>
+      <p class="hint techfound">${esc(found(eh, [eh && `Raum ${areaName(eh.area)}`, tank.length && `${tank.length} Speicherfühler`, eh && eh.stove && "Kamin", eh && eh.curve && `Heizkurve ${eh.curve}`, eh && eh.mixer && "Mischer"]))}</p>
+      ${tg("heating.enabled", H.enabled !== false, "Heizungs-Karte anzeigen")}
+      <div class="srow"><span class="lbl">Raum<small>auf dessen Raumseite die Karte steht</small></span>${areaSel("heating.area", H.area, AH.area)}</div>
+      <div class="fl-title">Speicher</div>
+      <div class="srow">${tank.length ? `<div class="pins sortl" style="padding-left:0" data-sort="tank" data-axis="x">${tank.map((e) => `<span class="pin sitem" data-sort-id="${esc(e)}" data-drag title="Ziehen: von oben nach unten sortieren">${esc(entName(h, e))}<button data-act="s-tank-del" data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`).join("")}</div>` : '<span class="lbl"><small>Keine Speicherfühler gefunden.</small></span>'}</div>
+      <div class="srow"><input class="inp w" list="dl-all" placeholder="Fühler hinzufügen, z. B. sensor.speicher_oben" data-tank-input="1"><button class="pbtn" data-act="s-tank-add">${icon("mdi:plus")}Hinzufügen</button>
+        ${H.tank && H.tank.length ? `<button class="pbtn" data-act="s-tank-auto">${icon("mdi:auto-fix")}Automatisch</button>` : ""}</div>
+      <p class="hint">Reihenfolge von oben nach unten – am Chip ziehen. ${H.tank && H.tank.length ? "Eigene Auswahl." : "Automatisch: Temperaturfühler mit „Speicher“ oder „Puffer“ im Namen."}</p>
+      <div class="srow"><span class="lbl">Speicher kalt / heiß<small>°C für Farbe und Ladung: kalt = 0 %, heiß = 100 %</small></span>
+        <input class="inp s" type="number" min="0" max="90" data-set="heating.tank_min" data-num="1" value="${H.tank_min}"><span class="rl">bis</span>
+        <input class="inp s" type="number" min="10" max="99" data-set="heating.tank_max" data-num="1" value="${H.tank_max}"></div>
+      <div class="fl-title">Kamin</div>
+      ${fld("heating", "stove", "Kamin-Temperatur", "", AH.stove)}
+      ${fld("heating", "stove_pump", "Kamin-Pumpe", "Drehzahl in % oder Schalter", AH.pump)}
+      ${numf("heating.stove_hot", H.stove_hot, "Kamin heizt ab", "°C", 20, 120)}
+      <div class="fl-title">Heizkurve</div>
+      ${fld("heating", "curve", "Heizkurve (Soll-Vorlauf)", "Sensor der Integration mit Attributen slope, level, curve …", AH.curve)}
+      ${fld("heating", "flow", "Vorlauf Ist", "", AH.flow)}
+      ${fld("heating", "outdoor", "Außentemperatur", "nur ohne Heizkurven-Sensor nötig", AH.outdoor)}
+      ${fld("heating", "mixer", "Mischer-Stellgröße", "Sensor der Mischerregelung", AH.mixer)}
+      ${tg("heating.manual_curve", H.manual_curve, "Heizkurve selbst berechnen", "ohne Integration: Werte unten, Formel wie in der Integration")}
+      ${H.manual_curve || !(eh && eh.curve) ? `<div class="srow sub techman">
+        ${[["slope", "Steilheit", 0.1, 3, 0.05], ["level", "Niveau K", -15, 15, 0.5], ["room", "Raum °C", 15, 28, 0.5], ["min", "Min °C", 15, 45, 1], ["max", "Max °C", 25, 70, 1], ["limit", "Heizgrenze °C", 5, 25, 1]]
+          .map(([k, t, mn, mx, st]) => `<label class="tml"><small>${t}</small><input class="inp xs" type="number" min="${mn}" max="${mx}" step="${st}" data-set="heating.manual.${k}" data-num="1" value="${M[k]}"></label>`).join("")}</div>` : ""}
+    </div>
+    <div class="set glass"><h2>${icon("mdi:ev-station")}Wallbox</h2>
+      <p class="hint">Die Karte „Wallbox“ erscheint auf der Raumseite der Einfahrt: Ladeleistung, Ladestand und Reichweite des Autos, geladene Energie, Lademodus (Aus, Sofort, Min + PV, PV) und Ziel-Ladestand. Passt zu EVCC und anderen Wallboxen. Leere Felder = automatisch.</p>
+      <p class="hint techfound">${esc(found(ew, [ew && `Raum ${areaName(ew.area)}`, ew && ew.power && "Ladeleistung", ew && ew.mode && "Lademodus", ew && ew.soc && "Ladestand", ew && ew.limit && "Ziel"]))}</p>
+      ${tg("wallbox.enabled", W.enabled !== false, "Wallbox-Karte anzeigen")}
+      <div class="srow"><span class="lbl">Raum</span>${areaSel("wallbox.area", W.area, AW.area)}</div>
+      ${fld("wallbox", "power", "Ladeleistung", "W oder kW", AW.power)}
+      ${fld("wallbox", "mode", "Lademodus", "Auswahl (select)", AW.mode)}
+      ${fld("wallbox", "soc", "Ladestand Auto", "%", AW.soc)}
+      ${fld("wallbox", "limit", "Ziel-Ladestand", "number – in der Karte mit − / + änderbar", AW.limit)}
+      ${fld("wallbox", "energy", "Geladen (Sitzung)", "kWh", AW.energy)}
+      ${fld("wallbox", "range", "Reichweite", "km", AW.range)}
+      ${fld("wallbox", "connected", "Fahrzeug angesteckt", "binary_sensor", AW.connected)}
+      ${fld("wallbox", "charging", "Lädt", "binary_sensor", AW.charging)}
+    </div>`;
   }
 
   _setBell(D) {
@@ -4159,6 +4589,7 @@ class HausVisualisierungPanel extends HvBase {
       }
       case "pins": D.pins[list.dataset.area] = ids; break;
       case "favorites": D.favorites = ids; break;
+      case "tank": D.heating.tank = ids; break;
       case "links": D.links = ids.map((i) => D.links[Number(i)]); break;
       case "actions": D.alarm_actions = ids.map((i) => D.alarm_actions[Number(i)]); break;
       default: return;
@@ -4191,7 +4622,7 @@ class HausVisualisierungPanel extends HvBase {
     for (let i = 0; i < path.length - 1; i++) o = o[path[i]] = o[path[i]] ?? {};
     o[path[path.length - 1]] = v;
     this._dirtySettings = true;
-    if (/^alerts\.rules\.\d+\.op$/.test(t.dataset.set) || /^alarm_actions\.\d+\.type$/.test(t.dataset.set) || (t.dataset.set === "doorbell.lock" && e.type === "change")) { this._rerenderSettings(); return; }
+    if ((/^(heating|wallbox)\./.test(t.dataset.set) && e.type === "change" && !/\.manual\./.test(t.dataset.set)) || /^alerts\.rules\.\d+\.op$/.test(t.dataset.set) || /^alarm_actions\.\d+\.type$/.test(t.dataset.set) || (t.dataset.set === "doorbell.lock" && e.type === "change")) { this._rerenderSettings(); return; }
     const msg = this.shadowRoot.querySelector(".savebar .msg");
     if (msg) msg.textContent = "Ungespeicherte Änderungen";
   }
@@ -4287,6 +4718,22 @@ class HausVisualisierungPanel extends HvBase {
         break;
       }
       case "s-fav-del": D.favorites = D.favorites.filter((e) => e !== t.dataset.eid); break;
+      case "s-tank-del": {
+        const cur = (buildModel(h, { ...D, hidden_areas: [] }).tech.heat || { tank: [] }).tank;
+        D.heating.tank = cur.filter((e) => e !== t.dataset.eid);
+        if (!D.heating.tank.length) { this._toast("Mindestens ein Fühler – sonst automatisch"); D.heating.tank = []; }
+        break;
+      }
+      case "s-tank-add": {
+        const inp = this.shadowRoot.querySelector("[data-tank-input]");
+        const v = inp && inp.value.trim();
+        if (!v) return;
+        if (!h.states[v]) { this._toast(`Entität ${v} nicht gefunden`); return; }
+        const cur = (buildModel(h, { ...D, hidden_areas: [] }).tech.heat || { tank: [] }).tank;
+        if (!cur.includes(v)) D.heating.tank = [...cur, v];
+        break;
+      }
+      case "s-tank-auto": D.heating.tank = []; break;
       case "s-push-test": {
         try {
           const r = await h.callWS({ type: `${DOMAIN}/push_test` });
@@ -4390,11 +4837,12 @@ class HausVisualisierungPanel extends HvBase {
 }
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
-const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
+const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
 const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
   alarme: ["house_mode", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
+  technik: ["heating", "wallbox"],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
@@ -4562,4 +5010,4 @@ if (!window.customCards.some((c) => c.type === "haus-raum-card")) {
 }
 
 // Für Tests
-window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll };
+window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll, techCfg, curveFlow };

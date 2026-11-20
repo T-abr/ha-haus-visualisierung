@@ -169,6 +169,53 @@ def _push(raw: dict) -> dict:
     return out
 
 
+_ENTITY = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+_MANUAL = {"slope": (0.1, 3.0), "level": (-15.0, 15.0), "room": (15.0, 28.0), "min": (15.0, 45.0), "max": (25.0, 70.0), "limit": (5.0, 25.0)}
+
+
+def _entity(val: Any) -> str:
+    v = str(val).strip()[:120] if isinstance(val, str) else ""
+    return v if _ENTITY.match(v) else ""
+
+
+def _num(val: Any, lo: float, hi: float, default: float) -> float:
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        return round(float(min(max(val, lo), hi)), 2)
+    return default
+
+
+def _heating(raw: dict) -> dict:
+    """Technik: Heizung – Entitäten, Speicher-Grenzen, eigene Heizkurve."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["heating"])
+    for key in ("enabled", "manual_curve"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    out["area"] = str(raw.get("area", ""))[:60] if isinstance(raw.get("area"), str) else ""
+    for key in ("stove", "stove_pump", "curve", "mixer", "flow", "outdoor"):
+        out[key] = _entity(raw.get(key))
+    out["tank"] = [e for e in (_entity(x) for x in raw.get("tank", []) if isinstance(raw.get("tank"), list)) if e][:8]
+    out["tank_min"] = _int(raw.get("tank_min"), 0, 90, out["tank_min"])
+    out["tank_max"] = _int(raw.get("tank_max"), 10, 99, out["tank_max"])
+    if out["tank_max"] <= out["tank_min"]:
+        out["tank_max"] = min(99, out["tank_min"] + 10)
+    out["stove_hot"] = _int(raw.get("stove_hot"), 20, 120, out["stove_hot"])
+    man = raw.get("manual") if isinstance(raw.get("manual"), dict) else {}
+    out["manual"] = {k: _num(man.get(k), lo, hi, out["manual"][k]) for k, (lo, hi) in _MANUAL.items()}
+    if out["manual"]["max"] <= out["manual"]["min"]:
+        out["manual"]["max"] = min(70.0, out["manual"]["min"] + 5)
+    return out
+
+
+def _wallbox(raw: dict) -> dict:
+    out = copy.deepcopy(DEFAULT_LAYOUT["wallbox"])
+    if isinstance(raw.get("enabled"), bool):
+        out["enabled"] = raw["enabled"]
+    out["area"] = str(raw.get("area", ""))[:60] if isinstance(raw.get("area"), str) else ""
+    for key in ("power", "mode", "soc", "limit", "energy", "connected", "charging", "range"):
+        out[key] = _entity(raw.get(key))
+    return out
+
+
 def _link_mode(link: dict) -> str:
     """theme = Original mit Haus-Farben, embed = Original-Farben, open = eigene Seite."""
     mode = link.get("mode")
@@ -254,6 +301,10 @@ def sanitize(raw: Any) -> dict:
         out["timeout"] = _int(db.get("timeout"), 10, 600, out["timeout"])
         out["pulse"] = _int(db.get("pulse"), 0, 30, out["pulse"])
         result["doorbell"] = out
+    if isinstance(raw.get("heating"), dict):
+        result["heating"] = _heating(raw["heating"])
+    if isinstance(raw.get("wallbox"), dict):
+        result["wallbox"] = _wallbox(raw["wallbox"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 
