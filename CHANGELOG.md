@@ -4,6 +4,18 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.3.1 – 2026-11-20
+
+### Behoben
+- **„Fenster und Türen erst melden nach … Minuten“ wurde in heizenden Räumen nicht beachtet.** Heizt ein Raum gerade (z. B. Fußbodenheizung mit `hvac_action: heating`), ersetzt „Fenster offen beim Heizen“ die normale Fenstermeldung. Diese Meldung kam sofort, ohne Verzögerung, als Push und im Panel. Jetzt gilt die eingestellte Zeit für beide Meldungen. Kurzes Lüften unter der eingestellten Zeit löst keine Meldung mehr aus.
+
+### Tests
+- Backend: neuer Test „Verzögerung auch beim Heizen“ mit vorgerückter Uhr: keine Meldung nach 9 Minuten, beide Meldungen nach 11 Minuten, keine Meldung bei 5 Minuten Lüften. Er schlägt mit dem alten Code fehl (15 Backend-Tests).
+- Bedienung: 2 neue Prüfungen für die Anzeige im Panel (344 Prüfungen).
+
+### Performance
+- Unverändert: Auswertung der Warnregeln 0,04 ms je Durchlauf (Backend); im Panel eine Prüfung mehr je offenem Kontakt. Verzögerte Meldungen erscheinen über den vorhandenen 30-Sekunden-Takt, ohne neuen Timer.
+
 ## 1.3.0 – 2026-11-20
 
 ### Neu – Wandpanel-Modus

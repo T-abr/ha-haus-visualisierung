@@ -979,6 +979,16 @@ with sync_playwright() as p:
     mp.touchscreen.tap(195, 420); mp.wait_for_timeout(200)
     check("WP-Handy: Antippen weckt auf", mp.locator(f"{P} .saver").count() == 0)
     ctx.close()
+    # ---------- 1.3.1: Verzögerung gilt auch für „Fenster offen beim Heizen“ ----------
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
+    PP = f"document.querySelector('{P}')"
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, contacts_min: 10 }} }}; p._dirty = true; p._flush(); }})()")
+    pg.evaluate("(() => { const a = window.__api; a.set('climate.kuche_fbh', 'heat', { hvac_action: 'heating' }); a.set('binary_sensor.kuche_fenster', 'on'); })()"); pg.wait_for_timeout(300)
+    keys = lambda: pg.evaluate(f"window.__HAUS_VIS__.evalAlertsAll(window.__api.hass, {PP}._model, {PP}._layout).map(a => a.key)")
+    check("FH: Fenster beim Heizen erst nach der eingestellten Zeit", "heat:kuche" not in keys() and "contact:binary_sensor.kuche_fenster" not in keys())
+    # Fenster seit 11 Minuten offen: Zeitpunkt der letzten Änderung zurückdatieren
+    pg.evaluate("(() => { const H = window.__api.hass, st = H.states['binary_sensor.kuche_fenster']; H.states = { ...H.states, 'binary_sensor.kuche_fenster': { ...st, last_changed: new Date(Date.now() - 11 * 60000).toISOString() } }; })()")
+    check("FH: nach 11 Min. „Fenster offen beim Heizen“", "heat:kuche" in keys() and "contact:binary_sensor.kuche_fenster" not in keys())
     check("Keine JS-Fehler", not errs)
     b.close()
 srv.shutdown()

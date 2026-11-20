@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.3.0";
+const VERSION = "1.3.1";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -989,14 +989,16 @@ function evalAlertsRaw(h, m, L) {
   const B = Object.fromEntries(Object.entries(c.builtin || {}).map(([k, v]) => [k, v && modeOk(k)]));
   const nm = (e) => { const a = m.eidArea.get(e); return `${a ? `${a.name} · ` : ""}${entName(h, e, a)}`; };
   const heatingArea = (a) => a && a.climates.some((x) => h.states[x] && h.states[x].attributes.hvac_action === "heating");
+  // „Erst melden nach … Minuten“ gilt auch für „Fenster offen beim Heizen“
+  const openLong = (e) => isOn(h.states[e]) && sinceMin(h.states[e]) >= (c.contacts_min || 0);
   if (B.contacts) for (const e of m.agg.contacts) {
     const st = h.states[e];
     if (B.window_heating && heatingArea(m.eidArea.get(e))) continue; // steckt schon in „Fenster offen beim Heizen“
-    if (isOn(st) && sinceMin(st) >= (c.contacts_min || 0)) out.push({ key: `contact:${e}`, level: "warn", icon: entIcon(h, st), title: `${nm(e)} offen`, detail: `seit ${relTime(st.last_changed).replace(/^vor /, "")}`, eid: e });
+    if (openLong(e)) out.push({ key: `contact:${e}`, level: "warn", icon: entIcon(h, st), title: `${nm(e)} offen`, detail: `seit ${relTime(st.last_changed).replace(/^vor /, "")}`, eid: e });
   }
   if (B.window_heating) for (const a of m.visibleAreas) {
-    if (a.contacts.some((e) => isOn(h.states[e])) && a.climates.some((e) => h.states[e] && h.states[e].attributes.hvac_action === "heating"))
-      out.push({ key: `heat:${a.id}`, level: "warn", icon: "mdi:radiator-disabled", title: `Fenster offen beim Heizen · ${a.name}`, detail: `${a.contacts.filter((e) => isOn(h.states[e])).map((e) => entName(h, e, a)).join(", ")} offen – Heizung läuft dagegen`, to: `raum/${a.id}` });
+    if (a.contacts.some(openLong) && a.climates.some((e) => h.states[e] && h.states[e].attributes.hvac_action === "heating"))
+      out.push({ key: `heat:${a.id}`, level: "warn", icon: "mdi:radiator-disabled", title: `Fenster offen beim Heizen · ${a.name}`, detail: `${a.contacts.filter(openLong).map((e) => entName(h, e, a)).join(", ")} offen – Heizung läuft dagegen`, to: `raum/${a.id}` });
   }
   if (B.safety) for (const e of m.agg.safety) {
     const st = h.states[e];
