@@ -6,6 +6,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## 1.5.0 – 2026-11-22
 
+### Neu – Installation über HACS
+- Das Repository lässt sich in HACS als benutzerdefiniertes Repository (Typ Integration) hinzufügen; Updates kommen danach per Klick.
+- Workflow „Release“: Ein Tag `vX.Y.Z` baut das ZIP mit `scripts/build_zip.py` und veröffentlicht ein GitHub-Release mit dem CHANGELOG-Abschnitt. Passt der Tag nicht zu `manifest.json`, bricht er ab.
+- Workflow „HACS-Prüfung“ (HACS-Action und hassfest) bei jedem PR.
+- `manifest.json`: Dokumentation, Fehlermeldungen (Issues) und Codeowner zeigen auf dieses Repository.
+
 ### Neu – Energie-Seite
 - **Neue Seite „Energie“** in der Navigation (nach Klima), sobald PV, Netz, Hausverbrauch oder ein Speicher bekannt sind. Kompakt, Komfort und Handy.
 - **Energiefluss:** PV oben, Netz links, Speicher rechts, Wallbox unten, das Haus in der Mitte. Punkte laufen in Flussrichtung, schneller bei mehr Leistung. Netz zeigt „Bezug“ oder „Einspeisung“, der Speicher Ladestand und „lädt“ oder „entlädt“. Ein Tipp öffnet die Details der Entität. Bei „Bewegung reduzieren“ ohne Animation.

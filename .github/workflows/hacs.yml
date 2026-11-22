@@ -1,0 +1,33 @@
+# Prüft, ob die Integration für HACS und Home Assistant (hassfest) gültig ist.
+name: HACS-Prüfung
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hacs:
+    name: HACS
+    # Die HACS-Action prüft nur öffentliche Repositories (HACS selbst installiert auch nur aus solchen).
+    # Solange das Repository privat ist, läuft nur hassfest.
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # brands: nur für den HACS-Standardkatalog nötig, nicht für ein eigenes Repository
+          # description/topics: Repository-Einstellungen auf GitHub, nicht Teil des Codes
+          ignore: brands description topics
+
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
