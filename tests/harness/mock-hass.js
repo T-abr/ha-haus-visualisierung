@@ -198,15 +198,23 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       if (msg.type.endsWith("/save")) { layout = msg.layout; return { layout }; }
       // Recorder: 5-Minuten-Statistik nur für Sensoren mit state_class, sonst Verlauf (wie Home Assistant)
       if (msg.type === "recorder/statistics_during_period") {
-        api.log.push(["ws", "statistics", { ids: msg.statistic_ids, period: msg.period }]);
+        api.log.push(["ws", "statistics", { ids: msg.statistic_ids, period: msg.period, start: msg.start_time, units: msg.units }]);
         if (api.noRecorder) return {};
         const t0 = Date.parse(msg.start_time), out = {};
+        // 5 Minuten (24 h) wie bisher; Langzeitstatistik stündlich bzw. täglich: Mittel aus mehreren Stützstellen,
+        // dazu ein Jahresgang (PV im Sommer mehr), damit Wochen- und Jahresansicht nicht nur Kopien eines Tages zeigen
+        const step = { hour: 3600000, day: 86400000 }[msg.period] || 300000;
+        const season = (e, t) => (step > 300000 && /pv_power/.test(e) ? 0.55 + 0.45 * Math.cos((new Date(t).getMonth() - 5.5) / 12 * 2 * Math.PI) : 1);
         for (const e of msg.statistic_ids) {
           const st = hass.states[e];
           if (!st || !st.attributes.state_class) continue;
           const base = parseFloat(st.state);
           out[e] = [];
-          for (let t = Math.ceil(t0 / 300000) * 300000; t < Date.now() - 300000; t += 300000) out[e].push({ start: t, end: t + 300000, mean: api.curve(e, base, t) });
+          const nS = step === 86400000 ? 24 : step === 3600000 ? 4 : 1;
+          for (let t = Math.ceil(t0 / step) * step; t < Date.now() - step; t += step) {
+            let sum = 0; for (let i = 0; i < nS; i++) sum += api.curve(e, base, t + (i + 0.5) * step / nS);
+            out[e].push({ start: t, end: t + step, mean: (sum / nS) * season(e, t) });
+          }
         }
         return out;
       }
