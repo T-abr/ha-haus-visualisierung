@@ -9,9 +9,11 @@ MANIFEST = COMP / "manifest.json"
 CONST = COMP / "const.py"
 JS = COMP / "frontend" / "modules" / "version.js"
 CHANGELOG = ROOT / "CHANGELOG.md"
+README = ROOT / "README.md"
 
 CONST_RE = re.compile(r'^VERSION = "([^"]+)"', re.M)
 JS_RE = re.compile(r'^const VERSION = "([^"]+)";', re.M)  # in frontend/modules/version.js
+README_RE = re.compile(r'^# Haus Visualisierung (\S+)$', re.M)  # Überschrift, auf GitHub sichtbar
 
 
 def manifest_version() -> str:
@@ -21,10 +23,12 @@ def manifest_version() -> str:
 def found_versions() -> dict[str, str | None]:
     c = CONST_RE.search(CONST.read_text(encoding="utf-8"))
     j = JS_RE.search(JS.read_text(encoding="utf-8"))
+    r = README_RE.search(README.read_text(encoding="utf-8"))
     return {
         "manifest.json": manifest_version(),
         "const.py": c.group(1) if c else None,
         "frontend/modules/version.js": j.group(1) if j else None,
+        "README.md": r.group(1) if r else None,
     }
 
 
@@ -34,3 +38,4 @@ def write_version(v: str) -> None:
     MANIFEST.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     CONST.write_text(CONST_RE.sub(f'VERSION = "{v}"', CONST.read_text(encoding="utf-8")), encoding="utf-8")
     JS.write_text(JS_RE.sub(f'const VERSION = "{v}";', JS.read_text(encoding="utf-8")), encoding="utf-8")
+    README.write_text(README_RE.sub(f"# Haus Visualisierung {v}", README.read_text(encoding="utf-8")), encoding="utf-8")

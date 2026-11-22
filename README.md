@@ -1,4 +1,4 @@
-# Haus Visualisierung 1.7
+# Haus Visualisierung 1.8.1
 
 Eigenes Home-Assistant-Panel, das sich wie eine Dashboard-Strategy aus Etagen, Bereichen und Geräten
 selbst aufbaut – mit eigenem Design, Alarmmanager und Hausmodus. Läuft auf einem Raspberry Pi ohne Last:
