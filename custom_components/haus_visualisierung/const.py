@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -38,6 +38,12 @@ DEFAULT_LAYOUT: dict = {
         "pv": "",
         "battery": "",
         "grid": "",
+    },
+    "energy": {                # Seite „Energie“: Speicher-Leistung und Vorzeichen
+        "enabled": True,
+        "battery_power": "",           # positiv = Laden; leer = automatisch
+        "grid_invert": False,          # Netz meldet Einspeisung positiv
+        "battery_invert": False,       # Speicher meldet Entladen positiv
     },
     "links": [                 # Verknüpfungen zu anderen Panels
         {"title": "Solar", "icon": "mdi:solar-power-variant", "path": "/solar-visualisierung", "embed": True, "mode": "theme"},

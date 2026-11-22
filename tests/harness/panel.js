@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -21,6 +21,7 @@ const DEFAULT_LAYOUT = {
   area_order: [], hidden_areas: [], floor_order: [], outdoor_floors: [],
   pins: {}, favorites: [], hidden_entities: [], hide_labels: ["no_dboard", "no-dboard"],
   header: { power: "", pv: "", battery: "", grid: "" },
+  energy: { enabled: true, battery_power: "", grid_invert: false, battery_invert: false },
   links: [
     { title: "Solar", icon: "mdi:solar-power-variant", path: "/solar-visualisierung", embed: true, mode: "theme" },
     { title: "Kameras", icon: "mdi:cctv", path: "/protect-visualisierung", embed: true, mode: "theme" },
@@ -60,6 +61,7 @@ const withDefaults = (l) => {
     doorbell: { ...DEFAULT_LAYOUT.doorbell, ...((l && l.doorbell) || {}) },
     heating: { ...structuredClone(DEFAULT_LAYOUT.heating), ...((l && l.heating) || {}), manual: { ...DEFAULT_LAYOUT.heating.manual, ...((l && l.heating && l.heating.manual) || {}) } },
     wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}) },
+    energy: { ...DEFAULT_LAYOUT.energy, ...((l && l.energy) || {}) },
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },
   };
@@ -521,7 +523,7 @@ function buildModel(h, L) {
   for (const b of batteries) if (b.areaId && areas.has(b.areaId)) eidArea.set(b.eid, areas.get(b.areaId));
   const _panelIds = Object.keys(h.entities || {}).filter((e) => e.startsWith("alarm_control_panel.") && h.states[e]);
   if (!_panelIds.length) for (const e in h.states) if (e.startsWith("alarm_control_panel.")) _panelIds.push(e);
-  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds, tech };
+  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds, tech, energy: energyCfg(h, L, tech) };
 }
 
 function shortFloor(name) {
@@ -1941,6 +1943,287 @@ function sparkHover(el, frac) {
   tip.classList.add("on");
 }
 
+/* ---------- Energie-Seite: Fluss, Kennzahlen, Bilanz heute, Verlauf 24 h ---------- */
+/* Quellen: „Energie auf dem Dach“ (PV, Akku-Ladestand, Hausverbrauch, Netz), Speicher-Leistung und Wallbox.
+   Vorzeichen: Netz positiv = Bezug, Speicher positiv = Laden (beides umkehrbar). Eine Recorder-Abfrage für alle Leistungen.
+   Farben (dunkle Fläche): PV #ffc457, Verbrauch #63c7ff, Netz #b39cff. */
+const EN_PV = "#ffc457", EN_USE = "#63c7ff", EN_GRID = "#b39cff";
+const BAT_RE = /(akku|batter|battery|hausspeicher|stromspeicher)/i;
+const EN_POS = { pv: [50, 14], grid: [12, 50], bat: [88, 50], wb: [50, 86] };
+
+/** Welche Sensoren die Energie-Seite nutzt; null = keine Energiedaten. */
+function energyCfg(h, L, tech) {
+  const H = L.header || {}, E = L.energy || {};
+  if (E.enabled === false) return null;
+  const S = (e) => (e && h.states[e] ? e : "");
+  const pv = S(H.pv), grid = S(H.grid), house = S(H.power), soc = S(H.battery);
+  const wb = (tech && tech.wb && tech.wb.power) || "";
+  const lbl = (e) => `${e} ${h.states[e].attributes.friendly_name || ""}`;
+  const bat = S(E.battery_power) || Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "power" && ![pv, grid, house, wb].includes(e)
+    && BAT_RE.test(lbl(e)) && !/(pv|solar|grid|netz|soc|wallbox|evcc|lade)/i.test(lbl(e))) || "";
+  if (!pv && !grid && !house && !bat) return null;
+  return { pv, grid, house, soc, bat, wb, wbOn: (tech && tech.wb && tech.wb.charging) || "", gridInv: !!E.grid_invert, batInv: !!E.battery_invert };
+}
+const energyWatch = (c) => (c ? [c.pv, c.grid, c.house, c.soc, c.bat, c.wb, c.wbOn].filter(Boolean) : []);
+const energyIds = (c) => (c ? [c.pv, c.grid, c.house, c.bat].filter(Boolean) : []);
+const kwTxt = (w) => (w === null ? "–" : Math.abs(w) >= 1000 ? `${NF1.format(w / 1000)} kW` : `${NF0.format(w)} W`);
+const kwhTxt = (wh) => (wh === null ? "–" : `${NF1.format(wh / 1000)} kWh`);
+const pctTxt = (v) => (v === null ? "–" : `${NF0.format(Math.round(v * 100))} %`);
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+/** Leistungen jetzt in W, mit Vorzeichen wie oben. Gesamtverbrauch aus der Bilanz (PV + Netz − Speicher). */
+function energyFlows(pv, grid, bat, house, wb) {
+  const p = pv === null ? null : Math.max(0, pv);
+  const total = grid !== null ? Math.max(0, (p || 0) + grid - (bat || 0)) : house !== null ? house + (wb || 0) : null;
+  const home = house !== null ? Math.max(0, house) : total !== null ? Math.max(0, total - (wb || 0)) : null;
+  const imp = grid === null ? null : Math.max(0, grid), exp = grid === null ? null : Math.max(0, -grid);
+  return {
+    pv: p, grid, bat, wb, home, total, imp, exp,
+    autark: total && imp !== null ? clamp01(1 - imp / total) : total === 0 && imp !== null ? 1 : null,
+    own: p !== null && p > 50 && exp !== null ? clamp01(1 - exp / p) : null,
+  };
+}
+
+function energyNow(h, c) {
+  const W = (e) => (e ? powerW(h.states[e]) : null);
+  const g = W(c.grid), b = W(c.bat);
+  return energyFlows(W(c.pv), g === null ? null : c.gridInv ? -g : g, b === null ? null : c.batInv ? -b : b, W(c.house), W(c.wb));
+}
+
+function energyFlowHTML(c) {
+  const has = { pv: !!c.pv, grid: !!c.grid, bat: !!(c.bat || c.soc), wb: !!c.wb };
+  const node = (k, ic, lbl, eid) => (has[k] ? `<button class="enode ${k}" style="left:${EN_POS[k][0]}%;top:${EN_POS[k][1]}%" data-act="more" data-eid="${esc(eid)}"><span class="enic">${icon(ic)}</span><b></b><small>${lbl}</small></button>` : "");
+  const line = (k) => (has[k] ? `<line class="eft ${k}" x1="${EN_POS[k][0]}" y1="${EN_POS[k][1]}" x2="50" y2="50"/><line class="efd ${k} off" x1="${EN_POS[k][0]}" y1="${EN_POS[k][1]}" x2="50" y2="50"/>` : "");
+  return `<div class="glass eflow" data-u="energy">
+    <div class="trh"><span class="trt">${icon("mdi:transit-connection-variant")}Energiefluss</span></div>
+    <div class="efwrap"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${["pv", "grid", "bat", "wb"].map(line).join("")}</svg>
+      ${node("pv", "mdi:solar-power-variant", "Erzeugung", c.pv)}
+      ${node("grid", "mdi:transmission-tower", "Netz", c.grid)}
+      ${node("bat", "mdi:battery", "Speicher", c.soc || c.bat)}
+      ${node("wb", "mdi:ev-station", "Wallbox", c.wb)}
+      <button class="enode hub" style="left:50%;top:50%" data-act="more" data-eid="${esc(c.house || c.grid || c.pv)}"><span class="enic">${icon("mdi:home-lightning-bolt-outline")}</span><b></b><small>Haus</small></button>
+    </div></div>`;
+}
+
+/** Fluss und Kennzahlen „jetzt“ – sofort bei jedem neuen Wert. */
+function updateEnergy(el, ctx) {
+  const c = ctx._model.energy;
+  if (!c) return;
+  const h = ctx._hass, F = energyNow(h, c), soc = num(h.states[c.soc]);
+  const sig = energyWatch(c).map((e) => { const s = h.states[e]; return s ? s.state : ""; }).join(";");
+  if (el._sig === sig) return;
+  el._sig = sig;
+  const wbOn = c.wbOn ? isOn(h.states[c.wbOn]) : F.wb !== null && F.wb > 50;
+  const set = (k, val, sub) => { const n = el.querySelector(`.enode.${k}`); if (!n) return; setText(n, "b", val); setText(n, "small", sub); };
+  set("pv", kwTxt(F.pv), "Erzeugung");
+  set("grid", kwTxt(F.grid === null ? null : Math.abs(F.grid)), F.grid === null ? "Netz" : F.grid < -20 ? "Einspeisung" : F.grid > 20 ? "Bezug" : "Netz");
+  set("bat", soc !== null ? `${NF0.format(soc)} %` : kwTxt(F.bat === null ? null : Math.abs(F.bat)),
+    F.bat === null || Math.abs(F.bat) <= 20 ? "Speicher" : `${F.bat > 0 ? "lädt" : "entlädt"} ${kwTxt(Math.abs(F.bat))}`);
+  set("wb", kwTxt(F.wb), wbOn ? "lädt" : "Wallbox");
+  set("hub", kwTxt(F.home), "Haus");
+  if (soc !== null) setIcon(el.querySelector(".enode.bat") || el, ".enic ha-icon", batteryIcon(soc));
+  // Punkte laufen in Flussrichtung; Richtung ist Knoten → Haus, rev = Haus → Knoten
+  const flow = { pv: F.pv, grid: F.grid, bat: F.bat === null ? null : -F.bat, wb: F.wb === null ? null : wbOn || F.wb > 50 ? -F.wb : 0 };
+  for (const [k, w] of Object.entries(flow)) {
+    const d = el.querySelector(`.efd.${k}`);
+    if (!d) continue;
+    const on = w !== null && Math.abs(w) > 20;
+    d.classList.toggle("off", !on);
+    d.classList.toggle("rev", on && w < 0);
+    if (on) d.style.animationDuration = Math.abs(w) >= 3000 ? "0.7s" : Math.abs(w) >= 1000 ? "1.1s" : "1.7s";
+  }
+  el.classList.toggle("producing", F.pv !== null && F.pv > 20);
+  // Seitenkopf und Kennzahlen „jetzt“
+  const page = el.getRootNode();
+  const st = page.querySelector && page.querySelector(".ensub");
+  if (st) setText(st, ".ct", F.exp !== null && F.exp > 50 ? `Speist ${kwTxt(F.exp)} ein` : F.imp !== null && F.imp > 50 ? `Bezieht ${kwTxt(F.imp)} aus dem Netz` : F.grid !== null ? "Netz ausgeglichen" : "");
+  const now = page.querySelector && page.querySelector(".ennow");
+  if (now) {
+    const stat = (lbl, val, sub = "") => `<span class="cts"><small>${lbl}</small><b>${val}</b>${sub ? `<em>${sub}</em>` : ""}</span>`;
+    setHtml(now, [
+      F.autark !== null ? stat("Autarkie", pctTxt(F.autark), "Verbrauch aus eigener Energie") : "",
+      F.own !== null ? stat("Eigenverbrauch", pctTxt(F.own), "der PV-Leistung im Haus") : "",
+      F.total !== null && c.grid ? stat("Verbrauch gesamt", kwTxt(F.total), c.wb && F.wb ? `davon Wallbox ${kwTxt(F.wb)}` : "") : "",
+      soc !== null ? stat("Speicher", `${NF0.format(soc)} %`, F.bat !== null && Math.abs(F.bat) > 20 ? `${F.bat > 0 ? "lädt" : "entlädt"} ${kwTxt(Math.abs(F.bat))}` : "Ruhe") : "",
+    ].join("") || `<span class="cts"><small>Jetzt</small><b>–</b></span>`);
+  }
+}
+
+/** Werte je 5 Minuten auf gemeinsamem Raster (NaN = keine Daten). */
+function rasterSeries(pts, start, now, f = 1) {
+  const n = Math.ceil((now - start) / TREND_BUCKET) + 1, out = new Float64Array(n).fill(NaN);
+  if (!pts) return out;
+  let i = 0;
+  for (let k = 0; k < n; k++) {
+    const t = Math.min(now, start + k * TREND_BUCKET);
+    while (i < pts.length - 1 && pts[i + 1][0] <= t) i++;
+    const p = pts[i];
+    if (p && p[0] <= t + TREND_BUCKET && t - p[0] <= TREND_GAP && finite(p[1])) out[k] = p[1] * f;
+  }
+  return out;
+}
+
+/** Reihen der letzten 24 h (W) und Bilanz seit Mitternacht (Wh). Höchstens alle 15 s neu gerechnet. */
+function energySeries(ctx, force) {
+  const c = ctx._model.energy, h = ctx._hass, now = Date.now();
+  if (ctx._enS && ctx._enS.c === c && now - ctx._enS.at < 15000 && !force) return ctx._enS;
+  const start = now - TREND_MS;
+  const unit = (e) => (e && h.states[e] && h.states[e].attributes.unit_of_measurement === "kW" ? 1000 : 1);
+  const get = (e, inv) => (e ? rasterSeries(trendSeries(h, e), start, now, unit(e) * (inv ? -1 : 1)) : null);
+  const pv = get(c.pv), grid = get(c.grid, c.gridInv), bat = get(c.bat, c.batInv), house = get(c.house);
+  const n = Math.ceil((now - start) / TREND_BUCKET) + 1;
+  const use = new Float64Array(n).fill(NaN);
+  for (let k = 0; k < n; k++) {
+    const F = energyFlows(pv ? (finite(pv[k]) ? pv[k] : null) : null, grid && finite(grid[k]) ? grid[k] : null, bat && finite(bat[k]) ? bat[k] : null, house && finite(house[k]) ? house[k] : null, null);
+    if (house && finite(house[k])) use[k] = house[k];
+    else if (!house && F.total !== null && (!c.pv || (pv && finite(pv[k])))) use[k] = F.total;
+  }
+  // Bilanz seit Mitternacht: 5-Minuten-Mittelwerte × 5 Minuten
+  const mid = new Date(now); mid.setHours(0, 0, 0, 0);
+  const k0 = Math.max(0, Math.ceil((mid.getTime() - start) / TREND_BUCKET));
+  const dt = TREND_BUCKET / 3600000;
+  const sum = (arr, fn) => { if (!arr) return null; let s = 0, any = false; for (let k = k0; k < n; k++) if (finite(arr[k])) { s += fn(arr[k]) * dt; any = true; } return any ? s : null; };
+  const day = { pv: sum(pv, (v) => Math.max(0, v)), imp: sum(grid, (v) => Math.max(0, v)), exp: sum(grid, (v) => Math.max(0, -v)) };
+  let tot = 0, anyT = false;
+  if (grid) for (let k = k0; k < n; k++) if (finite(grid[k])) { tot += Math.max(0, (pv && finite(pv[k]) ? Math.max(0, pv[k]) : 0) + grid[k] - (bat && finite(bat[k]) ? bat[k] : 0)) * dt; anyT = true; }
+  day.use = anyT ? tot : sum(house, (v) => Math.max(0, v));
+  day.autark = day.use && day.imp !== null ? clamp01(1 - day.imp / day.use) : null;
+  day.own = day.pv && day.pv > 50 && day.exp !== null ? clamp01(1 - day.exp / day.pv) : null;
+  ctx._enS = { c, at: now, start, now, S: { pv, use, grid }, day };
+  return ctx._enS;
+}
+
+function enLoad(el, ctx) {
+  const c = ctx._model.energy;
+  const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="enday"],[data-u="entrend"]').forEach((x) => { if (x.isConnected) { x._force = true; UPD[x.dataset.u].run(x, ctx); x._force = false; } });
+  return trendEnsure(ctx._hass, energyIds(c), rerun);
+}
+
+function enDayHTML(withDay = true) {
+  return `<div class="glass enside" data-u="enday"${withDay ? "" : ` data-noday="1"`}>
+    <div class="trh"><span class="trt">${icon("mdi:gauge")}Jetzt</span></div><div class="ctstats ennow"></div>
+    ${withDay ? `<div class="trh"><span class="trt">${icon("mdi:calendar-today")}Heute</span><span class="enhint">seit Mitternacht, aus dem Verlauf berechnet</span></div>
+    <div class="ctstats enday"><span class="cts"><small>Heute</small><b>–</b><em>Lade Verlauf …</em></span></div>
+    <div class="ensplit" hidden><i class="own"></i><i class="imp"></i></div><div class="ensplitl" hidden></div>` : ""}</div>`;
+}
+
+function updateEnDay(el, ctx) {
+  const c = ctx._model.energy;
+  if (!c || el.dataset.noday) return;
+  if (enLoad(el, ctx)) return;
+  const now = Date.now();
+  if (el._drawn && now - el._drawn < 15000 && !el._force) {
+    if (!el._tq) el._tq = setTimeout(() => { el._tq = 0; if (el.isConnected) { el._force = true; updateEnDay(el, ctx); el._force = false; } }, 15000 - (now - el._drawn));
+    return;
+  }
+  el._drawn = now;
+  const { day: D } = energySeries(ctx, el._force);
+  const stat = (lbl, val, sub = "") => `<span class="cts"><small>${lbl}</small><b>${val}</b>${sub ? `<em>${sub}</em>` : ""}</span>`;
+  const any = [D.pv, D.use, D.imp, D.exp].some((v) => v !== null);
+  setHtml(el.querySelector(".enday"), any ? [
+    D.pv !== null ? stat("Erzeugt", kwhTxt(D.pv)) : "",
+    D.use !== null ? stat("Verbraucht", kwhTxt(D.use)) : "",
+    D.imp !== null ? stat("Bezogen", kwhTxt(D.imp)) : "",
+    D.exp !== null ? stat("Eingespeist", kwhTxt(D.exp)) : "",
+    D.autark !== null ? stat("Autarkie", pctTxt(D.autark)) : "",
+    D.own !== null ? stat("Eigenverbrauch", pctTxt(D.own)) : "",
+  ].join("") : stat("Heute", "–", "Noch kein Verlauf aufgezeichnet (Recorder)."));
+  const bar = el.querySelector(".ensplit"), lab = el.querySelector(".ensplitl");
+  const show = D.autark !== null && D.use > 0;
+  setHidden(bar, !show); setHidden(lab, !show);
+  if (show) {
+    setWidth(bar.querySelector(".own"), D.autark * 100); setWidth(bar.querySelector(".imp"), (1 - D.autark) * 100);
+    setHtml(lab, `<span class="own"><i></i>eigene Energie ${kwhTxt(D.use - D.imp)}</span><span class="imp"><i></i>aus dem Netz ${kwhTxt(D.imp)}</span>`);
+  }
+}
+
+function enTrendHTML(c) {
+  return `<div class="glass ctrend entrend" data-u="entrend">
+    <div class="trh"><span class="trt">${icon("mdi:chart-areaspline")}Leistung 24 h</span>
+      ${c.pv ? `<span class="ctl pv"><i></i>PV<b></b></span>` : ""}<span class="ctl use"><i></i>Verbrauch<b></b></span>${c.grid ? `<span class="ctl grid" title="unter null = Einspeisung"><i></i>Netz<b></b></span>` : ""}</div>
+    <div class="trc enc"><svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><g class="trgrid"></g><g class="ctgrid"></g><line class="enzero" x1="0" x2="1000"/>
+      <path class="ena pv"/><path class="enp grid"/><path class="enp use"/><path class="enp pv"/></svg>
+      <div class="cty"></div><div class="trx"></div><div class="trcur"><i class="pv"></i><i class="use"></i><i class="grid"></i></div><div class="trtip"></div>
+      <div class="trmsg">${icon("mdi:loading", "spin")}Lade Verlauf …</div></div></div>`;
+}
+
+function updateEnTrend(el, ctx) {
+  const c = ctx._model.energy;
+  if (!c) return;
+  const h = ctx._hass, msg = el.querySelector(".trmsg");
+  const F = energyNow(h, c);
+  setText(el, ".ctl.pv b", kwTxt(F.pv)); setText(el, ".ctl.use b", kwTxt(c.house ? F.home : F.total)); setText(el, ".ctl.grid b", kwTxt(F.grid));
+  if (enLoad(el, ctx)) { setHidden(msg, false); return; }
+  const now = Date.now();
+  if (el._drawn && now - el._drawn < 15000 && !el._force) {
+    if (!el._tq) el._tq = setTimeout(() => { el._tq = 0; if (el.isConnected) { el._force = true; updateEnTrend(el, ctx); el._force = false; } }, 15000 - (now - el._drawn));
+    return;
+  }
+  const E = energySeries(ctx, el._force), { start } = E;
+  const toPts = (arr) => (arr ? Array.from(arr, (v, k) => [Math.min(E.now, start + k * TREND_BUCKET), v]) : []);
+  const S = { pv: toPts(E.S.pv), use: toPts(E.S.use), grid: toPts(E.S.grid) };
+  const vals = [...S.pv, ...S.use, ...S.grid].map((p) => p[1]).filter(finite);
+  if (vals.length < 3) {
+    setHidden(msg, false);
+    msg.innerHTML = `${icon("mdi:chart-line-variant")}Noch kein Verlauf aufgezeichnet (Recorder).`;
+    el.classList.add("nodata"); return;
+  }
+  setHidden(msg, true); el.classList.remove("nodata");
+  el._drawn = now;
+  const lo0 = Math.min(0, ...vals) / 1000, hi0 = Math.max(500, ...vals) / 1000;
+  let step = 50, lo = 0, hi = 50;
+  for (const s of [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50]) {
+    const l = Math.floor(lo0 / s) * s, u = Math.ceil(hi0 / s) * s;
+    if ((u - l) / s <= 4) { step = s; lo = l; hi = u; break; }
+  }
+  const H = 100, pad = 4, x = (t) => ((t - start) / TREND_MS) * 1000, y = (w) => H - pad - ((w / 1000 - lo) / (hi - lo)) * (H - 2 * pad);
+  for (const k of ["pv", "use", "grid"]) el.querySelector(`.enp.${k}`).setAttribute("d", trendPath(S[k], x, y));
+  // PV als Fläche bis null
+  el.querySelector(".ena.pv").setAttribute("d", areaPath(S.pv, x, y, y(0)));
+  const z = el.querySelector(".enzero"); z.setAttribute("y1", y(0).toFixed(1)); z.setAttribute("y2", y(0).toFixed(1));
+  const ticks = []; for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 10) / 10);
+  el.querySelector(".ctgrid").innerHTML = ticks.map((v) => `<line x1="0" x2="1000" y1="${y(v * 1000).toFixed(1)}" y2="${y(v * 1000).toFixed(1)}"/>`).join("");
+  setHtml(el.querySelector(".cty"), ticks.map((v) => `<span style="top:${y(v * 1000)}%">${NF1.format(v).replace(",0", "")}${v === ticks[ticks.length - 1] ? " kW" : ""}</span>`).join(""));
+  const hour = Math.floor(now / 3600000);
+  if (el._hour !== hour) {
+    el._hour = hour;
+    const tk = []; const d0 = new Date(start); d0.setMinutes(0, 0, 0);
+    for (let t = d0.getTime() + 3600000; t < now; t += 3600000) if (new Date(t).getHours() % 6 === 0) tk.push(t);
+    el.querySelector(".trgrid").innerHTML = tk.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
+    el.querySelector(".trx").innerHTML = tk.filter((t) => x(t) < 900).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
+  }
+  el._en = { S, start, y };
+  if (el._hover !== undefined) enHover(el, el._hover);
+}
+
+/** Fläche unter einer Reihe bis zur Nulllinie, mit Lücken wie trendPath. */
+function areaPath(pts, x, y, y0) {
+  let d = "", run = [], lastT = 0;
+  const flush = () => { if (run.length > 1) d += `M${run[0][0]} ${y0.toFixed(1)}${run.map(([a, b]) => `L${a} ${b}`).join("")}L${run[run.length - 1][0]} ${y0.toFixed(1)}Z`; run = []; };
+  for (const [t, v] of pts) {
+    if (!finite(v) || (run.length && t - lastT > TREND_GAP)) { flush(); if (!finite(v)) continue; }
+    run.push([x(t).toFixed(1), y(v).toFixed(1)]); lastT = t;
+  }
+  flush();
+  return d;
+}
+
+function enHover(el, frac) {
+  const T = el._en, tip = el.querySelector(".trtip"), cur = el.querySelector(".trcur");
+  if (!T || frac === null) { el._hover = undefined; cur.classList.remove("on"); tip.classList.remove("on"); return; }
+  el._hover = frac;
+  const t = T.start + frac * TREND_MS, parts = [];
+  for (const [k, lbl] of [["pv", "PV"], ["use", "Verbrauch"], ["grid", "Netz"]]) {
+    const p = trendAt(T.S[k], t), dot = cur.querySelector(`i.${k}`);
+    if (!p || !finite(p[1])) { dot.style.display = "none"; continue; }
+    dot.style.display = ""; dot.style.top = `${T.y(p[1])}%`;
+    parts.push(`<span class="tk ${k}"><i></i>${k === "grid" ? (p[1] < -20 ? "Einspeisung" : "Bezug") : lbl} <b>${kwTxt(k === "grid" ? Math.abs(p[1]) : p[1])}</b></span>`);
+  }
+  tip.innerHTML = `<span>${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>${parts.join("")}`;
+  cur.style.left = `${frac * 100}%`; tip.style.left = `${Math.min(Math.max(frac * 100, 20), 80)}%`;
+  cur.classList.add("on"); tip.classList.add("on");
+}
+
 const UPD = {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
   alarmpage: { watch: (el, c) => alertWatch(c._model, c._layout), run: (el, c) => c._renderAlarmPage(el) },
@@ -1962,6 +2245,9 @@ const UPD = {
   gcount: { watch: (el) => (el._eids = (el.dataset.eids || "").split(",").filter(Boolean)), run: updateGroupCount },
   heat: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.heat), run: updateHeat },
   wallbox: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.wb), run: updateWallbox },
+  energy: { watch: (el, c) => energyWatch(c._model.energy), run: updateEnergy },
+  enday: { watch: (el, c) => energyIds(c._model.energy), run: updateEnDay },
+  entrend: { watch: (el, c) => energyIds(c._model.energy), run: updateEnTrend },
   climtrend: { watch: (el, c) => [...climRooms(c._model).map((a) => a.tempId), outdoorTempId(c._hass, c._model, c._layout), ...c._model.agg.climates].filter(Boolean), run: updateClimTrend },
   spark: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, ...a.climates].filter(Boolean) : []; }, run: updateSpark },
   trend: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, a.humId].filter(Boolean) : []; }, run: updateTrend },
@@ -2364,7 +2650,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .ctp{fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
 .ctp.in{stroke:#e26a1c}.ctp.out{stroke:#2a9ad8}
 .ctgrid line{stroke:var(--hv-line);stroke-width:1;vector-effect:non-scaling-stroke}
-.cty span{position:absolute;right:calc(100% + 6px);transform:translateY(-50%);font-size:10.5px;color:var(--hv-faint);font-variant-numeric:tabular-nums}
+.cty span{position:absolute;right:calc(100% + 6px);white-space:nowrap;transform:translateY(-50%);font-size:10.5px;color:var(--hv-faint);font-variant-numeric:tabular-nums}
 .ctend{position:absolute;left:calc(100% + 6px);transform:translateY(-50%);font-size:11px;color:var(--hv-text);font-variant-numeric:tabular-nums;white-space:nowrap}
 .trcur i.cin{background:#e26a1c}.trcur i.cout{background:#2a9ad8}
 .trtip .tk{display:inline-flex;align-items:center;gap:5px;color:var(--hv-dim)}.trtip .tk i{width:8px;height:8px;border-radius:50%}.trtip .tk.in i{background:#e26a1c}.trtip .tk.out i{background:#2a9ad8}
@@ -2885,6 +3171,52 @@ details[open]>summary.shead{padding-bottom:2px}
 :host(.card) .trtip{background:var(--card-background-color,#222)}
 .narrow .trc{margin:0 30px 18px}
 .narrow .trl small{display:none}
+/* Energie */
+.engrid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.dense .engrid{gap:12px;margin-bottom:12px}
+.eflow,.enside{padding:12px 16px 14px;min-width:0}
+.dense .eflow,.dense .enside{padding:9px 12px 12px;border-radius:16px}
+.efwrap{position:relative;height:350px;max-width:560px;margin:0 auto}
+.dense .efwrap{height:330px}
+.efwrap svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.eft{stroke:var(--hv-line);stroke-width:3;vector-effect:non-scaling-stroke;stroke-linecap:round}
+.efd{stroke-width:6;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-dasharray:0 16;animation:hvflow 1.2s linear infinite}
+.efd.pv{stroke:#ffc457}.efd.grid{stroke:#b39cff}.efd.bat{stroke:var(--hv-ok)}.efd.wb{stroke:var(--hv-cool)}
+.efd.rev{animation-direction:reverse}.efd.off{display:none}
+@keyframes hvflow{to{stroke-dashoffset:-16}}
+@media (prefers-reduced-motion:reduce){.efd{animation:none;stroke-dasharray:none;stroke-width:3;opacity:.8}}
+.enode{position:absolute;transform:translate(-50%,-50%);width:112px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 6px;border-radius:16px;background:rgba(16,22,34,.88);border:1px solid var(--hv-line);text-align:center}
+.enode:hover{border-color:rgba(255,255,255,.22)}
+.enic{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--hv-surface-2);color:var(--hv-dim)}
+.enic ha-icon{--mdc-icon-size:22px}
+.enode b{font-size:17px;font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}
+.enode small{font-size:11.5px;color:var(--hv-dim);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.enode.pv .enic{color:#ffc457;background:rgba(255,196,87,.14)}.eflow.producing .enode.pv .enic{box-shadow:0 0 16px rgba(255,196,87,.35)}
+.enode.grid .enic{color:#b39cff;background:rgba(179,156,255,.14)}
+.enode.bat .enic{color:var(--hv-ok);background:rgba(79,209,139,.14)}
+.enode.wb .enic{color:var(--hv-cool);background:rgba(99,199,255,.14)}
+.enode.hub{width:128px;padding:10px 6px}.enode.hub .enic{width:48px;height:48px;color:var(--hv-text);background:rgba(255,255,255,.12)}.enode.hub b{font-size:20px}
+.enside .trh+.ctstats{margin-bottom:14px}
+.enside .cts b{font-size:20px}
+.enhint{font-size:11.5px;color:var(--hv-faint)}
+.ensplit{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--hv-surface-2);margin:2px 0 6px}
+.ensplit i{display:block;height:100%}.ensplit .own{background:var(--hv-ok)}.ensplit .imp{background:#b39cff}
+.ensplitl{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--hv-dim)}
+.ensplitl span{display:inline-flex;align-items:center;gap:6px}.ensplitl i{width:9px;height:9px;border-radius:50%}
+.ensplitl .own i{background:var(--hv-ok)}.ensplitl .imp i{background:#b39cff}
+.ctl.pv i{background:#ffc457}.ctl.use i{background:#63c7ff}.ctl.grid i{background:#b39cff}
+.enp{fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+.enp.pv{stroke:#ffc457}.enp.use{stroke:#63c7ff}.enp.grid{stroke:#b39cff;stroke-width:1.6;opacity:.9}
+.ena.pv{fill:rgba(255,196,87,.14);stroke:none}
+.enzero{stroke:rgba(255,255,255,.3);stroke-width:1;vector-effect:non-scaling-stroke}
+.trcur i.pv{background:#ffc457}.trcur i.use{background:#63c7ff}.trcur i.grid{background:#b39cff}
+.trtip .tk.pv i{background:#ffc457}.trtip .tk.use i{background:#63c7ff}.trtip .tk.grid i{background:#b39cff}
+.entrend.nodata .enc{height:48px}
+.narrow .engrid{grid-template-columns:minmax(0,1fr)}
+.narrow .efwrap{height:310px}
+.narrow .enode{width:92px;padding:6px 4px}.narrow .enode.hub{width:104px}
+.narrow .enic{width:34px;height:34px}.narrow .enode b{font-size:15px}
+@media (max-width:1100px){.engrid{grid-template-columns:minmax(0,1fr)}}
 `;
 
 const LOGO = `<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="hvg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#9a86ff"/></linearGradient></defs>
@@ -3251,6 +3583,7 @@ const NAV = [
   ["licht", "Licht", "mdi:lightbulb-group"],
   ["beschattung", "Beschattung", "mdi:window-shutter"],
   ["klima", "Klima", "mdi:thermometer"],
+  ["energie", "Energie", "mdi:lightning-bolt-circle"],
   ["sicherheit", "Sicherheit", "mdi:shield-home"],
   ["alarme", "Alarme", "mdi:bell-ring-outline"],
   ["batterien", "Batterien", "mdi:battery-heart-variant"],
@@ -3477,6 +3810,9 @@ class HausVisualisierungPanel extends HvBase {
         const ct = e.target.closest && e.target.closest(".ctc");
         if (ct) { clearTimeout(this._trHideT); this._ctHover = ct.closest(".ctrend"); climHover(this._ctHover, frac(ct)); }
         else if (this._ctHover) { climHover(this._ctHover, null); this._ctHover = null; }
+        const enc = e.target.closest && e.target.closest(".enc");
+        if (enc) { clearTimeout(this._trHideT); this._enHover = enc.closest(".entrend"); enHover(this._enHover, frac(enc)); }
+        else if (this._enHover) { enHover(this._enHover, null); this._enHover = null; }
         const spk = e.target.closest && e.target.closest(".kspark");
         if (spk && spk !== this._spHover && this._spHover) sparkHover(this._spHover, null);
         if (spk) { clearTimeout(this._trHideT); this._spHover = spk; sparkHover(spk, frac(spk)); }
@@ -3499,18 +3835,20 @@ class HausVisualisierungPanel extends HvBase {
         const to0 = e.relatedTarget;
         if (this._ctHover && !(to0 && to0.closest && to0.closest(".ctc"))) { climHover(this._ctHover, null); this._ctHover = null; }
         if (this._spHover && !(to0 && to0.closest && to0.closest(".kspark"))) { sparkHover(this._spHover, null); this._spHover = null; }
+        if (this._enHover && !(to0 && to0.closest && to0.closest(".enc"))) { enHover(this._enHover, null); this._enHover = null; }
         if (!this._trHover) return;
         const to = e.relatedTarget;
         if (!to || !to.closest || !to.closest(".trc")) { trendHover(this._trHover, null); this._trHover = null; }
       });
       r.addEventListener("pointerup", (e) => {
-        if (e.pointerType !== "touch" || !(this._trHover || this._ctHover || this._spHover)) return;
+        if (e.pointerType !== "touch" || !(this._trHover || this._ctHover || this._spHover || this._enHover)) return;
         clearTimeout(this._trHideT);
         // am Handy bleibt der Wert kurz stehen
         this._trHideT = setTimeout(() => {
           if (this._trHover) { trendHover(this._trHover, null); this._trHover = null; }
           if (this._ctHover) { climHover(this._ctHover, null); this._ctHover = null; }
           if (this._spHover) { sparkHover(this._spHover, null); this._spHover = null; }
+          if (this._enHover) { enHover(this._enHover, null); this._enHover = null; }
         }, 2500);
       });
       // Einstellungen: Sortieren per Ziehen
@@ -3793,7 +4131,9 @@ class HausVisualisierungPanel extends HvBase {
     if (view === "einstellungen" && !isAdmin) view = "overview";
     const active = view === "raum" ? "overview" : view;
 
-    const nav = NAV.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : ""}<span>${t}</span></button>`).join("");
+    // Energie nur, wenn es Energiedaten gibt
+    const navList = NAV.filter(([k]) => k !== "energie" || (this._model && this._model.energy));
+    const nav = navList.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : ""}<span>${t}</span></button>`).join("");
     const links = (L.links || []).filter((l) => l.path).map((l) => `<button class="nav${view === "extern" && panelPathOf(l.path) === this._arg ? " active" : ""}" data-act="link" data-path="${esc(l.path)}" title="${esc(l.title)}">${icon(l.icon || "mdi:link")}<span>${esc(l.title)}</span></button>`).join("");
 
     let body;
@@ -3814,7 +4154,7 @@ class HausVisualisierungPanel extends HvBase {
     this.shadowRoot.innerHTML = `<style>${STYLES}</style>
       <div class="app${L.glass ? " blur" : ""}${this._isNarrow ? " narrow" : ""}${isDense(L) ? " dense" : ""}">
         <div class="bg"></div>
-        <nav class="rail${NAV.length + (L.links || []).filter((l) => l.path).length + (isAdmin ? 1 : 0) > 6 ? " many" : ""}">
+        <nav class="rail${navList.length + (L.links || []).filter((l) => l.path).length + (isAdmin ? 1 : 0) > 6 ? " many" : ""}">
           <div class="logo">${LOGO}<small>v${VERSION}</small></div>
           ${nav}
           ${links ? `<hr>${links}` : ""}
@@ -3934,6 +4274,7 @@ class HausVisualisierungPanel extends HvBase {
       case "licht": return d ? this._vLightsDense() : this._vLights();
       case "beschattung": return d ? this._vCoversDense() : this._vCovers();
       case "klima": return d ? this._vClimateDense() : this._vClimate();
+      case "energie": return this._vEnergy();
       case "sicherheit": return d ? this._vSecurityDense() : this._vSecurity();
       case "alarme": return this._vAlarme();
       case "batterien": return d ? this._vBatteriesDense() : this._vBatteries();
@@ -4332,6 +4673,20 @@ class HausVisualisierungPanel extends HvBase {
     return out;
   }
 
+  /* ---------- Energie ---------- */
+  _vEnergy() {
+    const c = this._model.energy;
+    if (!c) return pageEmpty("Energie", "mdi:lightning-bolt-outline", "Keine Energiedaten gefunden. Unter Einstellungen → Darstellung → „Energie“ PV-Leistung, Netz, Hausverbrauch oder Speicher eintragen.");
+    const L = this._layout, T = this._model.tech || {};
+    const solar = (L.links || []).find((l) => l.path && /(solar|pv|energ)/i.test(`${l.path} ${l.title}`));
+    const tr = L.show_trends !== false;
+    return `<div class="ptitle"><h1>Energie</h1><span class="psub ensub"><span class="ct"></span></span><span class="sp"></span>
+      ${solar ? `<button class="pbtn" data-act="link" data-path="${esc(solar.path)}">${icon(solar.icon || "mdi:solar-power-variant")}${esc(solar.title)}</button>` : ""}</div>
+      <div class="engrid">${energyFlowHTML(c)}${enDayHTML(tr)}</div>
+      ${tr ? enTrendHTML(c) : ""}
+      ${T.wb ? wbCardHTML(this._model.areas.get(T.wb.area) || { id: "" }) : ""}`;
+  }
+
   _vSecurity() {
     const m = this._model, h = this._hass;
     const contacts = (a) => a.contacts;
@@ -4669,12 +5024,17 @@ class HausVisualisierungPanel extends HvBase {
           <input class="inp s" type="number" min="1" max="99" data-set="battery_critical" data-num="1" value="${D.battery_critical}">
           <input class="inp s" type="number" min="1" max="99" data-set="battery_low" data-num="1" value="${D.battery_low}"></div>
         <div class="srow"><span class="lbl">Ausblende-Labels<small>Label-IDs, durch Komma getrennt</small></span><input class="inp w" data-set="hide_labels" data-csv="1" value="${esc((D.hide_labels || []).join(", "))}"></div></div>
-      <div class="set glass"><h2>${icon("mdi:solar-power-variant")}Energie auf dem Dach</h2>
-        <p class="hint">Diese Werte stehen im Dach des Hausschnitts. Ein Tipp aufs Dach öffnet die erste Verknüpfung (z. B. die Solar Visualisierung).</p>
+      <div class="set glass"><h2>${icon("mdi:solar-power-variant")}Energie</h2>
+        <p class="hint">Diese Werte stehen im Dach des Hausschnitts und auf der Seite „Energie“ (Energiefluss, Bilanz heute, Verlauf 24 h; die Wallbox kommt aus Technik). Ein Tipp aufs Dach öffnet die Seite „Energie“; ohne Energiedaten die erste Verknüpfung.</p>
         ${ent("pv", "PV-Leistung", "z. B. sensor.growatt_modbus_…_pv_power")}
         ${ent("battery", "Akku-Ladestand", "in %")}
         ${ent("power", "Hausverbrauch", "z. B. dein AC-seitig berechneter Verbrauch")}
-        ${ent("grid", "Netz", "Bezug/Einspeisung")}</div>
+        ${ent("grid", "Netz", "positiv = Bezug, negativ = Einspeisung")}
+        <div class="srow"><span class="lbl">Speicher-Leistung<small>positiv = Laden, negativ = Entladen; leer = automatisch</small></span>
+          <input class="inp w" list="dl-sensor" data-set="energy.battery_power" value="${esc(D.energy.battery_power || "")}" placeholder="sensor.…"></div>
+        <div class="srow"><span class="lbl">Netz: Vorzeichen umkehren<small>wenn dein Zähler Einspeisung positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.grid_invert" data-bool="1" ${D.energy.grid_invert ? "checked" : ""}><span></span></label></div>
+        <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
+        <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
       <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
         <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
         <div class="sortl" data-sort="links">${links}</div><div class="srow"><button class="pbtn" data-act="s-link-add">${icon("mdi:plus")}Verknüpfung hinzufügen</button></div></div>`;
@@ -5118,7 +5478,7 @@ class HausVisualisierungPanel extends HvBase {
       case "nav": this._go(t.dataset.to); return;
       case "link": this._openLink(t.dataset.path); return;
       case "nav-raw": this._navigate(t.dataset.path); return;
-      case "roof": { const l = (this._layout.links || [])[0]; if (l && l.path) this._openLink(l.path); return; }
+      case "roof": { if (this._model && this._model.energy) { this._go("energie"); return; } const l = (this._layout.links || [])[0]; if (l && l.path) this._openLink(l.path); return; }
       case "menu": this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true })); return;
       case "bell-close": case "bell-live": case "bell-protect": case "bell-unlock": this._bellAction(act, t); return;
       case "s-bell-test": this._closeBell(); this._showBell(true, this._draft ? this._draft.doorbell : null); return;

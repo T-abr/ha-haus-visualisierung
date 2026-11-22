@@ -105,10 +105,12 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     ent("weather.forecast_home", "partlycloudy", { friendly_name: "Zuhause", temperature: 7, temperature_unit: "°C" });
     ent("person.tobias", "home", { friendly_name: "Tobias" });
     ent("person.zweite_person", "home", { friendly_name: "Zweite Person" });
-    ent("sensor.growatt_modbus_pv_power", 3240, { friendly_name: "PV-Leistung", device_class: "power", unit_of_measurement: "W" });
+    ent("sensor.growatt_modbus_pv_power", 3240, { friendly_name: "PV-Leistung", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
     ent("sensor.growatt_modbus_battery_soc", 78, { friendly_name: "Akku", device_class: "battery", unit_of_measurement: "%" });
-    ent("sensor.hausverbrauch_ac", 612, { friendly_name: "Hausverbrauch", device_class: "power", unit_of_measurement: "W" });
-    ent("sensor.netz_leistung", -1450, { friendly_name: "Netz", device_class: "power", unit_of_measurement: "W" });
+    ent("sensor.hausverbrauch_ac", 612, { friendly_name: "Hausverbrauch", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
+    // Bilanz: 3240 PV + 5532 Netz = 612 Haus + 7360 Wallbox + 800 Speicher (lädt)
+    ent("sensor.netz_leistung", 5532, { friendly_name: "Netz", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
+    ent("sensor.growatt_modbus_battery_power", 800, { friendly_name: "Akku Leistung", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
     ent("light.keller_flur", "unavailable", { friendly_name: "Keller Flur Licht" }, "hauswirtschaftsraum");
     ent("switch.gartenpumpe", "unavailable", { friendly_name: "Gartenpumpe" }, "garten");
     ent("sensor.debug_noise", 1, { friendly_name: "Rauschen" }, "wohnzimmer", { labels: ["no_dboard"] });
@@ -122,6 +124,10 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       clim(`climate.${a}`, `K`, a, 21, 21.5, "idle"); temp(`sensor.${a}_t`, "T", a, 21); hum(`sensor.${a}_h`, "H", a, 50);
       win(`binary_sensor.${a}_w`, "F", a, false); motion(`binary_sensor.${a}_m`, "B", a, false); batt(`sensor.${a}_b`, "Bat", a, 80);
     }
+    // Energie wie im kleinen Haus (für die Messung der Energie-Seite)
+    for (const [e, v] of [["sensor.growatt_modbus_pv_power", 3240], ["sensor.hausverbrauch_ac", 612], ["sensor.netz_leistung", -1828], ["sensor.growatt_modbus_battery_power", 800]])
+      ent(e, v, { friendly_name: e, device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
+    ent("sensor.growatt_modbus_battery_soc", 78, { friendly_name: "Akku", device_class: "battery", unit_of_measurement: "%" });
     for (let i = 0; i < 300; i++) ent(`sensor.fremd_${i}`, i, { friendly_name: `Fremd ${i}`, unit_of_measurement: "W", device_class: "power" });
   }
 
@@ -254,6 +260,16 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     onChange(l) { listeners.push(l); },
     /** Tagesverlauf für Testdaten: endet beim aktuellen Wert. */
     curve(eid, base, t) {
+      if (/(_power|_leistung|verbrauch)/.test(eid)) {
+        // Leistung: Tagesgang mit großer Amplitude, PV nie negativ
+        const ph = (s) => Math.sin(((new Date(s).getHours() + new Date(s).getMinutes() / 60) - 7) / 24 * 2 * Math.PI);
+        if (/pv_power/.test(eid)) {
+          // PV: Sonnenbogen 7–19 Uhr, endet beim aktuellen Wert, wenn gerade Tag ist
+          const sun = (s) => { const hh = new Date(s).getHours() + new Date(s).getMinutes() / 60; return Math.max(0, Math.sin((hh - 7) / 12 * Math.PI)); };
+          return sun(t) * (sun(Date.now()) > 0.1 ? base / sun(Date.now()) : 6000);
+        }
+        return base + (Math.abs(base) * 0.5 + 300) * (ph(t) - ph(Date.now()));
+      }
       const hum = /feuchte|humid/.test(eid), amp = hum ? 6 : 1.4;
       const ph = (s) => Math.sin(((new Date(s).getHours() + new Date(s).getMinutes() / 60) - 9) / 24 * 2 * Math.PI);
       return base + amp * (ph(t) - ph(Date.now())) + (hum ? 1.5 : 0.15) * Math.sin(t / 2.7e6);

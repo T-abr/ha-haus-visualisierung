@@ -4,6 +4,28 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.5.0 – 2026-11-22
+
+### Neu – Energie-Seite
+- **Neue Seite „Energie“** in der Navigation (nach Klima), sobald PV, Netz, Hausverbrauch oder ein Speicher bekannt sind. Kompakt, Komfort und Handy.
+- **Energiefluss:** PV oben, Netz links, Speicher rechts, Wallbox unten, das Haus in der Mitte. Punkte laufen in Flussrichtung, schneller bei mehr Leistung. Netz zeigt „Bezug“ oder „Einspeisung“, der Speicher Ladestand und „lädt“ oder „entlädt“. Ein Tipp öffnet die Details der Entität. Bei „Bewegung reduzieren“ ohne Animation.
+- **Jetzt:** Autarkie, Eigenverbrauch, Gesamtverbrauch (mit Anteil der Wallbox), Speicher. Im Seitenkopf „Speist … ein“ bzw. „Bezieht … aus dem Netz“.
+- **Heute** (seit Mitternacht, aus dem Verlauf berechnet): erzeugt, verbraucht, bezogen, eingespeist, Autarkie, Eigenverbrauch und ein Balken „eigene Energie / aus dem Netz“. Keine zusätzlichen Zähler nötig.
+- **Leistung 24 h:** PV als Fläche, Verbrauch und Netz (unter null = Einspeisung) mit einer kW-Achse; Zeiger zeigt Uhrzeit und alle Werte.
+- Die **Wallbox-Karte** mit Lademodus und Ziel steht auch auf der Energie-Seite, ein Knopf führt zur Solar-Verknüpfung.
+- **Ein Tipp auf die Energie-Karte bzw. das Dach** öffnet jetzt die Energie-Seite (ohne Energiedaten wie bisher die erste Verknüpfung).
+- **Einstellungen → Darstellung → Energie:** neu „Speicher-Leistung“ (leer = automatisch erkannt), „Vorzeichen umkehren“ für Netz und Speicher, Seite abschaltbar. Neue Einstellung `energy`.
+
+### Tests
+- Bedienung: 23 neue Prüfungen (381 Prüfungen): Navigation, Tipp auf die Energie-Karte, eine gesammelte Abfrage, Fluss mit allen Knoten und Flussrichtungen, Kennzahlen jetzt und heute, Verlauf mit Zeiger, Wallbox, Live-Werte ohne Neuaufbau und ohne Abfrage, Vorzeichen umkehren, Details per Tipp, abschaltbar, ohne Recorder, Komfort, Einstellungen, Handy 390 px ohne Überlappung. Die Prüfung „Energie-Karte öffnet Solar“ geht jetzt über die Energie-Seite.
+- Backend: Einstellung `energy` wird geprüft (15 Backend-Tests).
+- Testhaus: Speicher-Leistung ergänzt, Netz passend zur Bilanz (5,5 kW Bezug), Energie-Sensoren mit Statistik und Tagesgang.
+
+### Performance
+- Genau eine Recorder-Abfrage für alle Leistungen der Seite (5-Minuten-Statistik), danach fortgeschrieben; beim Blättern innerhalb von 10 Minuten keine weitere Abfrage.
+- Großes Testhaus: Energie-Seite 10 ms Aufbau, 0 Neuaufbauten, hass-Setter Ø 17 µs. Ein neuer Leistungswert kostet ≈ 0,12 ms (Fluss und Kennzahlen sofort). Verlauf und Tagesbilanz werden höchstens alle 15 s neu gerechnet (≈ 0,9 ms). Fremde Sensoren lösen nichts aus.
+- Übrige Seiten unverändert: 0 Neuaufbauten, hass-Setter Ø 17–32 µs, Klimaseite 18,2 ms Aufbau.
+
 ## 1.4.0 – 2026-11-22
 
 ### Neu – Temperaturverläufe auf der Klimaseite
