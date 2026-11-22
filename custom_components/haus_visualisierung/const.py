@@ -126,6 +126,10 @@ DEFAULT_LAYOUT: dict = {
         "saver_min": 5, "black_min": 0, "return_min": 2, "fullscreen": True, "hide_sidebar": True,
         "wake_alarm": True, "night_dim": True, "weather": "", "wake_entity": "",
     },
+    "shading": {                   # Beschattung: Hinweise nach Vorhersage, Sonnenstand und Ausrichtung
+        "enabled": True, "hot": 26,    # heißer Tag ab °C (Vorhersage)
+        "facing": {},                  # {cover_id: "N"|"NO"|"O"|"SO"|"S"|"SW"|"W"|"NW"|"-"}, fehlt = aus dem Namen
+    },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",
         "energy": "", "connected": "", "charging": "", "range": "",

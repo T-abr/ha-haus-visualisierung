@@ -4,6 +4,22 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Wettervorhersage und Beschattung nach Sonne
+- **Karte „Sonne & Wetter“** oben auf der Seite Beschattung: Vorhersage für fünf Tage (Lage, Höchst- und Tiefstwert, Regen), heiße Tage hervorgehoben, dazu der aktuelle Sonnenstand. Die Vorhersage kommt über das Abo `weather/subscribe_forecast` von Home Assistant (täglich, sonst stündlich zusammengefasst; ältere Wetter-Integrationen über das Attribut `forecast`).
+- **Beschattungshinweise** aus Vorhersage, Sonnenstand am Standort von Home Assistant und Ausrichtung der Fenster:
+  - heute, solange die Sonne auf einer Seite steht: „Sonne auf der Südseite bis 15:00 · 2 von 2 Rollos offen“, mit Knopf „Schließen“ für genau die offenen Rollos dieser Seite;
+  - heute vor der Sonne: „Westrollos bis 13:00 schließen“ (eine halbe Stunde vorher);
+  - für morgen: „Morgen 31 °C: Südrollos bis 08:45 schließen“ mit den Sonnenzeiten je Seite.
+  Ein heißer Tag beginnt bei 26 °C (einstellbar) und gilt nur bei Sonne oder leichter Bewölkung. Ohne Ausrichtung gibt es einen allgemeinen Hinweis. Geschaltet wird nie automatisch: „Schließen“ fragt vorher nach.
+- **Kopfzeile:** Das Wetter zeigt zusätzlich „morgen 31°“; liegt ein Hinweis vor, ist es dezent umrandet, und der Tooltip nennt die Vorhersage für drei Tage und die Kurzform, z. B. „Morgen 31 °C, Südrollos und Westrollos rechtzeitig schließen“. Die Kopfzeile nutzt jetzt dieselbe Wetter-Entität wie das Wandpanel.
+- **Bildschirmschoner:** zusätzlich „Morgen 31° / 17°“ und die Kurzform des Hinweises.
+- **Einstellungen → Technik → Beschattung:** Hinweise an/aus, Grenze für heiße Tage und die Himmelsrichtung je Rollo (acht Richtungen oder „Nicht beschatten“). „Automatisch“ liest die Richtung aus dem Namen, z. B. „Rollo Südwest“. Garagentore bleiben außen vor.
+
+### Tests
+- Neue Gruppe `wetter` der Bedienprüfungen (23 Prüfungen): Abo der Vorhersage, Karte mit fünf Tagen, Aktualisierung bei neuer Vorhersage, allgemeiner Hinweis ohne Ausrichtung, Hinweise je Seite und Reihenfolge, Kopfzeile, Hinweise zu festen Uhrzeiten (vor der Sonne, mittags, abends), „Schließen“ nur mit Rückfrage und nur für die offenen Rollos der Seite (eigene Seite mit fester Uhrzeit), Bildschirmschoner, Ausrichtung aus dem Namen und Speichern.
+- Backend: `tests/backend/test_shading.py` prüft die Einstellungen (Grenze 18–40 °C, nur `cover.*` mit gültiger Richtung).
+- Das Harness liefert Standort und eine Tagesvorhersage (`__api.fcSet(...)`).
+
 ### Neu – Woche, Monat und Jahr in den Verläufen
 - **Zeitraum umschalten:** Die Kopfkarten der Klimaseite (Temperaturen, Luftfeuchte) und der Verlauf auf der Energie-Seite haben einen Umschalter „24 h · Woche · Monat · Jahr“. Die Wahl gilt je Karte und wird im Browser gemerkt; beim Umschalten wird nur die Karte neu gezeichnet.
 - **Langzeitstatistik des Recorders:** Woche und Monat kommen als Stundenmittel, das Jahr als Tagesmittel. Diese Statistik bleibt in Home Assistant dauerhaft erhalten, auch wenn der Verlauf nach 10 Tagen gelöscht wird. Sensoren ohne `state_class` haben keine Langzeitstatistik; die Karte sagt das dann.

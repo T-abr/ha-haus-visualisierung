@@ -9,13 +9,14 @@ import { alertsCardHTML } from "./warnungen.js";
 import { trendCardHTML } from "./verlauf.js";
 import { heatCardHTML, wbCardHTML } from "./technik.js";
 import { climRooms, climTrendHTML, humRooms } from "./klima.js";
+import { shadeCardHTML, weatherIdOf } from "./wetter.js";
 import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
 const AnsichtenMixin = (Base) => class extends Base {
   _topbar() {
     const h = this._hass;
-    const weather = Object.keys(h.states).find((e) => e.startsWith("weather."));
+    const weather = weatherIdOf(h, this._layout);
     const persons = Object.keys(h.states).filter((e) => e.startsWith("person.")).slice(0, 6);
     const pers = persons.map((e) => {
       const st = h.states[e];
@@ -34,7 +35,7 @@ const AnsichtenMixin = (Base) => class extends Base {
 
   _topbarDense() {
     const h = this._hass;
-    const weather = Object.keys(h.states).find((e) => e.startsWith("weather."));
+    const weather = weatherIdOf(h, this._layout);
     const persons = Object.keys(h.states).filter((e) => e.startsWith("person.")).slice(0, 6);
     const pers = persons.map((e) => {
       const st = h.states[e];
@@ -45,7 +46,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     const hm = this._layout.house_mode && this._layout.house_mode.enabled !== false
       ? `<button class="hmode" data-u="hmode" data-act="go" data-to="alarme" title="Hausmodus">${icon("mdi:home-account")}<span class="hml"></span></button>` : "";
     const right = `<div class="hright">${hm}
-      ${weather ? `<button class="weather glass" data-u="weather" data-eid="${esc(weather)}" data-act="more">${icon("mdi:weather-partly-cloudy")}<span class="wt"></span></button>` : ""}
+      ${weather ? `<button class="weather glass" data-u="weather" data-eid="${esc(weather)}" data-act="more">${icon("mdi:weather-partly-cloudy")}<span class="wt"></span><span class="wf"></span></button>` : ""}
       ${pers ? `<div class="persons stack">${pers}</div>` : ""}</div>`;
     const menu = `<button class="menu" data-act="menu">${icon("mdi:menu")}</button>`;
     const clock = `<div class="clockbox"><div class="clock"></div><div class="date"></div></div>`;
@@ -170,7 +171,13 @@ const AnsichtenMixin = (Base) => class extends Base {
     const btns = (e) => `<button class="pbtn" data-act="list-covers" data-svc="open_cover" data-eids="${esc(e.join(","))}">${icon("mdi:arrow-up")}Auf</button>
       <button class="pbtn" data-act="list-covers" data-svc="close_cover" data-eids="${esc(e.join(","))}">${icon("mdi:arrow-down")}Zu</button>`;
     return `<div class="ptitle"><h1>Beschattung</h1><span class="psub" data-u="chip" data-k="covers"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span><span class="sp"></span>${btns(this._model.agg.covers)}</div>
-      ${this._byFloor("cover", (a) => a.covers, btns)}`;
+      ${this._shadeCard()}${this._byFloor("cover", (a) => a.covers, btns)}`;
+  }
+
+  /** Karte „Sonne & Wetter“ über den Rollos (Vorhersage und Hinweise), nur mit Wetter-Entität */
+  _shadeCard() {
+    const wid = weatherIdOf(this._hass, this._layout);
+    return wid ? shadeCardHTML(wid) : "";
   }
 
   /* Klimaseite: Kopfkarten (Temperatur, Feuchte) und Wahl der Größe für die Raum-Verläufe (je Gerät gemerkt) */

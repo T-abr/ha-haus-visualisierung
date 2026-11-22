@@ -5,6 +5,7 @@ import { DEFAULT_LAYOUT, esc, icon, isOn, MODE_ICON, MODE_NAME, NF0, NF1, num, p
 import { WEATHER_ICON } from "./aktualisierer.js";
 import { curMode, evalAlerts, LEVEL_ICON, LEVELS } from "./warnungen.js";
 import { finite } from "./verlauf.js";
+import { dayOf, fcDays, shadeHeadline, shadeHints } from "./wetter.js";
 
 const WandpanelMixin = (Base) => class extends Base {
   /* ---------- Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite ---------- */
@@ -128,7 +129,7 @@ const WandpanelMixin = (Base) => class extends Base {
     d.className = "saver";
     d.setAttribute("role", "button");
     d.setAttribute("aria-label", "Bildschirmschoner – tippen zum Aufwecken");
-    d.innerHTML = `<div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svstat"></div></div>`;
+    d.innerHTML = `<div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svhint"></div><div class="svstat"></div></div>`;
     this.shadowRoot.appendChild(d);
     this._saverMin = null;
     this._saverUpdate((Date.now() - (this._wallActive || Date.now())) / 60000, true);
@@ -157,8 +158,13 @@ const WandpanelMixin = (Base) => class extends Base {
     if (wst) parts.push(`<span>${icon(WEATHER_ICON[wst.state] || "mdi:weather-cloudy")}${outT !== null ? `${NF1.format(outT)}°` : ""}</span>`);
     else if (outT !== null) parts.push(`<span>${icon("mdi:thermometer")}${NF1.format(outT)}°</span>`);
     if (pv !== null && pv > 50) parts.push(`<span>${icon("mdi:solar-power-variant")}${pv >= 1000 ? `${NF1.format(pv / 1000)} kW` : `${NF0.format(pv)} W`}</span>`);
+    // Vorhersage morgen
+    const tm = wid ? dayOf(fcDays(h, wid), 1) : null;
+    if (tm && finite(tm.hi)) parts.push(`<span class="svfc">${icon(WEATHER_ICON[tm.cond] || "mdi:weather-partly-cloudy")}Morgen ${NF0.format(tm.hi)}°${finite(tm.lo) ? ` / ${NF0.format(tm.lo)}°` : ""}</span>`);
     parts.push(`<span>${icon(MODE_ICON[md])}${MODE_NAME[md]}</span>`);
     setHtml(el.querySelector(".svrow"), parts.join(""));
+    const hl = this._model ? shadeHeadline(shadeHints(h, this._model, this._layout)) : "";
+    setHtml(el.querySelector(".svhint"), hl ? `<span>${icon("mdi:window-shutter-alert")}${esc(hl)}</span>` : "");
     const al = this._model ? evalAlerts(h, this._model, this._layout) : [];
     const top = al.length ? al.reduce((a, b) => (LEVELS[b.level] > LEVELS[a.level] ? b : a)) : null;
     setHtml(el.querySelector(".svstat"), top ? `<span class="${top.level}">${icon(LEVEL_ICON[top.level])}${al.length === 1 ? esc(top.title) : `${al.length} Meldungen · ${esc(top.title)}`}</span>` : `<span class="ok">${icon("mdi:shield-check")}Alles in Ordnung</span>`);

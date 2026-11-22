@@ -102,7 +102,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     ent("lawn_mower.luba", "docked", { friendly_name: "Mähroboter" }, "garten");
     light("light.terrasse", "Terrasse Licht", "terrasse", false, 50);
 
-    ent("weather.forecast_home", "partlycloudy", { friendly_name: "Zuhause", temperature: 7, temperature_unit: "°C", humidity: 88 });
+    ent("weather.forecast_home", "partlycloudy", { friendly_name: "Zuhause", temperature: 7, temperature_unit: "°C", humidity: 88, supported_features: 3 });
     ent("person.tobias", "home", { friendly_name: "Tobias" });
     ent("person.zweite_person", "home", { friendly_name: "Zweite Person" });
     ent("sensor.growatt_modbus_pv_power", 3240, { friendly_name: "PV-Leistung", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
@@ -172,6 +172,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       "hausframe": { component_name: "iframe", url_path: "hausframe", title: "Rahmen", config: { url: "/fake-ha.html" } },
       "map": { component_name: "map", url_path: "map", title: "Karte", config: null },
     },
+    config: { latitude: 50.1, longitude: 8.7, time_zone: "Europe/Berlin", unit_system: { temperature: "°C" } },
     user: { is_admin: true, name: "Tobias" }, language: "de", themes: { darkMode: true, themes: {} },
     formatEntityState: fmt,
     callService: async (d, svc, data) => { api.log.push([d, svc, data]); api.applyService(d, svc, data); },
@@ -262,11 +263,23 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       return { version: window.__HAUS_VIS__.VERSION, options: {}, layout };
     },
     connection: { subscribeMessage: async (cb, msg) => {
+      if (msg && msg.type === "weather/subscribe_forecast") {
+        api.log.push(["ws", "subscribe_forecast", { entity_id: msg.entity_id, forecast_type: msg.forecast_type }]);
+        api.fcCbs.push(cb); setTimeout(() => cb({ type: msg.forecast_type, forecast: api.forecast }), 0);
+        return () => { api.fcCbs = api.fcCbs.filter((c) => c !== cb); };
+      }
       if (msg && msg.type && msg.type.endsWith("/alarms_subscribe")) { api.alarmCb = cb; setTimeout(() => cb(api.alarmSnap), 0); return () => { api.alarmCb = null; }; }
       setTimeout(() => cb({ version: window.__HAUS_VIS__.VERSION, options: {}, layout }), 0); return () => {}; } },
   };
   const api = {
     hass, log: [],
+    // Vorhersage (täglich): heute, morgen … – mild; Tests setzen mit fcSet([[hoch, tief, Lage], …]) andere Werte
+    forecast: [], fcCbs: [],
+    fcSet(rows) {
+      const d0 = new Date(); d0.setHours(12, 0, 0, 0);
+      api.forecast = rows.map(([hi, lo, cond, rain], i) => ({ datetime: new Date(d0.getTime() + i * 86400000).toISOString(), temperature: hi, templow: lo, condition: cond, precipitation: rain || 0 }));
+      api.fcCbs.forEach((cb) => cb({ type: "daily", forecast: api.forecast }));
+    },
     set(eid, state, attrs) {
       const old = hass.states[eid];
       const st = { ...old, state: String(state), attributes: { ...old.attributes, ...(attrs || {}) }, last_changed: new Date().toISOString() };
@@ -341,5 +354,6 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       }
     },
   };
+  api.fcSet([[8, 3, "partlycloudy"], [9, 4, "cloudy", 2], [7, 2, "rainy", 6], [6, 1, "cloudy"], [8, 2, "sunny"]]);
   return api;
 }

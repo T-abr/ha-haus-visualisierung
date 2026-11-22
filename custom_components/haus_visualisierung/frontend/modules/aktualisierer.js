@@ -5,6 +5,7 @@ import { CONTACT_DC, PRESENCE_DC, SAFETY_DC } from "./modell.js";
 import { roomActive } from "./bausteine.js";
 import { alertsByArea, alertWatch, CHIP_WATCH, CHIPS } from "./warnungen.js";
 import { dewPoint } from "./klima.js";
+import { condIcon, condName, dayOf, fcDays, shadeHeadline, shadeHints, W_COND } from "./wetter.js";
 
 /* ------------------------------------------------------------------------ */
 /*  Aktualisierer (werden nur für geänderte Entitäten ausgeführt)            */
@@ -241,23 +242,25 @@ function updateRoof(el, ctx) {
   el.classList.toggle("producing", pv !== null && pv > 20);
 }
 
-const WEATHER_ICON = { "clear-night": "mdi:weather-night", cloudy: "mdi:weather-cloudy", fog: "mdi:weather-fog", hail: "mdi:weather-hail", lightning: "mdi:weather-lightning",
-  "lightning-rainy": "mdi:weather-lightning-rainy", partlycloudy: "mdi:weather-partly-cloudy", pouring: "mdi:weather-pouring", rainy: "mdi:weather-rainy", snowy: "mdi:weather-snowy",
-  "snowy-rainy": "mdi:weather-snowy-rainy", sunny: "mdi:weather-sunny", windy: "mdi:weather-windy", "windy-variant": "mdi:weather-windy-variant", exceptional: "mdi:alert" };
+const WEATHER_ICON = Object.fromEntries(Object.entries(W_COND).map(([k, v]) => [k, v[1]]));
 
+/* Wetter in der Kopfzeile: jetzt, dazu morgen (Vorhersage) und der wichtigste Beschattungshinweis im Tooltip */
 function updateWeather(el, ctx) {
-  const st = ctx._hass.states[el.dataset.eid];
+  const h = ctx._hass, st = h.states[el.dataset.eid];
   if (!st) { el.hidden = true; return; }
   el.hidden = false;
-  const W = { "clear-night": ["Klar", "mdi:weather-night"], cloudy: ["Bewölkt", "mdi:weather-cloudy"], fog: ["Nebel", "mdi:weather-fog"],
-    hail: ["Hagel", "mdi:weather-hail"], lightning: ["Gewitter", "mdi:weather-lightning"], "lightning-rainy": ["Gewitter", "mdi:weather-lightning-rainy"],
-    partlycloudy: ["Teils bewölkt", "mdi:weather-partly-cloudy"], pouring: ["Starkregen", "mdi:weather-pouring"], rainy: ["Regen", "mdi:weather-rainy"],
-    snowy: ["Schnee", "mdi:weather-snowy"], "snowy-rainy": ["Schneeregen", "mdi:weather-snowy-rainy"], sunny: ["Sonnig", "mdi:weather-sunny"],
-    windy: ["Windig", "mdi:weather-windy"], "windy-variant": ["Windig", "mdi:weather-windy-variant"], exceptional: ["Unwetter", "mdi:alert"] }[st.state] || [st.state, "mdi:weather-partly-cloudy"];
-  setIcon(el, "ha-icon", W[1]);
+  setIcon(el, "ha-icon", condIcon(st.state));
   const t = st.attributes.temperature;
   setText(el, ".wt", t != null ? `${NF0.format(t)}°` : "");
-  setText(el, ".wc", W[0]);
+  const days = fcDays(h, el.dataset.eid), tm = dayOf(days, 1);
+  const tmTxt = tm && tm.hi !== null ? `morgen ${NF0.format(tm.hi)}°` : "";
+  setText(el, ".wc", tmTxt ? `${condName(st.state)} · ${tmTxt}` : condName(st.state));
+  setText(el, ".wf", tmTxt);
+  const hl = ctx._model ? shadeHeadline(shadeHints(h, ctx._model, ctx._layout)) : "";
+  el.classList.toggle("hint", !!hl);
+  el.title = [`Jetzt: ${condName(st.state)}${t != null ? `, ${NF0.format(t)} °C` : ""}`,
+    ...days.slice(0, 3).map((d, i) => `${i === 0 ? "Heute" : i === 1 ? "Morgen" : d.date.toLocaleDateString("de-DE", { weekday: "long" })}: ${condName(d.cond)}${d.hi !== null ? `, ${NF0.format(d.hi)}°` : ""}${d.lo !== null ? ` / ${NF0.format(d.lo)}°` : ""}`),
+    hl].filter(Boolean).join("\n");
 }
 
 function updatePerson(el, ctx) {

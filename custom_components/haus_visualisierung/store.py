@@ -229,6 +229,23 @@ def _energy(raw: dict) -> dict:
     return out
 
 
+_FACES = ("N", "NO", "O", "SO", "S", "SW", "W", "NW", "-")
+
+
+def _shading(raw: dict) -> dict:
+    """Beschattung: Schalter, Grenze für heiße Tage und Ausrichtung je Rollo."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["shading"])
+    if isinstance(raw.get("enabled"), bool):
+        out["enabled"] = raw["enabled"]
+    out["hot"] = _int(raw.get("hot"), 18, 40, out["hot"])
+    facing = raw.get("facing") if isinstance(raw.get("facing"), dict) else {}
+    for eid, face in list(facing.items())[:300]:
+        e = _entity(eid)
+        if e.startswith("cover.") and face in _FACES:
+            out["facing"][e] = face
+    return out
+
+
 def _price(raw: dict) -> dict:
     """Strompreis: Sensor, Schalter und Preise in ct/kWh."""
     out = copy.deepcopy(DEFAULT_LAYOUT["price"])
@@ -349,6 +366,8 @@ def sanitize(raw: Any) -> dict:
         result["wallpanel"] = _wallpanel(raw["wallpanel"])
     if isinstance(raw.get("wallbox"), dict):
         result["wallbox"] = _wallbox(raw["wallbox"])
+    if isinstance(raw.get("shading"), dict):
+        result["shading"] = _shading(raw["shading"])
     if isinstance(raw.get("energy"), dict):
         result["energy"] = _energy(raw["energy"])
     if isinstance(raw.get("price"), dict):
