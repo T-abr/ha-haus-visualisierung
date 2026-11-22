@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.5.0";
+const VERSION = "1.6.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {

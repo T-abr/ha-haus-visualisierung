@@ -4,7 +4,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
-## 1.5.0 – 2026-11-22
+## 1.6.0 – 2026-11-22
 
 ### Neu – Luftfeuchte und Taupunkt auf der Klimaseite
 - **Kopfkarte „Luftfeuchte 24 h“** neben „Temperaturen 24 h“ (Kompakt und Komfort; am Handy untereinander): Haus-Durchschnitt der relativen Feuchte und Außenfeuchte in einem Diagramm mit %-Achse, Wohlfühlbereich 40–60 % als Band und die Grenze für Schimmelrisiko als gestrichelte Linie. Innen orange, außen blau wie bei den Temperaturen. Werte am Linienende, Zeiger mit Uhrzeit und beiden Werten.
@@ -20,7 +20,15 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Gilt standardmäßig nur im Hausmodus Zuhause. Grenze (50–90 %) und Wartezeit (0–240 min) unter Einstellungen → Alarme; die Regel ist für Aktionen wählbar.
 - Taupunkt und absolute Feuchte nach der Magnus-Formel, in Panel und Backend gleich gerechnet. Außenbereiche zählen nicht.
 
+### Neu – Installation über HACS
+- Das Repository lässt sich in HACS als benutzerdefiniertes Repository (Typ Integration) hinzufügen; Updates kommen danach per Klick.
+- Workflow „Release“: Ein Tag `vX.Y.Z` baut das ZIP mit `scripts/build_zip.py` und veröffentlicht ein GitHub-Release mit dem CHANGELOG-Abschnitt. Passt der Tag nicht zu `manifest.json`, bricht er ab.
+- Workflow „HACS-Prüfung“ (HACS-Action und hassfest) bei jedem PR.
+- `manifest.json`: Dokumentation, Fehlermeldungen (Issues) und Codeowner zeigen auf dieses Repository.
+
 ### Tests
+- Tests laufen automatisch bei jedem Pull Request und Push auf `main` (GitHub Actions): Versionsprüfung, Backend-Tests und Bedienprüfungen im Browser.
+- Die Browser-Prüfungen laden die echte Frontend-Datei statt einer Kopie im Harness; `tests/harness/panel.js` ist entfernt. `tests/interact.py` meldet Fehler jetzt auch über den Rückgabewert.
 - Bedienung: 31 neue Prüfungen (389 Prüfungen): Feuchte-Karte (Kurven, Kennzahlen, Taupunkt, Lüftungshinweis in beide Richtungen, Band, Grenze, Achse, Zeiger), weiterhin eine Statistik- und eine Verlaufsabfrage für die ganze Seite, Taupunkt je Raum, Umschalter Temperatur/Feuchte in Kompakt und Komfort und je Gerät gemerkt, Live-Werte ohne Neuaufbau und ohne Abfrage, Schimmelrisiko (Wartezeit, offenes Fenster, Rückfall, draußen feuchter, Übernahme vom Backend nach Neuladen), Einstellungen, Handy 390 px. Die Klimaseite steht jetzt auch in `tests/perf/measure.py`.
 - Backend: 3 neue Tests (18 Backend-Tests): Formeln gegen Tabellenwerte, Wartezeit und Rückfall mit vorgerückter Uhr, offenes Fenster, draußen feuchter, Hausmodus, Grenzen der Einstellungen.
 - Test-Harness: Außenfeuchte im Garten und Feuchte an der Wetter-Entität.

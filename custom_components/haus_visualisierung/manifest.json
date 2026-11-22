@@ -5,7 +5,9 @@
     "mobile_app",
     "notify"
   ],
-  "codeowners": [],
+  "codeowners": [
+    "@T-abr"
+  ],
   "config_flow": true,
   "dependencies": [
     "frontend",
@@ -14,10 +16,11 @@
     "persistent_notification",
     "websocket_api"
   ],
-  "documentation": "https://github.com/",
+  "documentation": "https://github.com/T-abr/ha-haus-visualisierung",
   "integration_type": "service",
   "iot_class": "calculated",
+  "issue_tracker": "https://github.com/T-abr/ha-haus-visualisierung/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "1.5.0"
+  "version": "1.6.0"
 }

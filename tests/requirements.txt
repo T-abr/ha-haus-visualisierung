@@ -1,0 +1,4 @@
+# Abhängigkeiten für Backend-Tests und Bedienprüfungen (pip install -r tests/requirements.txt)
+pytest-homeassistant-custom-component==0.13.316
+home-assistant-frontend==20260128.6
+playwright==1.65.2

@@ -1,0 +1,63 @@
+# Release erstellen, auf zwei Wegen:
+#  - Tag pushen: git tag v1.4.0 && git push origin v1.4.0
+#  - Knopf: GitHub → Actions → „Release“ → „Run workflow“ (Branch main). Der Tag v<Version aus manifest.json>
+#    wird dabei angelegt.
+# Prüft, dass der Tag zur Version in manifest.json passt, baut das ZIP mit scripts/build_zip.py
+# und veröffentlicht ein GitHub-Release mit dem CHANGELOG-Abschnitt als Beschreibung.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version und Tag bestimmen
+        run: |
+          MANIFEST=$(python3 -c 'import json; print(json.load(open("custom_components/haus_visualisierung/manifest.json"))["version"])')
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"
+            if [ "${TAG#v}" != "$MANIFEST" ]; then
+              echo "::error::Tag $TAG passt nicht zu manifest.json ($MANIFEST)."
+              exit 1
+            fi
+          else
+            TAG="v$MANIFEST"
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              echo "::error::Tag $TAG gibt es schon. Erst die Version erhöhen (scripts/bump_version.py)."
+              exit 1
+            fi
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$MANIFEST" >> "$GITHUB_ENV"
+
+      - name: Release-Beschreibung aus CHANGELOG.md
+        run: python3 scripts/release_notes.py "$VERSION" > release_notes.md
+
+      - name: ZIP bauen
+        run: python3 scripts/build_zip.py
+
+      - name: Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Haus Visualisierung ${{ env.TAG }}
+          body_path: release_notes.md
+          files: dist/haus_visualisierung_${{ env.TAG }}.zip
+          fail_on_unmatched_files: true

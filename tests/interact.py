@@ -1,18 +1,14 @@
 """Bedientest mit dem Test-Harness (python3 tests/interact.py)."""
-import functools
-import http.server
-import threading
+import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).parent / "harness"
-handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
-http.server.SimpleHTTPRequestHandler.log_message = lambda *a: None
-srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-threading.Thread(target=srv.serve_forever, daemon=True).start()
-base = f"http://127.0.0.1:{srv.server_port}/index.html?komfort"
-dense = f"http://127.0.0.1:{srv.server_port}/index.html"
+from harness_server import launch, start
+
+srv, ORIGIN = start()
+base = f"{ORIGIN}/index.html?komfort"
+dense = f"{ORIGIN}/index.html"
 ok, fail = [], []
 
 def check(name, cond):
@@ -37,7 +33,7 @@ def drag(handle, target, after=False, steps=12):
     pg.mouse.up(); pg.wait_for_timeout(200)
 
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
+    b = launch(p)
     pg = b.new_page(viewport={"width": 1440, "height": 1000})
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -1133,3 +1129,4 @@ with sync_playwright() as p:
 srv.shutdown()
 print(f"OK: {len(ok)}  Fehler: {len(fail)}")
 for f in fail: print("  ✗", f)
+sys.exit(1 if fail else 0)
