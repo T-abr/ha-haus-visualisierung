@@ -97,6 +97,17 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
     assert wp["saver_min"] == 0 and wp["black_min"] == 600 and wp["return_min"] == 0 and wp["fullscreen"] is False
     assert wp["night_dim"] is True and wp["weather"] == "" and wp["wake_entity"] == "binary_sensor.flur_bewegung" and "evil" not in wp
 
+    # 1.5.0: Energie-Seite
+    await client.send_json({"id": 9, "type": f"{DOMAIN}/save", "layout": {"energy": {
+        "enabled": "ja", "battery_power": "switch.falsch", "grid_invert": True, "battery_invert": 1, "evil": 1}}})
+    got = [await client.receive_json(), await client.receive_json()]
+    en = next(m for m in got if m["id"] == 9 and m["type"] == "result")["result"]["layout"]["energy"]
+    assert en == {"enabled": True, "battery_power": "", "grid_invert": True, "battery_invert": False}
+    await client.send_json({"id": 10, "type": f"{DOMAIN}/save", "layout": {"energy": {"enabled": False, "battery_power": "sensor.akku_leistung"}}})
+    got = [await client.receive_json(), await client.receive_json()]
+    en = next(m for m in got if m["id"] == 10 and m["type"] == "result")["result"]["layout"]["energy"]
+    assert en["enabled"] is False and en["battery_power"] == "sensor.akku_leistung" and en["grid_invert"] is False
+
     # Optionen ändern → Panel neu registriert
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(

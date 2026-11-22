@@ -218,6 +218,17 @@ def _wallbox(raw: dict) -> dict:
     return out
 
 
+def _energy(raw: dict) -> dict:
+    """Seite „Energie“: Schalter, Speicher-Leistung (Sensor) und Vorzeichen."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["energy"])
+    for key in ("enabled", "grid_invert", "battery_invert"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    bp = _entity(raw.get("battery_power"))
+    out["battery_power"] = bp if bp.startswith("sensor.") else ""
+    return out
+
+
 def _wallpanel(raw: dict) -> dict:
     """Wandpanel: Zeiten in Minuten (0 = nie), Schalter, Wetter und Bewegungsmelder."""
     out = copy.deepcopy(DEFAULT_LAYOUT["wallpanel"])
@@ -324,6 +335,8 @@ def sanitize(raw: Any) -> dict:
         result["wallpanel"] = _wallpanel(raw["wallpanel"])
     if isinstance(raw.get("wallbox"), dict):
         result["wallbox"] = _wallbox(raw["wallbox"])
+    if isinstance(raw.get("energy"), dict):
+        result["energy"] = _energy(raw["energy"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 
