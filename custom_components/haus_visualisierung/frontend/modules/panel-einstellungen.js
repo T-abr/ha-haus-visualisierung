@@ -6,6 +6,7 @@ import { BUILTIN_MODES, dc, entName, esc, HOUSE_MODES, icon, NAV } from "./grund
 import { buildModel, linkMode, PRESENCE_DC } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
 import { techCfg } from "./technik.js";
+import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
@@ -13,7 +14,7 @@ const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
   alarme: ["house_mode", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
-  technik: ["heating", "wallbox"],
+  technik: ["heating", "wallbox", "shading"],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
@@ -90,7 +91,8 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setAlerts(D)}
       ${this._setActions(D)}`;
     else if (tab === "technik") body = `${dlAll}
-      ${this._setTech(D)}`;
+      ${this._setTech(D)}
+      ${this._setShade(D)}`;
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
       ${this._setBell(D)}`;
@@ -218,6 +220,33 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${fld("wallbox", "range", "Reichweite", "km", AW.range)}
       ${fld("wallbox", "connected", "Fahrzeug angesteckt", "binary_sensor", AW.connected)}
       ${fld("wallbox", "charging", "Lädt", "binary_sensor", AW.charging)}
+    </div>`;
+  }
+
+  /* Beschattung: Hinweise nach Wettervorhersage, Sonnenstand und Ausrichtung der Rollos */
+  _setShade(D) {
+    const h = this._hass, m = buildModel(h, { ...D, hidden_areas: [] }), S = D.shading || {};
+    const F = S.facing || {}, loc = homeLoc(h), wid = weatherIdOf(h, D);
+    const covers = [...(m.agg.covers || [])].sort((a, b) => {
+      const ra = (m.eidArea.get(a) || {}).name || "", rb = (m.eidArea.get(b) || {}).name || "";
+      return ra.localeCompare(rb, "de") || entName(h, a).localeCompare(entName(h, b), "de");
+    });
+    const name = (k) => (FACES.find((f) => f[0] === k) || [, , "–"])[2];
+    const row = (e) => {
+      const g = guessFace(h, e), cur = F[e] || "";
+      return `<div class="srow"><span class="lbl">${esc(entName(h, e))}<small>${esc((m.eidArea.get(e) || {}).name || "")}</small></span>
+        <select class="inp" data-shade-face="${esc(e)}"><option value="">${g ? `Automatisch (${esc(name(g))})` : "Automatisch (unbekannt)"}</option>
+        ${FACES.map(([k, , n]) => `<option value="${k}" ${cur === k ? "selected" : ""}>${n}</option>`).join("")}
+        <option value="-" ${cur === "-" ? "selected" : ""}>Nicht beschatten</option></select></div>`;
+    };
+    return `<div class="set glass"><h2>${icon("mdi:sun-angle-outline")}Beschattung</h2>
+      <p class="hint">Auf der Seite Beschattung, im Kopf und im Bildschirmschoner erscheinen Hinweise wie „Morgen 30 °C, Südrollos rechtzeitig schließen“. Grundlage sind die Wettervorhersage${wid ? ` (${esc(wid)})` : ""}, der Sonnenstand am Standort aus Home Assistant und die Ausrichtung der Fenster. Geschaltet wird nur auf Tippen, mit Rückfrage.</p>
+      ${loc ? "" : '<p class="hint warn">Kein Standort in Home Assistant hinterlegt (Einstellungen → System → Allgemein). Ohne ihn gibt es nur allgemeine Hinweise.</p>'}
+      <div class="srow"><span class="lbl">Hinweise zur Beschattung</span><label class="tgl"><input type="checkbox" data-set="shading.enabled" data-bool="1" ${S.enabled !== false ? "checked" : ""}><span></span></label></div>
+      <div class="srow"><span class="lbl">Heißer Tag ab<small>°C laut Vorhersage, bei Sonne oder leichter Bewölkung</small></span><input class="inp s" type="number" min="18" max="40" data-set="shading.hot" data-num="1" value="${esc(String(S.hot ?? 26))}"></div>
+      <div class="fl-title">Ausrichtung der Fenster</div>
+      <p class="hint">In welche Himmelsrichtung schaut das Fenster? „Automatisch“ liest die Richtung aus dem Namen (z. B. „Rollo Süd“).</p>
+      ${covers.length ? covers.map(row).join("") : '<p class="hint">Keine Rollos gefunden.</p>'}
     </div>`;
   }
 
@@ -544,6 +573,14 @@ const EinstellungenMixin = (Base) => class extends Base {
       const sv = t.dataset.pushTarget, P = this._draft.push;
       P.targets = t.checked ? [...new Set([...P.targets, sv])] : P.targets.filter((x) => x !== sv);
       this._rerenderSettings();
+      return;
+    }
+    if (t.dataset && t.dataset.shadeFace && e.type === "change" && this._draft) {
+      const S = this._draft.shading = { ...(this._draft.shading || {}) }, F = S.facing = { ...(S.facing || {}) };
+      if (t.value) F[t.dataset.shadeFace] = t.value; else delete F[t.dataset.shadeFace];
+      this._dirtySettings = true;
+      const msg = this.shadowRoot.querySelector(".savebar .msg");
+      if (msg) msg.textContent = "Ungespeicherte Änderungen";
       return;
     }
     if (!t.dataset || !t.dataset.set || !this._draft) return;

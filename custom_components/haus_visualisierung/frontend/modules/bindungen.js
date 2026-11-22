@@ -6,6 +6,7 @@ import { alertWatch, curMode, navBadge, updateAlerts } from "./warnungen.js";
 import { updateTrend } from "./verlauf.js";
 import { techWatch, updateHeat, updateWallbox } from "./technik.js";
 import { climRooms, humRooms, outdoorTempId, updateClimTrend, updateSpark } from "./klima.js";
+import { shadeWatch, updateShade } from "./wetter.js";
 import { energyIds, energyWatch, updateEnDay, updateEnergy, updateEnTrend } from "./energie.js";
 
 Object.assign(UPD, {
@@ -25,6 +26,7 @@ Object.assign(UPD, {
   chip: { watch: chipWatch, run: updateChip },
   roof: { watch: (el, c) => Object.values(c._layout.header).filter(Boolean), run: updateRoof },
   weather: { watch: (el) => [el.dataset.eid], run: updateWeather },
+  shade: { watch: shadeWatch, run: updateShade },
   person: { watch: (el) => [el.dataset.eid], run: updatePerson },
   gcount: { watch: (el) => (el._eids = (el.dataset.eids || "").split(",").filter(Boolean)), run: updateGroupCount },
   heat: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.heat), run: updateHeat },

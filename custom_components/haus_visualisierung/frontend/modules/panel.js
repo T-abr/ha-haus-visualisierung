@@ -8,6 +8,7 @@ import { trendHover } from "./verlauf.js";
 import { heatHover } from "./technik.js";
 import { climHover, sparkHover } from "./klima.js";
 import { enHover } from "./energie.js";
+import { fcListen, fcUnlisten } from "./wetter.js";
 import { LOGO, STYLES } from "./stile.js";
 import { HvBase } from "./basis.js";
 import { KlingelMixin } from "./panel-klingel.js";
@@ -72,8 +73,15 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     this._clockT = setInterval(() => { if (!document.hidden) this._tickClock(); }, 15000);
     this._alertT = setInterval(() => {
       if (document.hidden || !this._model) return;
-      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"]').forEach((el) => UPD[el.dataset.u].run(el, this));
+      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"], [data-u="shade"]').forEach((el) => UPD[el.dataset.u].run(el, this));
     }, 30000);
+    // Wettervorhersage: neue Daten frischen Kopfzeile, Karte „Sonne & Wetter“ und Bildschirmschoner auf
+    this._onForecast = this._onForecast || (() => {
+      if (!this._model) return;
+      this.shadowRoot.querySelectorAll('[data-u="weather"], [data-u="shade"]').forEach((el) => UPD[el.dataset.u].run(el, this));
+      this._saverDirty = true;
+    });
+    fcListen(this._onForecast);
     if (!this._alWired) {
       this._alWired = true;
       const r = this.shadowRoot;
@@ -143,6 +151,7 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     super.disconnectedCallback();
     clearInterval(this._clockT);
     clearInterval(this._alertT);
+    fcUnlisten(this._onForecast);
     clearInterval(this._wallT); this._wallT = 0;
     if (this._wallWired) {
       window.removeEventListener("pointerdown", this._onWallAct, true);

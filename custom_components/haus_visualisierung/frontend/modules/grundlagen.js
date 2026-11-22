@@ -18,6 +18,7 @@ const DEFAULT_LAYOUT = {
   heating: { enabled: true, area: "", tank: [], tank_min: 30, tank_max: 65, stove: "", stove_pump: "", stove_hot: 50, curve: "", mixer: "", flow: "", outdoor: "",
     manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 } },
   wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, weather: "", wake_entity: "" },
+  shading: { enabled: true, hot: 26, facing: {} },
   wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
@@ -49,6 +50,7 @@ const withDefaults = (l) => {
     wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}) },
     energy: { ...DEFAULT_LAYOUT.energy, ...((l && l.energy) || {}) },
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
+    shading: { ...DEFAULT_LAYOUT.shading, ...((l && l.shading) || {}), facing: { ...((l && l.shading && l.shading.facing) || {}) } },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },
   };
 };

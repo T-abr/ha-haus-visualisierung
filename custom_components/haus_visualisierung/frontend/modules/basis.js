@@ -205,6 +205,7 @@ class HvBase extends HTMLElement {
       const open = t.dataset.svc === "open_cover";
       title = open ? "Alle Rollos öffnen?" : "Alle Rollos schließen?";
       text = `${eids.length} ${eids.length === 1 ? "Rollo" : "Rollos"} im ganzen Haus.`; ok = open ? "Öffnen" : "Schließen"; ic = open ? "mdi:window-shutter-open" : "mdi:window-shutter";
+      if (t.dataset.ctitle) { title = t.dataset.ctitle; text = t.dataset.ctext || ""; }
     } else if (act === "hm-set") {
       const md = t.dataset.mode, arm = (this._layout.house_mode.arm || {})[md];
       title = `Hausmodus „${MODE_NAME[md]}“?`; ok = "Umschalten"; ic = MODE_ICON[md];

@@ -1301,6 +1301,79 @@ def energie():
     mp.close()
 
 
+@gruppe("wetter")
+def wetter():
+    # ---------- Wettervorhersage und Beschattungshinweise ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=beschattung"); pg.wait_for_timeout(600)
+    card = pg.locator(f"{P} .shade")
+    subs = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "subscribe_forecast"]
+    check("WE: ein Abo der Tagesvorhersage", len(subs) == 1 and subs[0][2] == {"entity_id": "weather.forecast_home", "forecast_type": "daily"})
+    check("WE: Karte „Sonne & Wetter“ über den Rollos mit 5 Tagen", card.count() == 1 and pg.locator(f"{P} .shade .fc").count() == 5)
+    fc = pg.locator(f"{P} .shade .fcs").inner_text()
+    check("WE: Tage mit Höchst-/Tiefstwert und Regen", "Heute" in fc and "Morgen" in fc and "9°" in fc and "6 mm" in fc)
+    check("WE: mild → keine Beschattung nötig", "Keine Beschattung nötig" in card.inner_text())
+    # heißer Tag morgen, Rollos ohne Ausrichtung → allgemeiner Hinweis
+    pg.evaluate("window.__api.fcSet([[12, 5, 'sunny'], [31, 17, 'sunny'], [29, 16, 'partlycloudy'], [22, 12, 'rainy', 4], [20, 10, 'cloudy']])"); pg.wait_for_timeout(150)
+    txt = card.inner_text()
+    check("WE: neue Vorhersage frischt die Karte auf", "31°" in pg.locator(f"{P} .shade .fcs").inner_text() and pg.locator(f"{P} .shade .fc.hot").count() == 2)
+    check("WE: ohne Ausrichtung allgemeiner Hinweis", "Morgen 31 °C und sonnig: Rollos auf der Sonnenseite rechtzeitig schließen" in txt and "Ausrichtung" in txt)
+    # Ausrichtung: Wohnzimmer nach Süden, Büro nach Westen
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, shading: {{ enabled: true, hot: 26, facing: {{ 'cover.wohnzimmer_terrassentur': 'S', 'cover.wohnzimmer_fenster': 'S', 'cover.buro_rollo': 'W', 'cover.esszimmer_rollo': '-' }} }} }}; p._dirty = true; p._schedule(); }})()"); pg.wait_for_timeout(250)
+    txt = pg.locator(f"{P} .shade .shints").inner_text()
+    check("WE: Hinweise je Seite für morgen", "Morgen 31 °C: Südrollos" in txt and "Morgen 31 °C: Westrollos" in txt and "Sonne auf der Südseite" in txt)
+    check("WE: Süden vor Westen (nach Uhrzeit)", txt.index("Südrollos") < txt.index("Westrollos"))
+    # Kopfzeile der Übersicht: morgen und Kurzform des Hinweises
+    pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
+    wb = pg.locator(f"{P} .dtop .weather")
+    check("WE: Kopf zeigt morgen", wb.locator(".wf").inner_text() == "morgen 31°")
+    check("WE: Kopf hebt den Hinweis hervor (Tooltip mit Kurzform)", "hint" in wb.get_attribute("class") and "Südrollos und Westrollos rechtzeitig schließen" in wb.get_attribute("title"))
+    pg.locator(f'{P} .nav[data-to=beschattung]').click(); pg.wait_for_timeout(300)
+    # heute heiß: Uhrzeit fest vorgeben (Modul direkt), damit die Prüfung nicht von der Tageszeit abhängt
+    pg.evaluate("window.__api.fcSet([[30, 17, 'sunny'], [31, 17, 'sunny'], [29, 16, 'partlycloudy']])"); pg.wait_for_timeout(100)
+    res = pg.evaluate(f"""(async () => {{ const W = await import('/modules/wetter.js'); const p = {PP};
+      const at = (hh) => {{ const d = new Date(); d.setHours(hh, 0, 0, 0); return W.shadeHints(p._hass, p._model, p._layout, d).hints.map(x => [x.k, x.face, x.title, x.eids.length]); }};
+      const sw = W.sunWindows(new Date(), 'S', W.homeLoc(p._hass))[0];
+      return {{ früh: at(Math.max(0, sw.from.getHours() - 2)), mitte: at(Math.floor((sw.from.getHours() + sw.to.getHours()) / 2)), spät: at(23) }}; }})()""")
+    check("WE: vor der Sonne → „bis … schließen“ mit offenen Rollos", any(k == "heute" and f == "S" and "Südrollos bis" in t and n == 2 for k, f, t, n in res["früh"]))
+    check("WE: Sonne auf der Seite → „jetzt“ zuerst", res["mitte"] and res["mitte"][0][0] == "jetzt" and res["mitte"][0][1] == "S" and res["mitte"][0][3] == 2)
+    check("WE: abends nur noch morgen", res["spät"] and all(k == "morgen" for k, *_ in res["spät"]))
+    check("WE: „Nicht beschatten“ bleibt außen vor", not any(f == "-" or "Ess" in t for _, f, t, _n in res["früh"] + res["mitte"]))
+    # Schließen nur mit Rückfrage – eigene Seite mit fester Uhrzeit (12 Uhr in Berlin, Sonne im Süden)
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    pg2 = pg.context.browser.new_page(viewport={"width": 1440, "height": 1000}, timezone_id="Europe/Berlin")
+    e2 = []; pg2.on("pageerror", lambda e: e2.append(str(e)))
+    pg2.clock.set_fixed_time(datetime.now(ZoneInfo("Europe/Berlin")).replace(hour=12, minute=0, second=0, microsecond=0))
+    pg2.goto(dense + "?view=beschattung"); pg2.wait_for_timeout(600)
+    pg2.evaluate("window.__api.fcSet([[30, 17, 'sunny'], [31, 17, 'sunny']])")
+    pg2.evaluate("(() => { const p = document.querySelector('haus-visualisierung-panel'); p._layout = { ...p._layout, shading: { enabled: true, hot: 26, facing: { 'cover.wohnzimmer_terrassentur': 'S', 'cover.wohnzimmer_fenster': 'S' } } }; p._dirty = true; p._schedule(); })()"); pg2.wait_for_timeout(250)
+    first = pg2.locator(f"{P} .shint").first
+    check("WE: mittags „Sonne auf der Südseite“ mit Schließen-Knopf", "Sonne auf der Südseite bis" in first.inner_text() and first.locator("[data-svc=close_cover]").count() == 1)
+    n0 = len(pg2.evaluate("window.__api.log")); first.locator("[data-svc=close_cover]").click(); pg2.wait_for_timeout(150)
+    check("WE: Schließen fragt nach", len(pg2.evaluate("window.__api.log")) == n0 and "Südrollos schließen?" in pg2.locator(f"{P} .mbg").inner_text())
+    pg2.locator(f"{P} [data-act=confirm-ok]").click(); pg2.wait_for_timeout(150)
+    last = pg2.evaluate("window.__api.log.at(-1)")
+    check("WE: nach Bestätigung genau die offenen Südrollos", last[1] == "close_cover" and sorted(last[2]["entity_id"]) == ["cover.wohnzimmer_fenster", "cover.wohnzimmer_terrassentur"])
+    check("WE: keine JS-Fehler (feste Uhrzeit)", not e2)
+    pg2.close()
+    # Bildschirmschoner: morgen und Hinweis
+    pg.evaluate(f"(() => {{ const p = {PP}; p._saverShow(); }})()"); pg.wait_for_timeout(200)
+    sv = pg.locator(f"{P} .saver").inner_text() if pg.locator(f"{P} .saver").count() else ""
+    check("WE: Schoner zeigt morgen und Hinweis", "Morgen 31° / 17°" in sv and ("rechtzeitig schließen" in sv or "Sonne auf der" in sv))
+    pg.mouse.click(640, 400); pg.wait_for_timeout(200)
+    # Einstellungen: Ausrichtung je Rollo, aus dem Namen geraten
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
+    pg.evaluate("window.__api.set('cover.buro_rollo', 'open', { friendly_name: 'Büro Rollo Südwest' })"); stab(pg, "raeume"); stab(pg, "technik")
+    sel = pg.locator(f'{P} select[data-shade-face="cover.buro_rollo"]')
+    check("WE: Einstellungen listen Rollos (ohne Garagentor)", sel.count() == 1 and pg.locator(f'{P} select[data-shade-face="cover.garagentor"]').count() == 0)
+    check("WE: Ausrichtung aus dem Namen", "Automatisch (Südwest)" in sel.locator("option").first.inner_text())
+    sel.select_option("O"); pg.wait_for_timeout(100)
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.shading)")
+    check("WE: Ausrichtung gespeichert", saved and saved["facing"].get("cover.buro_rollo") == "O" and saved["hot"] == 26)
+
+
 def auswahl(args):
     """Abschnitte zu den Namen (Gruppe oder Abschnitt) auf der Kommandozeile; ohne Namen alle."""
     if not args:

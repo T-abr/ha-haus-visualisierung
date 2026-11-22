@@ -88,7 +88,7 @@ const KompaktMixin = (Base) => class extends Base {
     const btns = (e) => `<button class="pbtn" data-act="list-covers" data-svc="open_cover" data-eids="${esc(e.join(","))}">${icon("mdi:arrow-up")}Auf</button>
       <button class="pbtn" data-act="list-covers" data-svc="close_cover" data-eids="${esc(e.join(","))}">${icon("mdi:arrow-down")}Zu</button>`;
     return `<div class="ptitle"><h1>Beschattung</h1><span class="psub" data-u="chip" data-k="covers"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span><span class="sp"></span>${btns(m.agg.covers)}</div>
-      ${this._listByFloor("cover", (a) => a.covers, btns)}`;
+      ${this._shadeCard()}${this._listByFloor("cover", (a) => a.covers, btns)}`;
   }
 
   _vClimateDense() {
