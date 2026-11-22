@@ -30,9 +30,23 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
 
 ## Installation
 
-1. `custom_components/haus_visualisierung` nach `/config/custom_components/` kopieren.
-2. Home Assistant neu starten.
-3. Einstellungen → Geräte & Dienste → Integration hinzufügen → „Haus Visualisierung“.
+### Über HACS (empfohlen)
+
+1. HACS öffnen → Menü oben rechts (⋮) → **Benutzerdefinierte Repositories**.
+2. Repository `https://github.com/T-abr/ha-haus-visualisierung` eintragen, Typ **Integration**, hinzufügen.
+3. „Haus Visualisierung“ in HACS suchen → **Herunterladen**.
+4. Home Assistant neu starten.
+5. Einstellungen → Geräte & Dienste → Integration hinzufügen → „Haus Visualisierung“.
+
+Neue Versionen zeigt HACS danach als Update an; ein Klick auf **Aktualisieren** und ein Neustart genügen.
+
+### Von Hand
+
+1. ZIP `haus_visualisierung_vX.Y.Z.zip` aus den [Releases](https://github.com/T-abr/ha-haus-visualisierung/releases)
+   laden und entpacken (oder das Repository klonen).
+2. `custom_components/haus_visualisierung` nach `/config/custom_components/` kopieren.
+3. Home Assistant neu starten.
+4. Einstellungen → Geräte & Dienste → Integration hinzufügen → „Haus Visualisierung“.
 
 Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
 
@@ -47,3 +61,6 @@ Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
 - CI: GitHub Actions (`.github/workflows/tests.yml`) prüft bei jedem Pull Request und Push auf `main`
   die Versionen, die Backend-Tests und die Bedienprüfungen.
 - Version setzen: `python3 scripts/bump_version.py patch|minor|major`, ZIP bauen: `python3 scripts/build_zip.py`.
+- Release: nach dem Merge `git tag vX.Y.Z && git push origin vX.Y.Z`. Der Workflow „Release“ prüft, dass der Tag
+  zu `manifest.json` passt, baut das ZIP und veröffentlicht das Release mit dem CHANGELOG-Abschnitt; HACS bietet
+  es danach als Update an.

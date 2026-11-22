@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Installation über HACS
+- Das Repository lässt sich in HACS als benutzerdefiniertes Repository (Typ Integration) hinzufügen; Updates kommen danach per Klick.
+- Workflow „Release“: Ein Tag `vX.Y.Z` baut das ZIP mit `scripts/build_zip.py` und veröffentlicht ein GitHub-Release mit dem CHANGELOG-Abschnitt. Passt der Tag nicht zu `manifest.json`, bricht er ab.
+- Workflow „HACS-Prüfung“ (HACS-Action und hassfest) bei jedem PR.
+- `manifest.json`: Dokumentation, Fehlermeldungen (Issues) und Codeowner zeigen auf dieses Repository.
+
 ### Tests
 - Tests laufen automatisch bei jedem Pull Request und Push auf `main` (GitHub Actions): Versionsprüfung, Backend-Tests und Bedienprüfungen im Browser.
 - Die Browser-Prüfungen laden die echte Frontend-Datei statt einer Kopie im Harness; `tests/harness/panel.js` ist entfernt. `tests/interact.py` meldet Fehler jetzt auch über den Rückgabewert.

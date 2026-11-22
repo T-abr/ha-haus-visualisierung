@@ -1,0 +1,46 @@
+# Release bei Version-Tag: git tag v1.4.0 && git push origin v1.4.0
+# Prüft, dass der Tag zur Version in manifest.json passt, baut das ZIP mit scripts/build_zip.py
+# und veröffentlicht ein GitHub-Release mit dem CHANGELOG-Abschnitt als Beschreibung.
+# HACS bietet jedes Release als Update an.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tag mit manifest.json vergleichen
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          MANIFEST=$(python3 -c 'import json; print(json.load(open("custom_components/haus_visualisierung/manifest.json"))["version"])')
+          if [ "$TAG" != "$MANIFEST" ]; then
+            echo "::error::Tag v$TAG passt nicht zu manifest.json ($MANIFEST)."
+            exit 1
+          fi
+
+      - name: Release-Beschreibung aus CHANGELOG.md
+        run: python3 scripts/release_notes.py "${GITHUB_REF_NAME#v}" > release_notes.md
+
+      - name: ZIP bauen
+        run: python3 scripts/build_zip.py
+
+      - name: Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Haus Visualisierung ${{ github.ref_name }}
+          body_path: release_notes.md
+          files: dist/haus_visualisierung_${{ github.ref_name }}.zip
+          fail_on_unmatched_files: true
