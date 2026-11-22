@@ -1,7 +1,7 @@
 /* Haus Visualisierung – Energie-Seite: Fluss, Kennzahlen, Bilanz heute, Verlauf 24 h. */
 
 import { batteryIcon, dc, esc, icon, isOn, NF0, NF1, num, powerW, setHidden, setHtml, setIcon, setText, setWidth, UPD } from "./grundlagen.js";
-import { finite, TREND_BUCKET, TREND_GAP, TREND_MS, trendAt, trendPath } from "./verlauf.js";
+import { axisCut, axisKey, finite, TREND_BUCKET, TREND_GAP, TREND_MS, trendAt, trendPath } from "./verlauf.js";
 import { trendEnsure, trendSeries } from "./klima.js";
 
 /* ---------- Energie-Seite: Fluss, Kennzahlen, Bilanz heute, Verlauf 24 h ---------- */
@@ -246,12 +246,13 @@ function updateEnTrend(el, ctx) {
   el.querySelector(".ctgrid").innerHTML = ticks.map((v) => `<line x1="0" x2="1000" y1="${y(v * 1000).toFixed(1)}" y2="${y(v * 1000).toFixed(1)}"/>`).join("");
   setHtml(el.querySelector(".cty"), ticks.map((v) => `<span style="top:${y(v * 1000)}%">${NF1.format(v).replace(",0", "")}${v === ticks[ticks.length - 1] ? " kW" : ""}</span>`).join(""));
   const hour = Math.floor(now / 3600000);
-  if (el._hour !== hour) {
-    el._hour = hour;
+  const trx = el.querySelector(".trx"), axk = axisKey(trx, hour);
+  if (el._hour !== axk) {
+    el._hour = axk;
     const tk = []; const d0 = new Date(start); d0.setMinutes(0, 0, 0);
     for (let t = d0.getTime() + 3600000; t < now; t += 3600000) if (new Date(t).getHours() % 6 === 0) tk.push(t);
     el.querySelector(".trgrid").innerHTML = tk.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
-    el.querySelector(".trx").innerHTML = tk.filter((t) => x(t) < 900).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
+    el.querySelector(".trx").innerHTML = tk.filter((t) => x(t) < axisCut(trx)).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
   }
   el._en = { S, start, y };
   if (el._hover !== undefined) enHover(el, el._hover);
