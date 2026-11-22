@@ -55,7 +55,11 @@ Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
 - Handbuch: Projekt-Dokument „Haus Visualisierung – Benutzerhandbuch“; Änderungen: `CHANGELOG.md`;
   Performance: `PERFORMANCE.md`.
 - Tests: `pytest` (Backend in echter HA-Instanz), `python3 tests/interact.py` (Bedienung im Browser),
-  `python3 tests/perf/measure.py` (Performance).
+  `python3 tests/perf/measure.py` (Performance). Abhängigkeiten: `pip install -r tests/requirements.txt`.
+  Die Browser-Prüfungen laden direkt `custom_components/haus_visualisierung/frontend/haus-visualisierung.js`
+  (über `tests/harness_server.py`), eine Kopie im Harness gibt es nicht.
+- CI: GitHub Actions (`.github/workflows/tests.yml`) prüft bei jedem Pull Request und Push auf `main`
+  die Versionen, die Backend-Tests und die Bedienprüfungen.
 - Version setzen: `python3 scripts/bump_version.py patch|minor|major`, ZIP bauen: `python3 scripts/build_zip.py`.
 - Release: nach dem Merge `git tag vX.Y.Z && git push origin vX.Y.Z`. Der Workflow „Release“ prüft, dass der Tag
   zu `manifest.json` passt, baut das ZIP und veröffentlicht das Release mit dem CHANGELOG-Abschnitt; HACS bietet
