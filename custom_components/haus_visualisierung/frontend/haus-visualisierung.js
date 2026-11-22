@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.3.1";
+const VERSION = "1.4.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -552,6 +552,7 @@ function roomTileHTML(a, nav = true, opts = {}) {
         <span class="al al-pres" hidden title="Präsenz"><i class="pulse"></i></span>
       </span></div>
     <div class="room-clim"><span class="rt"></span><span class="rh"></span></div>
+    ${opts.spark ? sparkHTML(a) : ""}
     ${opts.act ? '<div class="ract"></div>' : ""}
     <div class="room-foot">
       ${a.lights.length ? `<button class="mini ml" data-act="area-lights" data-area="${esc(a.id)}" title="Licht schalten">${icon("mdi:lightbulb-group")}<span></span></button>` : ""}
@@ -1744,6 +1745,202 @@ function updateWallbox(el, ctx) {
   setText(el, ".techs", charging ? `${NF1.format(kw ?? 0)} kW` : connected ? "angesteckt" : "");
 }
 
+/* ---------- Klimaseite: Temperaturen 24 h (Haus Ø und Außen) und Verlauf je Raum ---------- */
+/* Eine Recorder-Abfrage für alle Räume und die Außentemperatur (über die Kopfkarte), danach fortgeschrieben.
+   Farben (dunkle Fläche, geprüft): innen #e26a1c, außen #2a9ad8. Eine gemeinsame Achse in °C. */
+const CL_IN = "#e26a1c", CL_OUT = "#2a9ad8";
+
+/** Lädt fehlende Verläufe gesammelt; cb läuft nach dem Laden. Ergebnis: true, solange noch geladen wird. */
+function trendEnsure(h, ids, cb) {
+  const now = Date.now();
+  const missing = ids.filter((e) => { const r = TREND.get(e); return !r || (!r.loading && now - r.at > TREND_TTL && !r.live); });
+  if (missing.length && h.callWS) {
+    for (const e of missing) TREND.set(e, { at: now, pts: [], loading: true, seen: null });
+    trendFetch(h, missing).then((res) => { for (const e of missing) TREND.set(e, { at: Date.now(), pts: res[e] || [], loading: false, seen: null }); })
+      .catch(() => { for (const e of missing) TREND.set(e, { at: Date.now(), pts: [], loading: false, seen: null }); })
+      .finally(cb);
+  }
+  return ids.some((e) => TREND.get(e) && TREND.get(e).loading);
+}
+
+/** Reihe eines Sensors für die Anzeige: gespeicherte Werte + aktueller Wert bis „jetzt“. */
+function trendSeries(h, eid) {
+  const rec = eid && TREND.get(eid);
+  if (!rec || rec.loading) return null;
+  const fromRecorder = rec.pts.some((p) => !p.live);
+  rec.live = true; rec.at = Date.now();
+  trendPush(rec, h.states[eid]);
+  if (!fromRecorder && rec.pts.length < 2) return [];
+  const pts = rec.pts.slice(), cur = num(h.states[eid]);
+  if (cur !== null && pts.length && pts[pts.length - 1][0] < Date.now()) pts.push([Date.now(), cur]);
+  return pts;
+}
+
+function outdoorTempId(h, m, L) {
+  const pick = (L.heating && L.heating.outdoor) || (m.tech && m.tech.heat && m.tech.heat.outdoor);
+  if (pick && h.states[pick]) return pick;
+  return Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "temperature" && OUTDOOR_RE.test(`${e} ${h.states[e].attributes.friendly_name || ""}`)) || "";
+}
+
+const climRooms = (m) => m.visibleAreas.filter((a) => a.tempId && !OUTDOOR_RE.test(a.name) && !m.outdoor.some((f) => f.areas.includes(a)));
+
+function climTrendHTML() {
+  return `<div class="glass ctrend" data-u="climtrend">
+    <div class="trh"><span class="trt">${icon("mdi:chart-line")}Temperaturen 24 h</span>
+      <span class="ctl in"><i></i>Haus Ø<b></b></span><span class="ctl out"><i></i>Außen<b></b></span></div>
+    <div class="ctstats"></div>
+    <div class="trc ctc"><svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><g class="trgrid"></g><g class="ctgrid"></g><path class="ctp out"/><path class="ctp in"/></svg>
+      <div class="cty"></div><span class="ctend in"></span><span class="ctend out"></span>
+      <div class="trx"></div><div class="trcur"><i class="cin"></i><i class="cout"></i></div><div class="trtip"></div>
+      <div class="trmsg">${icon("mdi:loading", "spin")}Lade Verlauf …</div></div></div>`;
+}
+
+/** Durchschnitt mehrerer Reihen je 5 Minuten. */
+function avgSeries(list, start, now) {
+  const n = Math.ceil((now - start) / TREND_BUCKET) + 1, sum = new Float64Array(n), cnt = new Uint16Array(n);
+  for (const pts of list) {
+    let i = 0;
+    for (let k = 0; k < n; k++) {
+      const t = start + k * TREND_BUCKET;
+      while (i < pts.length - 1 && pts[i + 1][0] <= t) i++;
+      const p = pts[i];
+      if (p && p[0] <= t + TREND_BUCKET && t - p[0] <= TREND_GAP && finite(p[1])) { sum[k] += p[1]; cnt[k]++; }
+    }
+  }
+  const out = [];
+  for (let k = 0; k < n; k++) if (cnt[k]) out.push([Math.min(now, start + k * TREND_BUCKET), sum[k] / cnt[k]]);
+  return out;
+}
+
+function updateClimTrend(el, ctx) {
+  const h = ctx._hass, m = ctx._model, now = Date.now(), start = now - TREND_MS;
+  const rooms = climRooms(m), out = outdoorTempId(h, m, ctx._layout);
+  // alle Fühler der Seite in einer Abfrage – auch Außenbereiche, die nur einen Raum-Verlauf haben
+  const ids = [...new Set([...m.visibleAreas.map((a) => a.tempId), out].filter(Boolean))];
+  const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="climtrend"],[data-u="spark"]').forEach((x) => x.isConnected && UPD[x.dataset.u].run(x, ctx));
+  const msg = el.querySelector(".trmsg");
+  if (trendEnsure(h, ids, rerun)) { setHidden(msg, false); return; }
+  const outS = (out && trendSeries(h, out)) || [];
+  // Kennzahlen jetzt
+  const curs = rooms.map((a) => [a, num(h.states[a.tempId])]).filter(([, v]) => v !== null).sort((x, y) => x[1] - y[1]);
+  const avgNow = curs.length ? curs.reduce((s, [, v]) => s + v, 0) / curs.length : null;
+  const outNow = num(h.states[out]);
+  const outDay = trendScale(outS.filter(([t]) => t >= start).map((p) => p[1]), 0);
+  const heating = m.visibleAreas.filter((a) => a.climates.some((c) => h.states[c] && h.states[c].attributes.hvac_action === "heating")).length;
+  const stat = (lbl, val, sub = "") => `<span class="cts"><small>${lbl}</small><b>${val}</b>${sub ? `<em>${sub}</em>` : ""}</span>`;
+  setHtml(el.querySelector(".ctstats"), [
+    avgNow !== null ? stat("Innen Ø", `${NF1.format(avgNow)}°`) : "",
+    curs.length > 1 ? stat("Kühlster Raum", `${NF1.format(curs[0][1])}°`, esc(curs[0][0].name)) : "",
+    curs.length > 1 ? stat("Wärmster Raum", `${NF1.format(curs[curs.length - 1][1])}°`, esc(curs[curs.length - 1][0].name)) : "",
+    outNow !== null ? stat("Außen", `${NF1.format(outNow)}°`, outDay ? `24 h: ${NF1.format(outDay.min)}° bis ${NF1.format(outDay.max)}°` : "") : "",
+    m.agg.climates.length ? stat("Heizt", `${heating} ${heating === 1 ? "Raum" : "Räume"}`) : "",
+  ].join(""));
+  setText(el, ".ctl.in b", avgNow !== null ? `${NF1.format(avgNow)}°` : "–");
+  setText(el, ".ctl.out b", outNow !== null ? `${NF1.format(outNow)}°` : "–");
+  setHidden(el.querySelector(".ctl.out"), !out);
+  // Kurve höchstens alle 15 s neu rechnen (5-Minuten-Werte), Kennzahlen oben sofort
+  if (el._drawn && now - el._drawn < 15000 && !el._force) {
+    if (!el._tq) el._tq = setTimeout(() => { el._tq = 0; if (el.isConnected) { el._force = true; updateClimTrend(el, ctx); el._force = false; } }, 15000 - (now - el._drawn));
+    return;
+  }
+  const inner = rooms.map((a) => trendSeries(h, a.tempId)).filter((p) => p && p.length > 1);
+  const S = { in: inner.length ? avgSeries(inner, start, now) : [], out: outS };
+  if (S.in.length < 2 && S.out.length < 2) {
+    setHidden(msg, false);
+    msg.innerHTML = `${icon("mdi:chart-line-variant")}Noch kein Verlauf aufgezeichnet (Recorder).`;
+    el.classList.add("nodata"); return;
+  }
+  setHidden(msg, true); el.classList.remove("nodata");
+  el._drawn = now;
+  // eine Achse für beide Reihen, runde Teilstriche
+  const all = [...S.in, ...S.out].filter(([t]) => t >= start).map((p) => p[1]).filter(finite);
+  const lo0 = Math.min(...all) - 0.5, hi0 = Math.max(...all) + 0.5;
+  // höchstens vier Abschnitte auf der Achse, runde Teilstriche
+  let step = 20, lo = Math.floor(lo0 / 20) * 20, hi = Math.ceil(hi0 / 20) * 20;
+  for (const s of [1, 2, 5, 10]) {
+    const l = Math.floor(lo0 / s) * s, u = Math.ceil(hi0 / s) * s;
+    if ((u - l) / s <= 4) { step = s; lo = l; hi = u; break; }
+  }
+  const H = 100, pad = 4, x = (t) => ((t - start) / TREND_MS) * 1000, y = (v) => H - pad - ((v - lo) / (hi - lo)) * (H - 2 * pad);
+  el.querySelector(".ctp.in").setAttribute("d", trendPath(S.in, x, y));
+  el.querySelector(".ctp.out").setAttribute("d", trendPath(S.out, x, y));
+  const ticks = []; for (let v = lo; v <= hi; v += step) ticks.push(v);
+  el.querySelector(".ctgrid").innerHTML = ticks.map((v) => `<line x1="0" x2="1000" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`).join("");
+  setHtml(el.querySelector(".cty"), ticks.map((v) => `<span style="top:${y(v)}%">${v}°</span>`).join(""));
+  // Werte am Linienende (direkte Beschriftung)
+  for (const k of ["in", "out"]) {
+    const last = S[k][S[k].length - 1], lab = el.querySelector(`.ctend.${k}`);
+    setHidden(lab, !last);
+    if (last) { lab.style.top = `${y(last[1])}%`; lab.textContent = `${NF1.format(last[1])}°`; }
+  }
+  const li = el.querySelector(".ctend.in"), lo2 = el.querySelector(".ctend.out");
+  if (!li.hidden && !lo2.hidden && Math.abs(parseFloat(li.style.top) - parseFloat(lo2.style.top)) < 12) {
+    const up = parseFloat(li.style.top) < parseFloat(lo2.style.top) ? li : lo2, dn = up === li ? lo2 : li;
+    up.style.top = `${parseFloat(up.style.top) - 6}%`; dn.style.top = `${parseFloat(dn.style.top) + 6}%`;
+  }
+  const hour = Math.floor(now / 3600000);
+  if (el._hour !== hour) {
+    el._hour = hour;
+    const tk = []; const d0 = new Date(start); d0.setMinutes(0, 0, 0);
+    for (let t = d0.getTime() + 3600000; t < now; t += 3600000) if (new Date(t).getHours() % 6 === 0) tk.push(t);
+    el.querySelector(".trgrid").innerHTML = tk.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
+    el.querySelector(".trx").innerHTML = tk.filter((t) => x(t) < 900).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
+  }
+  el._ct = { S, start, y };
+  if (el._hover !== undefined) climHover(el, el._hover);
+}
+
+function climHover(el, frac) {
+  const T = el._ct, tip = el.querySelector(".trtip"), cur = el.querySelector(".trcur");
+  if (!T || frac === null) { el._hover = undefined; cur.classList.remove("on"); tip.classList.remove("on"); return; }
+  el._hover = frac;
+  const t = T.start + frac * TREND_MS, parts = [];
+  for (const [k, cls, lbl] of [["in", "cin", "Haus Ø"], ["out", "cout", "Außen"]]) {
+    const p = trendAt(T.S[k], t), dot = cur.querySelector(`i.${cls}`);
+    if (!p) { dot.style.display = "none"; continue; }
+    dot.style.display = ""; dot.style.top = `${T.y(p[1])}%`;
+    parts.push(`<span class="tk ${k}"><i></i>${lbl} <b>${NF1.format(p[1])}°</b></span>`);
+  }
+  tip.innerHTML = `<span>${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>${parts.join("")}`;
+  cur.style.left = `${frac * 100}%`; tip.style.left = `${Math.min(Math.max(frac * 100, 15), 85)}%`;
+  cur.classList.add("on"); tip.classList.add("on");
+}
+
+/* Verlauf je Raum: eine Reihe, Soll als gestrichelte Linie, Spanne der letzten 24 h */
+function sparkHTML(a) {
+  return a.tempId ? `<span class="kspark" data-u="spark" data-area="${esc(a.id)}"><svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"><path class="spset"/><path class="spl"/></svg><small class="sprg"></small><span class="sptip"></span></span>` : `<span class="kspark none"></span>`;
+}
+
+function updateSpark(el, ctx) {
+  const a = ctx._model.areas.get(el.dataset.area);
+  if (!a || !a.tempId) return;
+  const h = ctx._hass, now = Date.now(), start = now - TREND_MS;
+  if (trendEnsure(h, [a.tempId], () => el.isConnected && updateSpark(el, ctx))) return;
+  const pts = trendSeries(h, a.tempId) || [];
+  const cl = a.climates.map((c) => h.states[c]).find((s) => s && finite(s.attributes.temperature));
+  const soll = cl ? cl.attributes.temperature : null;
+  const sc = trendScale([...pts.filter(([t]) => t >= start).map((p) => p[1]), soll].filter(finite), 1.5);
+  if (!sc || pts.length < 2) { el.classList.add("empty"); el.querySelector(".spl").setAttribute("d", ""); setText(el, ".sprg", ""); return; }
+  el.classList.remove("empty");
+  const x = (t) => ((t - start) / TREND_MS) * 200, y = (v) => 38 - ((v - sc.lo) / (sc.hi - sc.lo)) * 36;
+  el.querySelector(".spl").setAttribute("d", trendPath(pts, x, y));
+  el.querySelector(".spset").setAttribute("d", soll !== null ? `M0 ${y(soll).toFixed(1)}L200 ${y(soll).toFixed(1)}` : "");
+  const day = trendScale(pts.filter(([t]) => t >= start).map((p) => p[1]), 0);
+  setText(el, ".sprg", day ? `${NF1.format(day.min)}–${NF1.format(day.max)}°` : "");
+  el.title = `${a.name}: 24 h ${day ? `${NF1.format(day.min)} bis ${NF1.format(day.max)} °C` : ""}${soll !== null ? ` · Soll ${NF1.format(soll)} °C` : ""}`;
+  el._sp = { pts, start };
+}
+
+function sparkHover(el, frac) {
+  const T = el._sp, tip = el.querySelector(".sptip");
+  if (!T || frac === null) { tip.classList.remove("on"); return; }
+  const t = T.start + frac * TREND_MS, p = trendAt(T.pts, t);
+  if (!p) { tip.classList.remove("on"); return; }
+  tip.textContent = `${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} · ${NF1.format(p[1])}°`;
+  tip.style.left = `${Math.min(Math.max(frac * 100, 20), 80)}%`;
+  tip.classList.add("on");
+}
+
 const UPD = {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
   alarmpage: { watch: (el, c) => alertWatch(c._model, c._layout), run: (el, c) => c._renderAlarmPage(el) },
@@ -1765,6 +1962,8 @@ const UPD = {
   gcount: { watch: (el) => (el._eids = (el.dataset.eids || "").split(",").filter(Boolean)), run: updateGroupCount },
   heat: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.heat), run: updateHeat },
   wallbox: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.wb), run: updateWallbox },
+  climtrend: { watch: (el, c) => [...climRooms(c._model).map((a) => a.tempId), outdoorTempId(c._hass, c._model, c._layout), ...c._model.agg.climates].filter(Boolean), run: updateClimTrend },
+  spark: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, ...a.climates].filter(Boolean) : []; }, run: updateSpark },
   trend: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, a.humId].filter(Boolean) : []; }, run: updateTrend },
 };
 
@@ -2142,6 +2341,37 @@ details[open]>summary.shead{padding-bottom:2px}
 .only-on .rlist:not(:has(.tile.light.on)){display:none}
 .only-on .fhead:has(+ .rlist:not(:has(.tile.light.on))){display:none}
 .ktable{padding:2px 0}
+.ktable.withspark .khead,.ktable.withspark .krow{grid-template-columns:minmax(150px,230px) 70px 76px minmax(120px,190px) 1fr}
+.kspark{position:relative;display:flex;align-items:center;gap:6px;height:34px;min-width:0;cursor:crosshair;touch-action:pan-y}
+.kspark svg{flex:1;min-width:60px;height:28px;overflow:visible}
+.kspark .spl{fill:none;stroke:#e26a1c;stroke-width:1.8;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.kspark .spset{fill:none;stroke:var(--hv-faint);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.kspark .sprg{flex:none;font-size:11px;color:var(--hv-dim);font-variant-numeric:tabular-nums;min-width:58px}
+.kspark.empty .sprg::after{content:"–"}.kspark.none{cursor:default}
+.sptip{position:absolute;bottom:calc(100% + 2px);transform:translateX(-50%);display:none;padding:3px 8px;border-radius:8px;background:rgba(10,14,23,.94);border:1px solid var(--hv-line);font-size:11.5px;white-space:nowrap;pointer-events:none;z-index:3;font-variant-numeric:tabular-nums}
+.sptip.on{display:block}
+.room .kspark{margin:2px 0 4px;position:relative;z-index:1}
+.narrow .krow .kna{display:none}
+.ctrend{padding:12px 16px 10px;margin-bottom:16px}
+.dense .ctrend{padding:9px 12px 8px;margin-bottom:12px;border-radius:16px}
+.ctl{display:inline-flex;align-items:baseline;gap:6px;font-size:13px;color:var(--hv-dim)}
+.ctl i{width:14px;height:3px;border-radius:2px;align-self:center}.ctl.in i{background:#e26a1c}.ctl.out i{background:#2a9ad8}
+.ctl b{color:var(--hv-text);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
+.ctstats{display:flex;flex-wrap:wrap;gap:6px 22px;margin:0 0 10px}
+.cts{display:flex;flex-direction:column;min-width:0}.cts small{font-size:11px;color:var(--hv-dim)}
+.cts b{font-size:18px;font-weight:400;font-variant-numeric:tabular-nums}.cts em{font-style:normal;font-size:11.5px;color:var(--hv-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctc{height:140px;margin:0 40px 18px 34px}.dense .ctc{height:110px}
+.ctp{fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+.ctp.in{stroke:#e26a1c}.ctp.out{stroke:#2a9ad8}
+.ctgrid line{stroke:var(--hv-line);stroke-width:1;vector-effect:non-scaling-stroke}
+.cty span{position:absolute;right:calc(100% + 6px);transform:translateY(-50%);font-size:10.5px;color:var(--hv-faint);font-variant-numeric:tabular-nums}
+.ctend{position:absolute;left:calc(100% + 6px);transform:translateY(-50%);font-size:11px;color:var(--hv-text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.trcur i.cin{background:#e26a1c}.trcur i.cout{background:#2a9ad8}
+.trtip .tk{display:inline-flex;align-items:center;gap:5px;color:var(--hv-dim)}.trtip .tk i{width:8px;height:8px;border-radius:50%}.trtip .tk.in i{background:#e26a1c}.trtip .tk.out i{background:#2a9ad8}
+.trtip .tk b{color:var(--hv-text);font-weight:500}
+.ctrend.nodata .ctc{height:48px}.ctrend.nodata .cty,.ctrend.nodata .trx,.ctrend.nodata .ctend{display:none}
+.narrow .ktable.withspark .krow{grid-template-columns:1fr auto auto}.narrow .krow .kspark{grid-column:1/-1;order:5}
+.narrow .ctc{margin:0 34px 18px 30px}
 .khead,.krow{display:grid;grid-template-columns:minmax(150px,230px) 70px 76px 1fr;align-items:center;gap:10px;padding:6px 14px}
 .khead{font-size:10.5px;color:var(--hv-faint);letter-spacing:.1em;text-transform:uppercase;padding-top:10px;padding-bottom:2px}
 .krow+.krow{border-top:1px solid var(--hv-line)}
@@ -3243,6 +3473,14 @@ class HausVisualisierungPanel extends HvBase {
       r.addEventListener("click", (e) => { if (this._alSwiped && Date.now() - this._alSwiped < 400 && e.target.closest(".alrow")) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
       // Verlauf: Wert unter Maus oder Finger anzeigen
       const trMove = (e) => {
+        const frac = (n) => { const b = n.getBoundingClientRect(); return b.width ? Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)) : null; };
+        const ct = e.target.closest && e.target.closest(".ctc");
+        if (ct) { clearTimeout(this._trHideT); this._ctHover = ct.closest(".ctrend"); climHover(this._ctHover, frac(ct)); }
+        else if (this._ctHover) { climHover(this._ctHover, null); this._ctHover = null; }
+        const spk = e.target.closest && e.target.closest(".kspark");
+        if (spk && spk !== this._spHover && this._spHover) sparkHover(this._spHover, null);
+        if (spk) { clearTimeout(this._trHideT); this._spHover = spk; sparkHover(spk, frac(spk)); }
+        else if (this._spHover) { sparkHover(this._spHover, null); this._spHover = null; }
         const hc = e.target.closest && e.target.closest(".hcc");
         if (hc) { const b = hc.getBoundingClientRect(); this._hcHover = hc; heatHover(hc, Math.min(1, Math.max(0, (e.clientX - b.left) / b.width))); }
         else if (this._hcHover) { heatHover(this._hcHover, null); this._hcHover = null; }
@@ -3257,15 +3495,23 @@ class HausVisualisierungPanel extends HvBase {
       r.addEventListener("pointermove", trMove);
       r.addEventListener("pointerdown", trMove);
       r.addEventListener("pointerout", (e) => {
-        if (!this._trHover || e.pointerType === "touch") return;
+        if (e.pointerType === "touch") return;
+        const to0 = e.relatedTarget;
+        if (this._ctHover && !(to0 && to0.closest && to0.closest(".ctc"))) { climHover(this._ctHover, null); this._ctHover = null; }
+        if (this._spHover && !(to0 && to0.closest && to0.closest(".kspark"))) { sparkHover(this._spHover, null); this._spHover = null; }
+        if (!this._trHover) return;
         const to = e.relatedTarget;
         if (!to || !to.closest || !to.closest(".trc")) { trendHover(this._trHover, null); this._trHover = null; }
       });
       r.addEventListener("pointerup", (e) => {
-        if (e.pointerType !== "touch" || !this._trHover) return;
-        const el = this._trHover;
+        if (e.pointerType !== "touch" || !(this._trHover || this._ctHover || this._spHover)) return;
         clearTimeout(this._trHideT);
-        this._trHideT = setTimeout(() => { trendHover(el, null); if (this._trHover === el) this._trHover = null; }, 2500);
+        // am Handy bleibt der Wert kurz stehen
+        this._trHideT = setTimeout(() => {
+          if (this._trHover) { trendHover(this._trHover, null); this._trHover = null; }
+          if (this._ctHover) { climHover(this._ctHover, null); this._ctHover = null; }
+          if (this._spHover) { sparkHover(this._spHover, null); this._spHover = null; }
+        }, 2500);
       });
       // Einstellungen: Sortieren per Ziehen
       r.addEventListener("pointerdown", (e) => this._sortStart(e));
@@ -4073,11 +4319,13 @@ class HausVisualisierungPanel extends HvBase {
     const m = this._model, h = this._hass;
     const rooms = m.visibleAreas.filter((a) => a.tempId || a.climates.length);
     if (!rooms.length) return pageEmpty("Klima", "mdi:thermometer-off", "Keine Temperatur-Sensoren oder Thermostate in den Bereichen gefunden.");
-    let out = `<div class="ptitle"><h1>Klima</h1><span class="psub" data-u="chip" data-k="temp"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span></div>`;
+    const tr = this._layout.show_trends !== false;
+    let out = `<div class="ptitle"><h1>Klima</h1><span class="psub" data-u="chip" data-k="temp"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span></div>
+      ${tr && climRooms(m).length ? climTrendHTML() : ""}`;
     for (const f of m.floors) {
       const list = f.areas.filter((a) => a.tempId || a.climates.length);
       if (!list.length) continue;
-      out += `<div class="fhead">${esc(f.name)}<span class="sp"></span></div><div class="rooms" style="padding:0">${list.map((a) => roomTileHTML(a)).join("")}</div>`;
+      out += `<div class="fhead">${esc(f.name)}<span class="sp"></span></div><div class="rooms" style="padding:0">${list.map((a) => roomTileHTML(a, true, { spark: tr && !!a.tempId })).join("")}</div>`;
       const cl = list.filter((a) => a.climates.length);
       if (cl.length) out += `<div class="sgrid" style="margin-top:14px">${cl.map((a) => sectionHTML(h, a, "climate", a.climates, a.name, a.icon, true)).join("")}</div>`;
     }
@@ -4271,19 +4519,21 @@ class HausVisualisierungPanel extends HvBase {
     const m = this._model, h = this._hass;
     const rooms = m.visibleAreas.filter((a) => a.tempId || a.climates.length);
     if (!rooms.length) return pageEmpty("Klima", "mdi:thermometer-off", "Keine Temperatur-Sensoren oder Thermostate in den Bereichen gefunden.");
+    const tr = this._layout.show_trends !== false;
     let out = `<div class="ptitle"><h1>Klima</h1><span class="psub" data-u="chip" data-k="temp"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span>
-      <span class="psub" data-u="chip" data-k="heat"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span></div>`;
+      <span class="psub" data-u="chip" data-k="heat"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span></div>
+      ${tr && climRooms(m).length ? climTrendHTML() : ""}`;
     for (const f of m.floors) {
       const list = f.areas.filter((a) => a.tempId || a.climates.length);
       if (!list.length) continue;
-      out += `<div class="fhead">${esc(f.name)}<span class="sp"></span></div><div class="glass ktable">
-        <div class="khead"><span>Raum</span><span>Ist</span><span>Feuchte</span><span>Thermostat</span></div>
+      out += `<div class="fhead">${esc(f.name)}<span class="sp"></span></div><div class="glass ktable${tr ? " withspark" : ""}">
+        <div class="khead"><span>Raum</span><span>Ist</span><span>Feuchte</span>${tr ? "<span>24 h</span>" : ""}<span>Thermostat</span></div>
         ${list.map((a) => {
           const cl = a.climates[0];
           const cell = cl ? `<div class="tile row climate kcell" data-u="tile" data-eid="${esc(cl)}" data-act="more" data-long="1"><span class="tic">${icon("mdi:thermostat")}</span>
               <span class="rbtns"><button class="btn" data-act="clim" data-step="-1" data-eid="${esc(cl)}" title="Kälter">${icon("mdi:minus")}</button><span class="ttarget"></span><button class="btn" data-act="clim" data-step="1" data-eid="${esc(cl)}" title="Wärmer">${icon("mdi:plus")}</button></span>
               <span class="tstate"></span></div>` : `<span class="kna">–</span>`;
-          return `<div class="krow" data-u="room" data-area="${esc(a.id)}"><span class="kname" data-act="go" data-to="raum/${esc(a.id)}">${icon(a.icon)}${esc(a.name)}</span><span class="rt"></span><span class="rh"></span>${cell}</div>`;
+          return `<div class="krow" data-u="room" data-area="${esc(a.id)}"><span class="kname" data-act="go" data-to="raum/${esc(a.id)}">${icon(a.icon)}${esc(a.name)}</span><span class="rt"></span><span class="rh"></span>${tr ? sparkHTML(a) : ""}${cell}</div>`;
         }).join("")}</div>`;
     }
     return out;
@@ -4407,7 +4657,7 @@ class HausVisualisierungPanel extends HvBase {
       <div class="set glass"><h2>${icon("mdi:tune-variant")}Darstellung</h2>
         ${sw("confirm_quick", "Schnellzugriff bestätigen", "Abfrage vor „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff")}
         ${sw("glass", "Glas-Effekt", "Weichzeichner hinter Karten; auf schwachen Tablets ausschalten")}
-        ${sw("show_trends", "Verlauf auf Raumseiten", "Temperatur und Luftfeuchte der letzten 24 Stunden aus dem Recorder")}
+        ${sw("show_trends", "Verläufe (Raumseiten und Klima)", "Temperatur und Luftfeuchte der letzten 24 Stunden aus dem Recorder")}
         ${sw("show_energy_sensors", "Energie-Sensoren in Räumen", "Leistung, Energie, Strom, Spannung")}
         ${sw("show_other", "Bereich „Weitere“", "Auswahlen, Zahlen und Tasten")}
         <div class="srow"><span class="lbl">Darstellung<small>Kompakt: mehr auf einen Blick · Komfort: große Kacheln fürs Wandpanel</small></span><select class="inp" data-set="density"><option value="kompakt" ${D.density !== "komfort" ? "selected" : ""}>Kompakt</option><option value="komfort" ${D.density === "komfort" ? "selected" : ""}>Komfort</option></select></div>

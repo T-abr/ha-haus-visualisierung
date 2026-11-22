@@ -4,6 +4,24 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.4.0 – 2026-11-22
+
+### Neu – Temperaturverläufe auf der Klimaseite
+- **Kopfkarte „Temperaturen 24 h“** (Kompakt und Komfort): Haus-Durchschnitt aller Innenräume und Außentemperatur der letzten 24 Stunden in einem Diagramm mit einer gemeinsamen °C-Achse. Werte direkt am Linienende, Legende mit aktuellen Werten. Maus oder Finger zeigen Uhrzeit und beide Werte.
+- **Kennzahlen:** Innen Ø, kühlster und wärmster Raum (mit Namen), Außen mit der Spanne der letzten 24 Stunden, Anzahl heizender Räume.
+- **Verlauf je Raum:** in der Kompakt-Tabelle als neue Spalte „24 h“, in Komfort in der Raumkachel. Darin die Temperaturkurve, die Soll-Temperatur des Thermostats als gestrichelte Linie und die Tagesspanne (min–max); Zeiger zeigt den Wert zu jeder Uhrzeit.
+- Farben für innen und außen auf der dunklen Fläche geprüft: Helligkeit, Kontrast und Unterscheidbarkeit bei Farbsehschwäche.
+- Die Einstellung heißt jetzt „Verläufe (Raumseiten und Klima)“ und schaltet beides ab.
+
+### Tests
+- Bedienung: 14 neue Prüfungen (358 Prüfungen): eine gesammelte Abfrage, Kurven, Kennzahlen, Achse, Beschriftung am Linienende, Zeiger, Raum-Verlauf mit Soll-Linie und Spanne, Live-Werte ohne Neuaufbau und ohne Abfrage, Komfort-Kacheln, ohne Recorder, abschaltbar.
+- Backend unverändert (15 Backend-Tests).
+
+### Performance
+- Genau eine Recorder-Abfrage für alle Fühler der Seite, auch Außenbereiche (5-Minuten-Statistik). Vorher wäre jeder Außenbereich einzeln geladen worden; beim Messen gefunden und behoben. Beim Blättern innerhalb von 10 Minuten keine weitere Abfrage.
+- Großes Testhaus (24 Räume): Klimaseite 19,5 ms Aufbau (Kompakt), 27,4 ms (Komfort). Eine geänderte Raumtemperatur kostet ≈ 0,35 ms. Der Haus-Durchschnitt wird höchstens alle 15 s neu berechnet, die Kennzahlen sofort. Fremde Sensoren lösen nichts aus.
+- Übrige Seiten unverändert: 0 Neuaufbauten, hass-Setter Ø 18–33 µs.
+
 ## 1.3.1 – 2026-11-20
 
 ### Behoben
