@@ -111,6 +111,14 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     // Bilanz: 3240 PV + 5532 Netz = 612 Haus + 7360 Wallbox + 800 Speicher (lädt)
     ent("sensor.netz_leistung", 5532, { friendly_name: "Netz", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
     ent("sensor.growatt_modbus_battery_power", 800, { friendly_name: "Akku Leistung", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
+    // Dynamischer Strompreis wie Nordpool: Stundenpreise heute und morgen (günstig nachts und mittags 12–15 Uhr)
+    {
+      const P = [27, 25, 22, 21, 21, 23, 29, 34, 33, 30, 26, 22, 18, 16, 17, 21, 27, 35, 38, 36, 32, 30, 29, 28].map((c) => c / 100);
+      const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+      const raw = (day, add) => P.map((v, i) => { const s = new Date(d0); s.setDate(s.getDate() + day); s.setHours(i); const e = new Date(s); e.setHours(i + 1); return { start: s.toISOString(), end: e.toISOString(), value: Math.round((v + add) * 1000) / 1000 }; });
+      ent("sensor.nordpool_kwh_de_eur", P[new Date().getHours()], { friendly_name: "Strompreis", unit_of_measurement: "EUR/kWh", state_class: "measurement",
+        today: P, tomorrow: P.map((v) => Math.round((v + 0.01) * 1000) / 1000), raw_today: raw(0, 0), raw_tomorrow: raw(1, 0.01), tomorrow_valid: true });
+    }
     ent("light.keller_flur", "unavailable", { friendly_name: "Keller Flur Licht" }, "hauswirtschaftsraum");
     ent("switch.gartenpumpe", "unavailable", { friendly_name: "Gartenpumpe" }, "garten");
     ent("sensor.debug_noise", 1, { friendly_name: "Rauschen" }, "wohnzimmer", { labels: ["no_dboard"] });

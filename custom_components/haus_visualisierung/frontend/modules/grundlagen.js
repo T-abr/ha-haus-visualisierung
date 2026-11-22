@@ -8,6 +8,7 @@ const DEFAULT_LAYOUT = {
   pins: {}, favorites: [], hidden_entities: [], hide_labels: ["no_dboard", "no-dboard"],
   header: { power: "", pv: "", battery: "", grid: "" },
   energy: { enabled: true, battery_power: "", grid_invert: false, battery_invert: false },
+  price: { sensor: "", use_sensor: true, fixed_ct: 30, feed_in_ct: 8, surcharge_ct: 0, window_h: 3 },
   links: [
     { title: "Solar", icon: "mdi:solar-power-variant", path: "/solar-visualisierung", embed: true, mode: "theme" },
     { title: "Kameras", icon: "mdi:cctv", path: "/protect-visualisierung", embed: true, mode: "theme" },
@@ -49,6 +50,7 @@ const withDefaults = (l) => {
     heating: { ...structuredClone(DEFAULT_LAYOUT.heating), ...((l && l.heating) || {}), manual: { ...DEFAULT_LAYOUT.heating.manual, ...((l && l.heating && l.heating.manual) || {}) } },
     wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}) },
     energy: { ...DEFAULT_LAYOUT.energy, ...((l && l.energy) || {}) },
+    price: { ...DEFAULT_LAYOUT.price, ...((l && l.price) || {}) },
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
     shading: { ...DEFAULT_LAYOUT.shading, ...((l && l.shading) || {}), facing: { ...((l && l.shading && l.shading.facing) || {}) } },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },

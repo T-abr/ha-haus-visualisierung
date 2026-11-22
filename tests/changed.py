@@ -28,6 +28,7 @@ GRUPPEN_FUER = {
     "modules/verlauf.js": {"verlauf", "klima", "energie", "handy"},
     "modules/energie.js": {"energie", "panels"},
     "modules/technik.js": {"technik"},
+    "modules/strompreis.js": {"energie", "technik"},
     "modules/panel-alarmseite.js": {"alarme"},
     "modules/panel-klingel.js": {"klingel"},
     "modules/panel-wandpanel.js": {"wandpanel", "wetter"},

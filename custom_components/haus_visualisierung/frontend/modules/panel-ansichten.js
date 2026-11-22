@@ -9,8 +9,8 @@ import { alertsCardHTML } from "./warnungen.js";
 import { trendCardHTML } from "./verlauf.js";
 import { heatCardHTML, wbCardHTML } from "./technik.js";
 import { climRooms, climTrendHTML, humRooms } from "./klima.js";
-import { enDayHTML, energyFlowHTML, enTrendHTML } from "./energie.js";
 import { shadeCardHTML, weatherIdOf } from "./wetter.js";
+import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
 const AnsichtenMixin = (Base) => class extends Base {
@@ -224,6 +224,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     return `<div class="ptitle"><h1>Energie</h1><span class="psub ensub"><span class="ct"></span></span><span class="sp"></span>
       ${solar ? `<button class="pbtn" data-act="link" data-path="${esc(solar.path)}">${icon(solar.icon || "mdi:solar-power-variant")}${esc(solar.title)}</button>` : ""}</div>
       <div class="engrid">${energyFlowHTML(c)}${enDayHTML(tr)}</div>
+      ${enPriceCard(c, this._model.price)}
       ${tr ? enTrendHTML(c) : ""}
       ${T.wb ? wbCardHTML(this._model.areas.get(T.wb.area) || { id: "" }) : ""}`;
   }

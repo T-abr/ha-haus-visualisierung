@@ -7,7 +7,8 @@ import { updateTrend } from "./verlauf.js";
 import { techWatch, updateHeat, updateWallbox } from "./technik.js";
 import { climRooms, humRooms, outdoorTempId, updateClimTrend, updateSpark } from "./klima.js";
 import { shadeWatch, updateShade } from "./wetter.js";
-import { energyIds, energyWatch, updateEnDay, updateEnergy, updateEnTrend } from "./energie.js";
+import { energyIds, energyWatch, updateEnDay, updateEnergy, updateEnPriceCard, updateEnTrend } from "./energie.js";
+import { priceWatch, updateWbPrice } from "./strompreis.js";
 
 Object.assign(UPD, {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
@@ -34,6 +35,8 @@ Object.assign(UPD, {
   energy: { watch: (el, c) => energyWatch(c._model.energy), run: updateEnergy },
   enday: { watch: (el, c) => energyIds(c._model.energy), run: updateEnDay },
   entrend: { watch: (el, c) => energyIds(c._model.energy), run: updateEnTrend },
+  enprice: { watch: (el, c) => [...new Set([...energyIds(c._model.energy), ...priceWatch(c._model.price)])], run: updateEnPriceCard },
+  wbprice: { watch: (el, c) => { const m = c._model, e = m.energy; return [...priceWatch(m.price), m.tech && m.tech.wb && m.tech.wb.power, e && e.grid].filter(Boolean); }, run: updateWbPrice },
   climtrend: { watch: (el, c) => (el.dataset.kind === "h"
     ? [...humRooms(c._model).flatMap((a) => [a.humId, a.tempId]), ...(c._model._outClim || [])]
     : [...climRooms(c._model).map((a) => a.tempId), outdoorTempId(c._hass, c._model, c._layout), ...c._model.agg.climates]).filter(Boolean), run: updateClimTrend },

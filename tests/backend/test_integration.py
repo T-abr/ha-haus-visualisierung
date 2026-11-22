@@ -108,6 +108,17 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
     en = next(m for m in got if m["id"] == 10 and m["type"] == "result")["result"]["layout"]["energy"]
     assert en["enabled"] is False and en["battery_power"] == "sensor.akku_leistung" and en["grid_invert"] is False
 
+    # Strompreis: Sensor, Schalter, Preise in ct/kWh (begrenzt), Fensterlänge
+    await client.send_json({"id": 11, "type": f"{DOMAIN}/save", "layout": {"price": {
+        "sensor": "sensor.nordpool_kwh_de_eur", "use_sensor": False, "fixed_ct": 999, "feed_in_ct": 8.25, "surcharge_ct": "x", "window_h": 0, "evil": 1}}})
+    got = [await client.receive_json(), await client.receive_json()]
+    pr = next(m for m in got if m["id"] == 11 and m["type"] == "result")["result"]["layout"]["price"]
+    assert pr == {"sensor": "sensor.nordpool_kwh_de_eur", "use_sensor": False, "fixed_ct": 200.0, "feed_in_ct": 8.25, "surcharge_ct": 0, "window_h": 1}
+    await client.send_json({"id": 12, "type": f"{DOMAIN}/save", "layout": {"price": {"sensor": "switch.falsch"}}})
+    got = [await client.receive_json(), await client.receive_json()]
+    pr = next(m for m in got if m["id"] == 12 and m["type"] == "result")["result"]["layout"]["price"]
+    assert pr["sensor"] == "" and pr["use_sensor"] is True and pr["fixed_ct"] == 30 and pr["window_h"] == 3
+
     # Optionen ändern → Panel neu registriert
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
