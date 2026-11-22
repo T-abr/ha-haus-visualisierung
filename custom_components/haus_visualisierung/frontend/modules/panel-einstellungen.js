@@ -122,6 +122,7 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><span class="lbl">Netz: Vorzeichen umkehren<small>wenn dein Zähler Einspeisung positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.grid_invert" data-bool="1" ${D.energy.grid_invert ? "checked" : ""}><span></span></label></div>
         <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
         <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
+      ${this._setPrice(D)}
       <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
         <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
         <div class="sortl" data-sort="links">${links}</div><div class="srow"><button class="pbtn" data-act="s-link-add">${icon("mdi:plus")}Verknüpfung hinzufügen</button></div></div>`;
@@ -132,6 +133,22 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="savebar glass"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>
         <button class="pbtn" data-act="s-reset">${icon("mdi:undo")}Verwerfen</button>
         <button class="pbtn primary" data-act="s-save">${icon("mdi:content-save")}Speichern</button></div>`;
+  }
+
+  /** Strompreis: Preissensor (automatisch erkannt oder gewählt) und feste Preise in ct/kWh. */
+  _setPrice(D) {
+    const P = D.price || {}, pc = this._model && this._model.price;
+    const auto = pc && pc.auto && pc.sensor ? `erkannt: ${esc(pc.sensor)}` : "keiner erkannt";
+    const ct = (key, label, hint, min, max) => `<div class="srow"><span class="lbl">${label}<small>${hint}</small></span><input class="inp s" type="number" min="${min}" max="${max}" step="0.1" data-set="price.${key}" data-num="1" value="${P[key]}"><span class="rl">ct/kWh</span></div>`;
+    return `<div class="set glass" data-sec="price"><h2>${icon("mdi:currency-eur")}Strompreis</h2>
+        <p class="hint">Für die Kosten auf der Seite „Energie“ und den Hinweis an der Wallbox. Ein dynamischer Tarif (z. B. Tibber, Nordpool, EPEX Spot, evcc) wird an der Einheit „…/kWh“ erkannt; liefert der Sensor Preise für später, zeigt die Seite das günstigste Zeitfenster.</p>
+        <div class="srow"><span class="lbl">Preissensor nutzen<small>aus = immer fester Preis</small></span><label class="tgl"><input type="checkbox" data-set="price.use_sensor" data-bool="1" ${P.use_sensor !== false ? "checked" : ""}><span></span></label></div>
+        <div class="srow"><span class="lbl">Preissensor<small>leer = automatisch (${auto})</small></span>
+          <input class="inp w" list="dl-sensor" data-set="price.sensor" value="${esc(P.sensor || "")}" placeholder="sensor.…"></div>
+        ${ct("surcharge_ct", "Aufschlag auf den Sensorpreis", "wenn der Sensor nur den Börsenpreis liefert: Netzentgelt, Steuern, Umlagen", -50, 100)}
+        ${ct("fixed_ct", "Fester Preis", "ohne Preissensor", 0, 200)}
+        ${ct("feed_in_ct", "Einspeisevergütung", "für die Bilanz heute", 0, 100)}
+        <div class="srow"><span class="lbl">Günstiges Zeitfenster<small>Länge in Stunden, z. B. für eine Ladung des Autos</small></span><input class="inp s" type="number" min="1" max="12" data-set="price.window_h" data-num="1" value="${P.window_h}"><span class="rl">h</span></div></div>`;
   }
 
   _setWall(D) {

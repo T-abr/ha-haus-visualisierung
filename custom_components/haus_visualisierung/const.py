@@ -48,6 +48,14 @@ DEFAULT_LAYOUT: dict = {
         "grid_invert": False,          # Netz meldet Einspeisung positiv
         "battery_invert": False,       # Speicher meldet Entladen positiv
     },
+    "price": {                 # Strompreis: Sensor (dynamisch) oder fester Preis, alles in ct/kWh
+        "sensor": "",                  # leer = automatisch erkennen (Einheit …/kWh)
+        "use_sensor": True,            # False = immer fester Preis
+        "fixed_ct": 30,                # Arbeitspreis ohne Preissensor
+        "feed_in_ct": 8,               # Einspeisevergütung
+        "surcharge_ct": 0,             # Aufschlag auf den Sensorpreis (z. B. Netzentgelt, Steuern zum Börsenpreis)
+        "window_h": 3,                 # Länge des günstigsten Zeitfensters in Stunden
+    },
     "links": [                 # Verknüpfungen zu anderen Panels
         {"title": "Solar", "icon": "mdi:solar-power-variant", "path": "/solar-visualisierung", "embed": True, "mode": "theme"},
         {"title": "Kameras", "icon": "mdi:cctv", "path": "/protect-visualisierung", "embed": True, "mode": "theme"},

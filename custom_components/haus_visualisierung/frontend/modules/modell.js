@@ -4,6 +4,7 @@ import { areaIcon, dc, dom, entName, num, OUTDOOR_RE, TECH_RE } from "./grundlag
 import { techCfg } from "./technik.js";
 import { outdoorHumId, outdoorTempId, weatherId } from "./klima.js";
 import { energyCfg } from "./energie.js";
+import { priceCfg } from "./strompreis.js";
 
 /* ------------------------------------------------------------------------ */
 /*  Strategy-Logik: aus Registern ein Hausmodell bauen                       */
@@ -201,8 +202,9 @@ function buildModel(h, L) {
   const _panelIds = Object.keys(h.entities || {}).filter((e) => e.startsWith("alarm_control_panel.") && h.states[e]);
   if (!_panelIds.length) for (const e in h.states) if (e.startsWith("alarm_control_panel.")) _panelIds.push(e);
   // Außenfühler für Feuchte und Lüftungshinweis (nur bei Änderungen an Bereichen, Geräten, Entitäten neu gesucht)
+  const price = priceCfg(h, L);
   const _oc = { tId: outdoorTempId(h, { tech }, L), hId: outdoorHumId(h), wId: weatherId(h, L) };
-  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds, tech, _oc, _outClim: Object.values(_oc).filter(Boolean), energy: energyCfg(h, L, tech) };
+  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds, tech, _oc, _outClim: Object.values(_oc).filter(Boolean), energy: energyCfg(h, L, tech, price), price };
 }
 
 function shortFloor(name) {

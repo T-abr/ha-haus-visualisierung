@@ -3,6 +3,7 @@
 import { batteryIcon, dc, esc, icon, isOn, NF0, NF1, num, powerW, setHidden, setHtml, setIcon, setText, setWidth, UPD } from "./grundlagen.js";
 import { axisCut, axisKey, finite, TREND_BUCKET, TREND_GAP, TREND_MS, trendAt, trendPath } from "./verlauf.js";
 import { trendEnsure, trendSeries } from "./klima.js";
+import { enPriceHTML, priceInfo, unitFactor, updateEnPrice } from "./strompreis.js";
 
 /* ---------- Energie-Seite: Fluss, Kennzahlen, Bilanz heute, Verlauf 24 h ---------- */
 /* Quellen: „Energie auf dem Dach“ (PV, Akku-Ladestand, Hausverbrauch, Netz), Speicher-Leistung und Wallbox.
@@ -13,7 +14,7 @@ const BAT_RE = /(akku|batter|battery|hausspeicher|stromspeicher)/i;
 const EN_POS = { pv: [50, 14], grid: [12, 50], bat: [88, 50], wb: [50, 86] };
 
 /** Welche Sensoren die Energie-Seite nutzt; null = keine Energiedaten. */
-function energyCfg(h, L, tech) {
+function energyCfg(h, L, tech, price) {
   const H = L.header || {}, E = L.energy || {};
   if (E.enabled === false) return null;
   const S = (e) => (e && h.states[e] ? e : "");
@@ -23,10 +24,10 @@ function energyCfg(h, L, tech) {
   const bat = S(E.battery_power) || Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "power" && ![pv, grid, house, wb].includes(e)
     && BAT_RE.test(lbl(e)) && !/(pv|solar|grid|netz|soc|wallbox|evcc|lade)/i.test(lbl(e))) || "";
   if (!pv && !grid && !house && !bat) return null;
-  return { pv, grid, house, soc, bat, wb, wbOn: (tech && tech.wb && tech.wb.charging) || "", gridInv: !!E.grid_invert, batInv: !!E.battery_invert };
+  return { pv, grid, house, soc, bat, wb, wbOn: (tech && tech.wb && tech.wb.charging) || "", gridInv: !!E.grid_invert, batInv: !!E.battery_invert, price: (price && price.sensor) || "" };
 }
 const energyWatch = (c) => (c ? [c.pv, c.grid, c.house, c.soc, c.bat, c.wb, c.wbOn].filter(Boolean) : []);
-const energyIds = (c) => (c ? [c.pv, c.grid, c.house, c.bat].filter(Boolean) : []);
+const energyIds = (c) => (c ? [c.pv, c.grid, c.house, c.bat, c.price].filter(Boolean) : []);
 const kwTxt = (w) => (w === null ? "–" : Math.abs(w) >= 1000 ? `${NF1.format(w / 1000)} kW` : `${NF0.format(w)} W`);
 const kwhTxt = (wh) => (wh === null ? "–" : `${NF1.format(wh / 1000)} kWh`);
 const pctTxt = (v) => (v === null ? "–" : `${NF0.format(Math.round(v * 100))} %`);
@@ -150,13 +151,13 @@ function energySeries(ctx, force) {
   day.use = anyT ? tot : sum(house, (v) => Math.max(0, v));
   day.autark = day.use && day.imp !== null ? clamp01(1 - day.imp / day.use) : null;
   day.own = day.pv && day.pv > 50 && day.exp !== null ? clamp01(1 - day.exp / day.pv) : null;
-  ctx._enS = { c, at: now, start, now, S: { pv, use, grid }, day };
+  ctx._enS = { c, at: now, start, now, S: { pv, use, grid, bat }, day };
   return ctx._enS;
 }
 
 function enLoad(el, ctx) {
   const c = ctx._model.energy;
-  const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="enday"],[data-u="entrend"]').forEach((x) => { if (x.isConnected) { x._force = true; UPD[x.dataset.u].run(x, ctx); x._force = false; } });
+  const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="enday"],[data-u="entrend"],[data-u="enprice"]').forEach((x) => { if (x.isConnected) { x._force = true; UPD[x.dataset.u].run(x, ctx); x._force = false; } });
   return trendEnsure(ctx._hass, energyIds(c), rerun);
 }
 
@@ -286,4 +287,28 @@ function enHover(el, frac) {
   cur.classList.add("on"); tip.classList.add("on");
 }
 
-export { enDayHTML, energyCfg, energyFlowHTML, energyIds, energyWatch, enHover, enTrendHTML, updateEnDay, updateEnergy, updateEnTrend };
+/* ---------- Strompreis und Kosten (Anzeige in strompreis.js) ---------- */
+/** Karte nur, wenn es etwas zu zeigen gibt: Preissensor oder Netz (Kosten zum festen Preis). */
+const enPriceCard = (c, p) => (p && (p.sensor || (c && c.grid)) ? enPriceHTML() : "");
+
+function updateEnPriceCard(el, ctx) {
+  const c = ctx._model.energy, p = ctx._model.price, h = ctx._hass;
+  if (!p) return;
+  const cost = !!(c && c.grid);
+  setHidden(el.querySelector(".enpch"), !cost); setHidden(el.querySelector(".enpcost"), !cost);
+  if (!cost || enLoad(el, ctx)) { updateEnPrice(el, ctx, null); return; }
+  // Preis „jetzt“ sofort, Kosten höchstens alle 15 s
+  const now = Date.now();
+  if (el._drawn && now - el._drawn < 15000 && !el._force) {
+    updateEnPrice(el, ctx, null);
+    if (!el._tq) el._tq = setTimeout(() => { el._tq = 0; if (el.isConnected) { el._force = true; updateEnPriceCard(el, ctx); el._force = false; } }, 15000 - (now - el._drawn));
+    return;
+  }
+  el._drawn = now;
+  const E = energySeries(ctx, el._force);
+  const st = c.price && h.states[c.price], f = st ? unitFactor(st.attributes.unit_of_measurement) : null;
+  const hist = st && f !== null && !priceInfo(h, p).slots.length ? rasterSeries(trendSeries(h, c.price), E.start, E.now, f) : null;
+  updateEnPrice(el, ctx, E, hist);
+}
+
+export { enDayHTML, enPriceCard, updateEnPriceCard, energyCfg, energyFlowHTML, energyIds, energyWatch, enHover, enTrendHTML, updateEnDay, updateEnergy, updateEnTrend };

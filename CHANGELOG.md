@@ -4,6 +4,16 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Strompreis und Stromkosten
+- **Karte „Strompreis“ auf der Seite „Energie“:** Preis jetzt mit Einordnung (günstig, mittel, teuer), Ø heute und das günstigste Zeitfenster der nächsten Stunden (Länge einstellbar, Standard 3 h). Liefert der Preissensor Preise für später, zeigen Balken die Stundenpreise bis morgen; die laufende Stunde und das günstigste Fenster sind hervorgehoben.
+- **Kosten heute:** Netzbezug in € (je 5 Minuten mit dem Preis dieser Zeit), Einspeisevergütung, was eigener Strom (PV und Speicher) gespart hat, und die Bilanz – aus demselben Verlauf wie „Heute“, ohne zusätzliche Abfrage.
+- **Wallbox:** Preis jetzt, „Günstig laden“ mit dem besten Zeitfenster und was das Laden gerade kostet (nur der Anteil aus dem Netz, z. B. „75 % aus dem Netz“; bei Überschuss „Lädt gerade mit eigenem Strom“). Gilt auf der Energie-Seite und im Raum der Wallbox.
+- **Preissensor automatisch erkannt:** Sensor mit Einheit „…/kWh“ oder „…/MWh“ (z. B. Tibber, Nordpool, EPEX Spot, Energi Data Service, evcc); Preise für später aus den üblichen Attributen (`raw_today`/`raw_tomorrow`, `today`/`tomorrow`, `data`, `prices`). Werte in ct oder € werden am Zustand des Sensors abgeglichen.
+- **Einstellungen → Darstellung → Strompreis:** Preissensor wählen oder abschalten, Aufschlag auf den Sensorpreis (für reine Börsenpreise), fester Preis ohne Sensor (Standard 30 ct/kWh), Einspeisevergütung (Standard 8 ct/kWh) und Länge des Zeitfensters.
+
+### Tests
+- Neuer Abschnitt `strompreis` (Gruppe `energie`): erkannter Sensor, Preis und Einordnung, Balken, Kosten, Wallbox-Hinweis, Aufschlag, fester Preis, ohne Recorder, Einstellungen und Handy. Das Harness hat dafür einen Nordpool-ähnlichen Preissensor. Backend: Speichern der Einstellungen `price`.
+
 ## 1.8.1 – 2026-11-22
 
 ### Behoben
