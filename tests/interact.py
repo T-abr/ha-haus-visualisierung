@@ -1015,6 +1015,10 @@ with sync_playwright() as p:
     bx = bad.bounding_box()
     pg.mouse.move(bx["x"] + bx["width"] * 0.3, bx["y"] + bx["height"] / 2); pg.wait_for_timeout(100)
     check("KL: Zeiger auf dem Raum-Verlauf", "°" in bad.locator(".sptip").inner_text() and "on" in bad.locator(".sptip").get_attribute("class"))
+    spans = pg.evaluate(f"[...{PP}.shadowRoot.querySelectorAll('.ktable .kspark[data-kind=t]')].filter(e => e._sp).map(e => +(e._sp.hi - e._sp.lo).toFixed(2))")
+    check("KL: Raum-Verläufe mit gleicher Skalenhöhe (mind. 6°)", len(spans) >= 5 and min(spans) >= 6 and len(set(spans)) == 1)
+    check("KL: Raum-Verlauf mit Nacht, 6-h-Strichen, Punkt und Wert bei jetzt", bad.locator(".spnight rect").count() >= 1 and bad.locator(".sptick line").count() >= 3
+          and bad.locator(".spdot").is_visible() and bad.locator(".spv").inner_text() == "22,1°" and bad.locator(".spw").bounding_box()["width"] > 250)
     pg.mouse.move(5, 5)
     r0 = pg.evaluate(f"{PP}._stats.renders"); n0 = len(pg.evaluate("window.__api.log"))
     pg.evaluate("window.__api.set('sensor.wohnzimmer_temperatur', '25.0')"); pg.wait_for_timeout(250)
@@ -1058,6 +1062,9 @@ with sync_playwright() as p:
     bad = pg.locator(f"{P} .krow[data-area=bad] .kspark")
     check("KF: Umschalter – Raum-Verläufe zeigen Feuchte", bad.get_attribute("data-kind") == "h" and bad.locator(".sprg").inner_text().endswith("%")
           and "24 H FEUCHTE" in pg.locator(f"{P} .khead").first.inner_text().upper())
+    sc = pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.krow[data-area=bad] .kspark'); return [e._sp.lo, e._sp.hi]; }})()")
+    check("KF: Feuchte-Verlauf mit fester Skala, Wohlfühlband und Rot über der Grenze", sc == [30, 80] and float(bad.locator(".spband").get_attribute("height")) > 0
+          and len(bad.locator(".spov").get_attribute("d") or "") > 20 and len(pg.locator(f"{P} .krow[data-area=buro] .kspark .spov").get_attribute("d") or "") == 0)
     check("KF: Feuchte-Verlauf mit Grenze für Schimmelrisiko", (bad.locator(".spset").get_attribute("d") or "").startswith("M0") and "Schimmelrisiko ab 65 %" in (bad.get_attribute("title") or ""))
     nws = len([x for x in pg.evaluate("window.__api.log") if x[0] == "ws"])
     pg.goto(dense + "?view=klima"); pg.wait_for_timeout(700)

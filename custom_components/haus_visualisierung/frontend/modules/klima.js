@@ -249,11 +249,48 @@ function climHover(el, frac) {
   cur.classList.add("on"); tip.classList.add("on");
 }
 
-/* Verlauf je Raum: eine Reihe der gewählten Größe. Temperatur mit Soll als gestrichelter Linie,
-   Feuchte mit der Grenze für Schimmelrisiko; dazu die Spanne der letzten 24 h. */
+/* Verlauf je Raum: eine Reihe der gewählten Größe, dazu der aktuelle Wert und die Spanne der letzten 24 h.
+   Lesbarkeit: alle Räume mit derselben Skalenhöhe (Temperatur 6°, Feuchte fest 30–80 %), damit gleiche
+   Schwankungen gleich groß aussehen; Nacht 22–6 Uhr schattiert, feine Striche alle 6 Stunden, Punkt bei „jetzt“.
+   Temperatur mit Soll als gestrichelter Linie; Feuchte mit Wohlfühlband 40–60 % und Abschnitten über der
+   Grenze für Schimmelrisiko in Rot. */
+const SPARK_W = 200, SPARK_H = 40, SPARK_T_SPAN = 6, SPARK_H_LO = 30, SPARK_H_HI = 80, NIGHT_FROM = 22, NIGHT_TO = 6;
+let sparkSeq = 0;
 function sparkHTML(a, k = "t") {
   const id = k === "h" ? a.humId : a.tempId;
-  return id ? `<span class="kspark k-${k}" data-u="spark" data-kind="${k}" data-area="${esc(a.id)}"><svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"><path class="spset"/><path class="spl"/></svg><small class="sprg"></small><span class="sptip"></span></span>` : `<span class="kspark none"></span>`;
+  if (!id) return `<span class="kspark none"></span>`;
+  const cid = `spc${++sparkSeq}`;
+  return `<span class="kspark k-${k}" data-u="spark" data-kind="${k}" data-area="${esc(a.id)}"><span class="spw"><svg viewBox="0 0 ${SPARK_W} ${SPARK_H}" preserveAspectRatio="none" aria-hidden="true">`
+    + `<defs><clipPath id="${cid}"><rect class="spclip" x="0" y="0" width="${SPARK_W}" height="0"/></clipPath></defs>`
+    + `<g class="spnight"></g><g class="sptick"></g>${k === "h" ? '<rect class="spband" x="0" width="' + SPARK_W + '" y="0" height="0"/>' : ""}`
+    + `<path class="spset"/><path class="spl"/>${k === "h" ? `<path class="spov" clip-path="url(#${cid})"/>` : ""}</svg><i class="spdot" hidden></i><span class="sptip"></span></span>`
+    + `<small class="sprg"><b class="spv"></b><span class="spr"></span></small></span>`;
+}
+
+/** Skala einer Raumkurve: Temperatur immer gleich hoch (mind. 6°) um den eigenen Verlauf, Feuchte fest 30–80 %. */
+function sparkScale(vals, k) {
+  const day = trendScale(vals, 0);
+  if (!day) return null;
+  if (k === "h") {
+    const lo = Math.max(0, Math.min(SPARK_H_LO, Math.floor((day.min - 2) / 10) * 10));
+    const hi = Math.min(100, Math.max(SPARK_H_HI, Math.ceil((day.max + 2) / 10) * 10));
+    return { lo, hi, min: day.min, max: day.max };
+  }
+  return trendScale(vals, SPARK_T_SPAN / 1.15);
+}
+
+/** Nachtabschnitte (22–6 Uhr) und volle 6-Stunden-Zeitpunkte im Fenster, in Ortszeit. */
+function sparkTimes(start, now) {
+  const nights = [], ticks = [], d = new Date(start);
+  d.setHours(0, 0, 0, 0);
+  for (let day = d.getTime() - 86400000; day <= now; day += 86400000) {
+    const n0 = new Date(day); n0.setHours(NIGHT_FROM - 24, 0, 0, 0);
+    const n1 = new Date(day); n1.setHours(NIGHT_TO, 0, 0, 0);
+    const a = Math.max(start, n0.getTime()), b = Math.min(now, n1.getTime());
+    if (b > a) nights.push([a, b]);
+    for (const hr of [0, 6, 12, 18]) { const t = new Date(day); t.setHours(hr, 0, 0, 0); if (t > start && t < now) ticks.push(t.getTime()); }
+  }
+  return { nights, ticks };
 }
 
 function updateSpark(el, ctx) {
@@ -266,23 +303,52 @@ function updateSpark(el, ctx) {
   let ref = null;
   if (k === "h") ref = L.alerts && L.alerts.builtin && L.alerts.builtin.mold !== false ? moldLimit(L) : null;
   else { const cl = a.climates.map((c) => h.states[c]).find((s) => s && finite(s.attributes.temperature)); ref = cl ? cl.attributes.temperature : null; }
-  const vals = pts.filter(([t]) => t >= start).map((p) => p[1]);
-  // die Feuchte-Grenze nur in die Skala nehmen, wenn sie in der Nähe liegt
-  const sc = trendScale([...vals, k === "t" || (ref !== null && vals.some((v) => v > ref - 15)) ? ref : null].filter(finite), k === "h" ? 10 : 1.5);
-  if (!sc || pts.length < 2) { el.classList.add("empty"); el.querySelector(".spl").setAttribute("d", ""); setText(el, ".sprg", ""); return; }
-  el.classList.remove("empty");
-  const x = (t) => ((t - start) / TREND_MS) * 200, y = (v) => 38 - ((v - sc.lo) / (sc.hi - sc.lo)) * 36;
-  el.querySelector(".spl").setAttribute("d", trendPath(pts, x, y));
-  el.querySelector(".spset").setAttribute("d", ref !== null && ref >= sc.lo && ref <= sc.hi ? `M0 ${y(ref).toFixed(1)}L200 ${y(ref).toFixed(1)}` : "");
+  const vals = pts.filter(([t]) => t >= start).map((p) => p[1]).filter(finite);
+  // Soll in die Skala nehmen, wenn es nahe am Verlauf liegt (sonst bliebe die Linie unsichtbar)
   const day = trendScale(vals, 0);
+  const near = k === "t" && ref !== null && day && ref >= day.min - 2 && ref <= day.max + 2;
+  const sc = sparkScale(near ? [...vals, ref] : vals, k);
+  const dot = el.querySelector(".spdot"), fmt = k === "h" ? (v) => `${NF0.format(v)} %` : (v) => `${NF1.format(v)}°`;
+  if (!sc || pts.length < 2) {
+    el.classList.add("empty"); el.querySelector(".spl").setAttribute("d", ""); setText(el, ".spv", ""); setText(el, ".spr", ""); setHidden(dot, true);
+    return;
+  }
+  el.classList.remove("empty");
+  const W = SPARK_W, H = SPARK_H, x = (t) => ((t - start) / TREND_MS) * W, y = (v) => H - 2 - ((v - sc.lo) / (sc.hi - sc.lo)) * (H - 4);
+  const line = trendPath(pts, x, y);
+  el.querySelector(".spl").setAttribute("d", line);
+  // Zeitbezug: Nacht schattiert, Striche alle 6 Stunden – alle 5 Minuten neu (das Fenster wandert mit)
+  const slot = Math.floor(now / 300000);
+  if (el._slot !== slot) {
+    el._slot = slot;
+    const T = sparkTimes(start, now);
+    el.querySelector(".spnight").innerHTML = T.nights.map(([a0, b0]) => `<rect x="${x(a0).toFixed(1)}" y="0" width="${(x(b0) - x(a0)).toFixed(1)}" height="${H}"/>`).join("");
+    el.querySelector(".sptick").innerHTML = T.ticks.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
+  }
+  const refOn = ref !== null && ref > sc.lo && ref < sc.hi;
+  el.querySelector(".spset").setAttribute("d", refOn ? `M0 ${y(ref).toFixed(1)}L${W} ${y(ref).toFixed(1)}` : "");
   if (k === "h") {
-    setText(el, ".sprg", day ? `${NF0.format(day.min)}–${NF0.format(day.max)} %` : "");
+    const b0 = Math.max(sc.lo, 40), b1 = Math.min(sc.hi, 60), band = el.querySelector(".spband");
+    band.setAttribute("y", b1 > b0 ? y(b1).toFixed(1) : "0"); band.setAttribute("height", b1 > b0 ? (y(b0) - y(b1)).toFixed(1) : "0");
+    // über der Grenze: dieselbe Linie rot, auf den Bereich oberhalb der Grenze beschnitten
+    el.querySelector(".spclip").setAttribute("height", refOn ? y(ref).toFixed(1) : "0");
+    el.querySelector(".spov").setAttribute("d", refOn && day.max > ref ? line : "");
+    el.classList.toggle("over", ref !== null && (num(h.states[eid]) ?? pts[pts.length - 1][1]) >= ref);
+  }
+  // Punkt am Linienende (jetzt) und aktueller Wert
+  const last = pts[pts.length - 1];
+  setHidden(dot, !last);
+  if (last) { dot.style.left = `${(x(last[0]) / W) * 100}%`; dot.style.top = `${(y(last[1]) / H) * 100}%`; }
+  const cur = num(h.states[eid]);
+  setText(el, ".spv", cur !== null ? fmt(cur) : last ? fmt(last[1]) : "");
+  if (k === "h") {
+    setText(el, ".spr", day ? `${NF0.format(day.min)}–${NF0.format(day.max)} %` : "");
     el.title = `${a.name}: Luftfeuchte 24 h ${day ? `${NF0.format(day.min)} bis ${NF0.format(day.max)} %` : ""}${ref !== null ? ` · Schimmelrisiko ab ${NF0.format(ref)} %` : ""}`;
   } else {
-    setText(el, ".sprg", day ? `${NF1.format(day.min)}–${NF1.format(day.max)}°` : "");
+    setText(el, ".spr", day ? `${NF1.format(day.min)}–${NF1.format(day.max)}°` : "");
     el.title = `${a.name}: 24 h ${day ? `${NF1.format(day.min)} bis ${NF1.format(day.max)} °C` : ""}${ref !== null ? ` · Soll ${NF1.format(ref)} °C` : ""}`;
   }
-  el._sp = { pts, start, fmt: k === "h" ? (v) => `${NF0.format(v)} %` : (v) => `${NF1.format(v)}°` };
+  el._sp = { pts, start, fmt, lo: sc.lo, hi: sc.hi };
 }
 
 function sparkHover(el, frac) {
