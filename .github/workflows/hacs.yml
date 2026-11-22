@@ -13,6 +13,9 @@ permissions:
 jobs:
   hacs:
     name: HACS
+    # Die HACS-Action prüft nur öffentliche Repositories (HACS selbst installiert auch nur aus solchen).
+    # Solange das Repository privat ist, läuft nur hassfest.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: hacs/action@main
