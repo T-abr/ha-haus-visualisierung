@@ -57,7 +57,7 @@ JS_RUN = """async (seconds) => {
 rows = []
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
-    for view in ["", "ov=cockpit", "ov=fokus", "raum/a1_1", "licht", "alarme"]:
+    for view in ["", "ov=cockpit", "ov=fokus", "raum/a1_1", "licht", "klima", "alarme"]:
         pg = b.new_page(viewport={"width": 1440, "height": 1000})
         pg.goto(base + (f"&{view}" if view.startswith("ov=") else f"&view={view}" if view else ""))
         pg.wait_for_timeout(800)

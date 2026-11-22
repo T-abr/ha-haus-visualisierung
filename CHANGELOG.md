@@ -4,6 +4,33 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.5.0 – 2026-11-22
+
+### Neu – Luftfeuchte und Taupunkt auf der Klimaseite
+- **Kopfkarte „Luftfeuchte 24 h“** neben „Temperaturen 24 h“ (Kompakt und Komfort; am Handy untereinander): Haus-Durchschnitt der relativen Feuchte und Außenfeuchte in einem Diagramm mit %-Achse, Wohlfühlbereich 40–60 % als Band und die Grenze für Schimmelrisiko als gestrichelte Linie. Innen orange, außen blau wie bei den Temperaturen. Werte am Linienende, Zeiger mit Uhrzeit und beiden Werten.
+- **Kennzahlen:** Innen Ø, feuchtester Raum (gelb ab der Schimmel-Grenze) und trockenster Raum mit Namen, Taupunkt innen (Ø der Räume), außen mit Taupunkt.
+- **Lüftungshinweis** nach absoluter Feuchte (g/m³) innen und außen: „Lüften lohnt sich“ (draußen mindestens 2 g/m³ trockener), „Lüften bringt wenig“ oder „Draußen feuchter“. Außenwerte vom Außenfühler (am Namen erkannt: Außen, Garten …), sonst von der Wetter-Entität.
+- **Taupunkt je Raum** in der Kompakt-Tabelle unter der Feuchte und in den Komfort-Raumkacheln.
+- **Verlauf je Raum umschaltbar** zwischen Temperatur und Feuchte („Verlauf je Raum“ oben rechts, je Gerät gemerkt). Der Feuchte-Verlauf zeigt die Grenze für Schimmelrisiko statt der Soll-Temperatur.
+
+### Neu – Warnregel „Schimmelrisiko – jetzt lüften“
+- Feste Regel im Alarmmanager (Panel und Backend, also auch als Push): Raumfeuchte ab **65 %** für mindestens **30 Minuten** meldet „Schimmelrisiko · Raum“ mit Feuchte, Temperatur und Taupunkt. Kurzes Duschen oder Kochen meldet nicht.
+- Entwarnung erst 3 Prozentpunkte unter der Grenze, damit die Meldung nicht flattert. Steht im Raum ein Fenster offen, wird schon gelüftet: keine Meldung.
+- Ist es draußen feuchter als drinnen (Sommer, Gewitter), steht statt „jetzt lüften“ der Hinweis „draußen feuchter, besser heizen oder entfeuchten“.
+- Gilt standardmäßig nur im Hausmodus Zuhause. Grenze (50–90 %) und Wartezeit (0–240 min) unter Einstellungen → Alarme; die Regel ist für Aktionen wählbar.
+- Taupunkt und absolute Feuchte nach der Magnus-Formel, in Panel und Backend gleich gerechnet. Außenbereiche zählen nicht.
+
+### Tests
+- Bedienung: 31 neue Prüfungen (389 Prüfungen): Feuchte-Karte (Kurven, Kennzahlen, Taupunkt, Lüftungshinweis in beide Richtungen, Band, Grenze, Achse, Zeiger), weiterhin eine Statistik- und eine Verlaufsabfrage für die ganze Seite, Taupunkt je Raum, Umschalter Temperatur/Feuchte in Kompakt und Komfort und je Gerät gemerkt, Live-Werte ohne Neuaufbau und ohne Abfrage, Schimmelrisiko (Wartezeit, offenes Fenster, Rückfall, draußen feuchter, Übernahme vom Backend nach Neuladen), Einstellungen, Handy 390 px. Die Klimaseite steht jetzt auch in `tests/perf/measure.py`.
+- Backend: 3 neue Tests (18 Backend-Tests): Formeln gegen Tabellenwerte, Wartezeit und Rückfall mit vorgerückter Uhr, offenes Fenster, draußen feuchter, Hausmodus, Grenzen der Einstellungen.
+- Test-Harness: Außenfeuchte im Garten und Feuchte an der Wetter-Entität.
+
+### Performance
+- Weiterhin eine Statistik-Abfrage für die ganze Klimaseite. Feuchtefühler ohne `state_class` kommen in einer gesammelten Verlaufsabfrage dazu (vorher wurden sie dort nicht geladen). Beide Karten und alle Raum-Verläufe teilen sich die Daten, auch beim Umschalten keine weitere Abfrage.
+- Großes Testhaus (24 Räume): Klimaseite 27 ms Aufbau (Kompakt, vorher 16,7 ms), 42 ms (Komfort, vorher 25 ms) durch die zweite Karte und die Taupunkte. Eine geänderte Raumfeuchte kostet ≈ 0,38 ms (Kennzahlen, Taupunkt, Warnregel), vorher ≈ 0,09 ms. Die Feuchte-Kurve wird wie die Temperatur höchstens alle 15 s neu gerechnet.
+- Warnregeln im Panel: 0,09 ms je Auswertung statt 0,06 ms. Der Alarmmanager beobachtet nur die Raumfeuchte, nicht Temperatur und Außenfühler: auf der Seite Alarme 0 DOM-Änderungen bei Temperaturänderungen.
+- Übrige Seiten unverändert: 0 Neuaufbauten, hass-Setter Ø 24–31 µs (1.4.0 am selben Rechner: 24–35 µs). Backend: Auswertung weiter 0,04 ms je Durchlauf.
+
 ## 1.4.0 – 2026-11-22
 
 ### Neu – Temperaturverläufe auf der Klimaseite
