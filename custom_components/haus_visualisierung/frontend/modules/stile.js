@@ -977,6 +977,14 @@ details[open]>summary.shead{padding-bottom:2px}
 .trcur i.pv{background:#ffc457}.trcur i.use{background:#63c7ff}.trcur i.grid{background:#b39cff}
 .trtip .tk.pv i{background:#ffc457}.trtip .tk.use i{background:#63c7ff}.trtip .tk.grid i{background:#b39cff}
 .entrend.nodata .enc{height:48px}
+/* Zeitraum der Verläufe: 24 h, Woche, Monat, Jahr */
+.rng{display:inline-flex;gap:4px;flex-wrap:wrap}.rng .altab.sm{padding:3px 10px;font-size:11.5px}
+.narrow .rng{order:9;flex-basis:100%}
+.trbr{flex-basis:100%;height:0}.narrow .trbr{display:none}
+.entrend.long .enc{margin-left:40px}
+.enbars rect.pv{fill:#ffc457;opacity:.9}.enbars rect.use{fill:#63c7ff;opacity:.85}
+.entrend.long .trc{cursor:default}.entrend.long .trcur{background:rgba(255,255,255,.18)}
+.enper{margin-bottom:12px}
 .narrow .engrid{grid-template-columns:minmax(0,1fr)}
 .narrow .efwrap{height:310px}
 .narrow .enode{width:92px;padding:6px 4px}.narrow .enode.hub{width:104px}

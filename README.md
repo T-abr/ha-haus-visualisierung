@@ -10,9 +10,11 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Desktop und Aktiv-Fokus am Handy; Darstellung Kompakt oder Komfort; vier Kopfzeilen.
 - **Raumseiten und Sammelseiten** (Licht, Beschattung, Klima, Sicherheit, Batterien) – Wischen zum Dimmen,
   langes Drücken für Details; auf Raumseiten Temperatur- und Feuchteverlauf der letzten 24 Stunden, auf der
-  Klimaseite Haus-Durchschnitt und Außentemperatur über 24 Stunden sowie ein Verlauf je Raum.
+  Klimaseite Haus-Durchschnitt und Außentemperatur über 24 Stunden, eine Woche, einen Monat oder ein Jahr
+  sowie ein Verlauf je Raum.
 - **Energie**: Energiefluss mit PV, Netz, Speicher, Wallbox und Haus, Autarkie und Eigenverbrauch jetzt und heute,
-  Leistung der letzten 24 Stunden; ein Tipp aufs Dach öffnet die Seite.
+  Leistung der letzten 24 Stunden, Energie je Tag für Woche und Monat bzw. je Monat fürs Jahr; ein Tipp aufs Dach
+  öffnet die Seite.
 - **Heizung** im Heizungsraum: Speicher mit Schichtung und Ladung, Kamin mit Pumpe, Heizkurve mit Betriebspunkt
   und Mischer (passt zur Integration „Heizkurve Fußbodenheizung“).
 - **Wallbox** in der Einfahrt: Ladeleistung, Ladestand, Reichweite, Lademodus und Ziel (EVCC und andere).

@@ -1238,6 +1238,65 @@ def klima_feuchte():
     check("KF: Handy 390 px – beide Karten und Umschalter ohne Überbreite", not ov and pg.locator(f"{P} .ctrend").count() == 2)
     pg.set_viewport_size({"width": 1440, "height": 1000})
 
+@gruppe("klima")
+def klima_zeitraum():
+    # ---------- Klimaseite: Zeitraum 24 h, Woche, Monat, Jahr aus der Langzeitstatistik (1.9.0) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=klima"); pg.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hv-range-')).forEach(k => localStorage.removeItem(k))")
+    pg.goto(dense + "?view=klima"); pg.wait_for_timeout(800)
+    ct = pg.locator(f"{P} .ctrend.k-t"); ch = pg.locator(f"{P} .ctrend.k-h")
+    chips = ct.locator("[data-act=range]")
+    check("KZ: Umschalter 24 h · Woche · Monat · Jahr, 24 h gewählt", chips.all_inner_texts() == ["24 h", "Woche", "Monat", "Jahr"]
+          and ct.locator("[data-act=range].on").inner_text() == "24 h" and ct.locator("[data-act=range][aria-pressed=true]").count() == 1)
+    stats = lambda: [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "statistics"]
+    n0 = len(stats()); r0 = pg.evaluate(f"{PP}._stats.renders")
+    ct.locator('[data-act=range][data-r="7"]').click(); pg.wait_for_timeout(400)
+    q = stats()[n0:]
+    nt = pg.evaluate(f"{PP}._model.visibleAreas.filter(a => a.tempId).length")
+    check("KZ: Woche – eine Abfrage der Stundenmittel nur für diese Karte", len(q) == 1 and q[0]["period"] == "hour" and "sensor.aussen_temperatur" in q[0]["ids"]
+          and not [i for i in q[0]["ids"] if "feuchte" in i] and len(q[0]["ids"]) >= nt)
+    check("KZ: Woche – Titel, Umschalter, kein Neuaufbau der Seite", "Temperaturen 7 Tage" in ct.locator(".trt").text_content() and ct.locator("[data-act=range].on").inner_text() == "Woche"
+          and pg.evaluate(f"{PP}._stats.renders") == r0 and "Luftfeuchte 24 h" in ch.locator(".trt").text_content())
+    dd = pg.evaluate(f"[...{R}.querySelectorAll('.ctrend.k-t .ctp')].map(p => (p.getAttribute('d') || '').length)")
+    ax = ct.locator(".trx span").all_inner_texts()
+    check("KZ: Woche – Haus Ø und Außen über 7 Tage, Achse mit Wochentagen", len(dd) == 2 and all(n > 400 for n in dd) and len([a for a in ax if a in ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")]) >= 5 and ax[-1] == "jetzt")
+    check("KZ: Woche – Spanne außen über 7 Tage", "7 Tage:" in ct.locator(".ctstats").inner_text())
+    bb = ct.locator(".ctc").bounding_box()
+    pg.mouse.move(bb["x"] + bb["width"] * 0.3, bb["y"] + bb["height"] / 2); pg.wait_for_timeout(100)
+    tip = ct.locator(".trtip").inner_text()
+    check("KZ: Woche – Zeiger mit Wochentag und Stunde", "Uhr" in tip and tip[:2] in ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So") and "Haus Ø" in tip and "Außen" in tip)
+    pg.mouse.move(5, 5); pg.wait_for_timeout(50)
+    ct.locator('[data-act=range][data-r="30"]').click(); pg.wait_for_timeout(400)
+    ax = ct.locator(".trx span").all_inner_texts()
+    check("KZ: Monat – Stundenmittel 30 Tage, Achse mit Datum der Montage", stats()[-1]["period"] == "hour" and "Temperaturen 30 Tage" in ct.locator(".trt").text_content()
+          and 3 <= len([a for a in ax if a.endswith(".") and a.count(".") == 2]) <= 5)
+    ct.locator('[data-act=range][data-r="365"]').click(); pg.wait_for_timeout(400)
+    ax = ct.locator(".trx span").all_inner_texts()
+    mon = ("Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez")
+    check("KZ: Jahr – Tagesmittel, Achse mit Monaten", stats()[-1]["period"] == "day" and "Temperaturen 12 Monate" in ct.locator(".trt").text_content()
+          and len([a for a in ax if a in mon or a.isdigit()]) >= 6 and all(n > 200 for n in pg.evaluate(f"[...{R}.querySelectorAll('.ctrend.k-t .ctp')].map(p => (p.getAttribute('d') || '').length)")))
+    pg.mouse.move(bb["x"] + bb["width"] * 0.5, bb["y"] + bb["height"] / 2); pg.wait_for_timeout(100)
+    tip = ct.locator(".trtip").inner_text()
+    check("KZ: Jahr – Zeiger mit Datum", tip.split("\n")[0].count(".") == 2 and "Haus Ø" in tip)
+    pg.mouse.move(5, 5); pg.wait_for_timeout(50)
+    n1 = len(pg.evaluate("window.__api.log"))
+    ct.locator('[data-act=range][data-r="7"]').click(); pg.wait_for_timeout(200)
+    pg.evaluate("window.__api.set('sensor.aussen_temperatur', '9.5')"); pg.wait_for_timeout(250)
+    check("KZ: zurück zur Woche und neue Werte – ohne neue Abfrage", not [x for x in pg.evaluate("window.__api.log")[n1:] if x[0] == "ws"] and "9,5°" in ct.locator(".ctl.out").inner_text())
+    ch.locator('[data-act=range][data-r="30"]').click(); pg.wait_for_timeout(400)
+    check("KZ: Feuchte ohne Langzeitstatistik (keine state_class) – Hinweis statt alter Kurven", "Keine Langzeitstatistik" in ch.locator(".trmsg").inner_text()
+          and "nodata" in ch.get_attribute("class") and all(n == 0 for n in pg.evaluate(f"[...{R}.querySelectorAll('.ctrend.k-h .ctp')].map(p => (p.getAttribute('d') || '').length)")))
+    pg.goto(dense + "?view=klima"); pg.wait_for_timeout(800)
+    check("KZ: Wahl je Karte gemerkt", "Temperaturen 7 Tage" in ct.locator(".trt").text_content() and "Luftfeuchte 30 Tage" in ch.locator(".trt").text_content()
+          and ct.locator("[data-act=range].on").inner_text() == "Woche")
+    ch.locator('[data-act=range][data-r="1"]').click(); pg.wait_for_timeout(300)
+    check("KZ: zurück auf 24 h – Kurven wieder da", "Luftfeuchte 24 h" in ch.locator(".trt").text_content() and "nodata" not in ch.get_attribute("class")
+          and all(n > 200 for n in pg.evaluate(f"[...{R}.querySelectorAll('.ctrend.k-h .ctp')].map(p => (p.getAttribute('d') || '').length)")))
+    mp = b.new_page(viewport={"width": 390, "height": 900}); mp.goto(dense + "?view=klima"); mp.wait_for_timeout(800)
+    mp.locator(f'{P} .ctrend.k-t [data-act=range][data-r="365"]').click(); mp.wait_for_timeout(400)
+    check("KZ: Handy – Umschalter in eigener Zeile, nichts steht über", mp.evaluate(WIDE) == [] and mp.locator(f"{P} .ctrend.k-t .rng").bounding_box()["width"] < 390)
+    mp.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hv-range-')).forEach(k => localStorage.removeItem(k))"); mp.close()
+
 @gruppe("energie")
 def energie():
     # ---------- Energie-Seite (1.5.0) ----------
@@ -1299,6 +1358,64 @@ def energie():
       return [m.scrollWidth - m.clientWidth, ov, Math.min(...n.map(r => r.left)), Math.max(...n.map(r => r.right))]; }})()""")
     check("EN: Handy 390 px – nichts überlappt, kein seitliches Scrollen", geo[0] <= 0 and geo[1] == 0 and geo[2] >= 0 and geo[3] <= 390)
     mp.close()
+
+
+@gruppe("energie")
+def energie_zeitraum():
+    # ---------- Energie-Seite: Woche, Monat, Jahr als Energie je Tag bzw. Monat (1.9.0) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=energie"); pg.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hv-range-')).forEach(k => localStorage.removeItem(k))")
+    pg.goto(dense + "?view=energie"); pg.wait_for_timeout(800)
+    et = pg.locator(f"{P} .entrend")
+    stats = lambda: [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "statistics"]
+    check("EZ: Leistung 24 h vorgewählt, keine Zeitraum-Kennzahlen", "Leistung 24 h" in et.locator(".trt").text_content() and not et.locator(".enper").is_visible())
+    n0 = len(stats())
+    et.locator('[data-act=range][data-r="30"]').click(); pg.wait_for_timeout(400)
+    q = stats()[n0:]
+    check("EZ: Monat – eine Abfrage der Stundenmittel in W", len(q) == 1 and q[0]["period"] == "hour" and q[0]["units"] == {"power": "W"} and len(q[0]["ids"]) == 4)
+    check("EZ: Monat – Titel „Energie 30 Tage“, Linien weg", "Energie 30 Tage" in et.locator(".trt").text_content()
+          and all(n == 0 for n in pg.evaluate(f"[...{R}.querySelectorAll('.entrend .enp, .entrend .ena')].map(p => (p.getAttribute('d') || '').length)")))
+    check("EZ: Monat – 30 Tage mit Balken für Erzeugung und Verbrauch", 28 <= et.locator(".enbars rect.pv").count() <= 30 and et.locator(".enbars rect.use").count() == 30)
+    per = et.locator(".enper").inner_text()
+    check("EZ: Monat – Summen, bester Tag, Ø am Tag, Autarkie", all(w in per for w in ("Erzeugt", "Verbraucht", "Bezogen", "Eingespeist", "Autarkie", "bester Tag", "am Tag")) and "kWh" in per)
+    ok_sum = pg.evaluate(f"(() => {{ const D = {R}.querySelector('.entrend')._en.D; let s = 0; for (const v of D.pv) if (Number.isFinite(v)) s += v; return Math.abs(s - D.T.pv) < 1 && D.T.pv > 0; }})()")
+    check("EZ: Monat – Summe gleich den Balken", ok_sum)
+    check("EZ: Monat – Achse in kWh, Datum der Montage", "kWh" in et.locator(".cty").inner_text() and 3 <= et.locator(".trx span").count() <= 5)
+    bb = et.locator(".enc").bounding_box()
+    pg.mouse.move(bb["x"] + bb["width"] * 0.99, bb["y"] + bb["height"] / 2); pg.wait_for_timeout(100)
+    tip = et.locator(".trtip").inner_text()
+    check("EZ: Monat – Zeiger zeigt Tag mit Erzeugt, Verbraucht, Bezug", "Erzeugt" in tip and "Verbraucht" in tip and "Bezug" in tip and "kWh" in tip and tip.split("\n")[0].endswith("."))
+    pg.mouse.move(5, 5); pg.wait_for_timeout(50)
+    et.locator('[data-act=range][data-r="7"]').click(); pg.wait_for_timeout(400)
+    check("EZ: Woche – 7 Tage, Wochentage unter den Balken", et.locator(".enbars rect.use").count() == 7
+          and set(et.locator(".trx span").all_inner_texts()) <= {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"} and et.locator(".trx span").count() == 7)
+    n1 = len(stats())
+    et.locator('[data-act=range][data-r="365"]').click(); pg.wait_for_timeout(400)
+    q = stats()[n1:]
+    check("EZ: Jahr – PV, Haus, Speicher als Tagesmittel, Netz stündlich (Bezug und Einspeisung getrennt)", len(q) == 2
+          and sorted(x["period"] for x in q) == ["day", "hour"] and [x["ids"] for x in q if x["period"] == "hour"] == [["sensor.netz_leistung"]])
+    check("EZ: Jahr – 12 Monate, bester Monat", et.locator(".enbars rect.use").count() == 12 and "bester Monat" in et.locator(".enper").inner_text() and "Energie 12 Monate" in et.locator(".trt").text_content())
+    yl = pg.evaluate(f"(() => {{ const r = {R}.querySelector('.entrend .cty span:last-child').getBoundingClientRect(); return r.left - {R}.querySelector('.entrend').getBoundingClientRect().left; }})()")
+    check("EZ: Jahr – Achsenbeschriftung bleibt in der Karte", yl >= 0)
+    r0 = pg.evaluate(f"{PP}._stats.renders"); n2 = len(pg.evaluate("window.__api.log"))
+    pg.evaluate("window.__api.set('sensor.growatt_modbus_pv_power', '4100')"); pg.wait_for_timeout(250)
+    check("EZ: neuer Wert – Legende live, ohne Abfrage und Neuaufbau", "4,1 kW" in et.locator(".ctl.pv").inner_text() and pg.evaluate(f"{PP}._stats.renders") == r0
+          and not [x for x in pg.evaluate("window.__api.log")[n2:] if x[0] == "ws"])
+    pg.goto(dense + "?view=energie"); pg.wait_for_timeout(800)
+    check("EZ: Wahl gemerkt", "Energie 12 Monate" in et.locator(".trt").text_content() and et.locator(".enbars rect.use").count() == 12)
+    et.locator('[data-act=range][data-r="1"]').click(); pg.wait_for_timeout(400)
+    dd = pg.evaluate(f"[...{R}.querySelectorAll('.entrend .enp, .entrend .ena')].map(p => (p.getAttribute('d') || '').length)")
+    check("EZ: zurück auf 24 h – Linien, keine Balken, Uhrzeiten", "Leistung 24 h" in et.locator(".trt").text_content() and all(n > 200 for n in dd)
+          and et.locator(".enbars rect").count() == 0 and not et.locator(".enper").is_visible() and "Uhr" in et.locator(".trx").inner_text())
+    pg.goto(dense + "?view=energie&norec"); pg.wait_for_timeout(700)
+    et.locator('[data-act=range][data-r="30"]').click(); pg.wait_for_timeout(400)
+    check("EZ: ohne Recorder – Hinweis statt Balken", "Keine Langzeitstatistik" in et.locator(".trmsg").inner_text() and et.locator(".enbars rect").count() == 0)
+    mp = b.new_page(viewport={"width": 390, "height": 900}); mp.goto(dense + "?view=energie"); mp.wait_for_timeout(800)
+    mp.locator(f'{P} .entrend [data-act=range][data-r="30"]').click(); mp.wait_for_timeout(400)
+    check("EZ: Handy – Monat ohne seitliches Scrollen", mp.locator(f"{P} .entrend .enbars rect.use").count() == 30 and mp.evaluate(WIDE) == [])
+    mp.locator(f'{P} .entrend [data-act=range][data-r="7"]').click(); mp.wait_for_timeout(400)
+    check("EZ: Handy – Woche: alle Wochentage lesbar", mp.locator(f"{P} .entrend .trx span").count() == 7 and mp.evaluate(WIDE) == [])
+    mp.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hv-range-')).forEach(k => localStorage.removeItem(k))"); mp.close()
 
 
 def auswahl(args):
