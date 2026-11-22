@@ -4,6 +4,10 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Tests
+- Bedienprüfungen in 14 Gruppen mit 30 Abschnitten aufgeteilt, die jeweils auch einzeln laufen: `python3 tests/interact.py klima energie` (Übersicht mit `--liste`). Ohne Angabe läuft wie bisher alles, so auch in der CI.
+- Neu `tests/changed.py`: wählt anhand der Änderungen gegenüber `main` (auch nicht committete und neue Dateien) die passenden Gruppen aus, z. B. bei einer Änderung an `klima.js` nur Klima, Energie, Warnungen und die Handy-Prüfungen (≈ 1 min statt ≈ 3 min). Gemeinsam genutzte Module und das Harness lösen weiterhin alle Prüfungen aus.
+
 ## 1.8.0 – 2026-11-22
 
 ### Verbessert – Raum-Verläufe auf der Klimaseite besser lesbar
