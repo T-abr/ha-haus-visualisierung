@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.8.1"
+VERSION = "1.9.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
