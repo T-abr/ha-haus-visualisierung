@@ -2,6 +2,7 @@
 
 import { dc, dom, entName, esc, icon, isOn, NF0, NF1, num, OUTDOOR_RE, powerW, setText } from "./grundlagen.js";
 import { finite } from "./verlauf.js";
+import { wbPriceHTML } from "./strompreis.js";
 
 /* ------------------------------------------------------------------------ */
 /*  Technik: Heizung (Speicher, Kamin, Heizkurve) und Wallbox (EVCC)          */
@@ -225,7 +226,7 @@ function heatHover(c, frac) {
 
 /* ---------- Wallbox ---------- */
 function wbCardHTML(a) {
-  return `<div class="glass tech wb" data-u="wallbox" data-area="${esc(a.id)}"><div class="techh">${icon("mdi:ev-station")}<span>Wallbox</span><span class="techs"></span></div><div class="wbbody"></div></div>`;
+  return `<div class="glass tech wb" data-u="wallbox" data-area="${esc(a.id)}"><div class="techh">${icon("mdi:ev-station")}<span>Wallbox</span><span class="techs"></span></div><div class="wbbody"></div>${wbPriceHTML()}</div>`;
 }
 
 function updateWallbox(el, ctx) {

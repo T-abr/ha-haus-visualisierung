@@ -229,6 +229,20 @@ def _energy(raw: dict) -> dict:
     return out
 
 
+def _price(raw: dict) -> dict:
+    """Strompreis: Sensor, Schalter und Preise in ct/kWh."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["price"])
+    sensor = _entity(raw.get("sensor"))
+    out["sensor"] = sensor if sensor.startswith("sensor.") else ""
+    if isinstance(raw.get("use_sensor"), bool):
+        out["use_sensor"] = raw["use_sensor"]
+    out["fixed_ct"] = _num(raw.get("fixed_ct"), 0, 200, out["fixed_ct"])
+    out["feed_in_ct"] = _num(raw.get("feed_in_ct"), 0, 100, out["feed_in_ct"])
+    out["surcharge_ct"] = _num(raw.get("surcharge_ct"), -50, 100, out["surcharge_ct"])
+    out["window_h"] = _int(raw.get("window_h"), 1, 12, out["window_h"])
+    return out
+
+
 def _wallpanel(raw: dict) -> dict:
     """Wandpanel: Zeiten in Minuten (0 = nie), Schalter, Wetter und Bewegungsmelder."""
     out = copy.deepcopy(DEFAULT_LAYOUT["wallpanel"])
@@ -337,6 +351,8 @@ def sanitize(raw: Any) -> dict:
         result["wallbox"] = _wallbox(raw["wallbox"])
     if isinstance(raw.get("energy"), dict):
         result["energy"] = _energy(raw["energy"])
+    if isinstance(raw.get("price"), dict):
+        result["price"] = _price(raw["price"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 

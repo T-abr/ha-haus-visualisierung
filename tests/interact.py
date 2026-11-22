@@ -1306,8 +1306,8 @@ def energie():
     pg.locator(f"{P} .ecard").click(); pg.wait_for_timeout(800)
     check("EN: Tipp auf die Energie-Karte öffnet die Energie-Seite", pg.locator(f"{P} .ptitle h1").inner_text() == "Energie" and pg.locator(f"{P} .nav.active[data-to=energie]").count() == 1)
     ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] in ("statistics", "history")]
-    check("EN: eine gesammelte Abfrage für PV, Netz, Haus und Speicher", len(ws) == 1 and ws[0][1] == "statistics"
-          and sorted(ws[0][2]["ids"]) == sorted(["sensor.growatt_modbus_pv_power", "sensor.netz_leistung", "sensor.hausverbrauch_ac", "sensor.growatt_modbus_battery_power"]))
+    check("EN: eine gesammelte Abfrage für PV, Netz, Haus, Speicher und Strompreis", len(ws) == 1 and ws[0][1] == "statistics"
+          and sorted(ws[0][2]["ids"]) == sorted(["sensor.growatt_modbus_pv_power", "sensor.netz_leistung", "sensor.hausverbrauch_ac", "sensor.growatt_modbus_battery_power", "sensor.nordpool_kwh_de_eur"]))
     nd = lambda k: pg.locator(f"{P} .enode.{k}").inner_text().replace("\n", " ")
     check("EN: Fluss – PV, Netz-Bezug, Speicher (automatisch erkannt), Wallbox, Haus", "3,2 kW" in nd("pv") and "5,5 kW" in nd("grid") and "Bezug" in nd("grid")
           and "78 %" in nd("bat") and "lädt 800 W" in nd("bat") and "7,4 kW" in nd("wb") and "lädt" in nd("wb") and "612 W" in nd("hub"))
@@ -1416,6 +1416,55 @@ def energie_zeitraum():
     mp.locator(f'{P} .entrend [data-act=range][data-r="7"]').click(); mp.wait_for_timeout(400)
     check("EZ: Handy – Woche: alle Wochentage lesbar", mp.locator(f"{P} .entrend .trx span").count() == 7 and mp.evaluate(WIDE) == [])
     mp.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hv-range-')).forEach(k => localStorage.removeItem(k))"); mp.close()
+
+
+@gruppe("energie")
+def strompreis():
+    # ---------- Strompreis und Kosten (Energie-Seite, Wallbox) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=energie"); pg.wait_for_timeout(800)
+    PR = [27, 25, 22, 21, 21, 23, 29, 34, 33, 30, 26, 22, 18, 16, 17, 21, 27, 35, 38, 36, 32, 30, 29, 28]
+    hr = pg.evaluate("new Date().getHours()")
+    ct = lambda v: f"{v:.1f}".replace(".", ",") + " ct"
+    card = pg.locator(f"{P} .enprice")
+    check("SP: Karte Strompreis auf der Energie-Seite", card.count() == 1)
+    nw = pg.locator(f"{P} .enpnow").inner_text()
+    check("SP: Preissensor automatisch erkannt (Einheit …/kWh)", "Strompreis (automatisch erkannt)" in pg.locator(f"{P} .enpsrc").inner_text())
+    check("SP: Preis jetzt aus dem Stundenpreis, Ø heute, günstigstes Fenster", f"{ct(PR[hr])}/kWh" in nw and "Ø heute" in nw and "Günstigste 3 h" in nw and "Uhr" in nw)
+    ref = PR + [v + 1 for v in PR[:min(24, hr + 13)]]  # heute und bis 36 h voraus
+    q = (PR[hr] - min(ref)) / (max(ref) - min(ref))
+    lvl = "günstig" if q <= 0.33 else "teuer" if q >= 0.67 else "mittel"
+    check("SP: Einordnung günstig/mittel/teuer", lvl in nw)
+    bars = pg.evaluate(f"(() => {{ const b = [...{R}.querySelectorAll('.enpb i')]; return [b.length, b.filter(i => i.classList.contains('now')).length, b.filter(i => i.classList.contains('best')).length]; }})()")
+    check("SP: Preisbalken bis morgen, laufende Stunde markiert, 3-h-Fenster hervorgehoben", bars[0] == 48 - hr and bars[1] == 1 and 3 <= bars[2] <= 4)
+    co = pg.locator(f"{P} .enpcost").inner_text()
+    check("SP: Kosten heute – Netzbezug, Einspeisung, Gespart, Bilanz in €", all(w in co for w in ("Netzbezug", "Einspeisung", "Gespart", "Bilanz")) and "€" in co and "kWh" in co)
+    wp = pg.locator(f"{P} .tech.wb .wbprice").inner_text()
+    check("SP: Wallbox – Preis, günstig laden, was Laden gerade kostet", f"{ct(PR[hr])}/kWh" in wp and "Günstig laden" in wp and "Laden kostet gerade" in wp and "€/h" in wp and "75 % aus dem Netz" in wp)
+    pg.evaluate("window.__api.set('sensor.netz_leistung', '-2000')"); pg.wait_for_timeout(250)
+    check("SP: Wallbox lädt mit Überschuss – eigener Strom", "eigenem Strom" in pg.locator(f"{P} .tech.wb .wbprice").inner_text())
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, price: {{ ...p._layout.price, surcharge_ct: 10 }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(400)
+    check("SP: Aufschlag auf den Sensorpreis", f"{ct(PR[hr] + 10)}/kWh" in pg.locator(f"{P} .enpnow").inner_text())
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, price: {{ ...p._layout.price, use_sensor: false, fixed_ct: 32.5 }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(400)
+    nw = pg.locator(f"{P} .enpnow").inner_text()
+    check("SP: ohne Preissensor – fester Preis, keine Balken", "Fester Preis" in nw and "32,5 ct" in nw and not pg.locator(f"{P} .enpbars").is_visible()
+          and "fester Preis" in pg.locator(f"{P} .enpsrc").inner_text() and "€" in pg.locator(f"{P} .enpcost").inner_text())
+    wp = pg.locator(f"{P} .tech.wb .wbprice").inner_text()
+    check("SP: Wallbox mit festem Preis, ohne Zeitfenster", "32,5 ct/kWh" in wp and "fest" in wp and "Günstig laden" not in wp)
+    pg.goto(dense + "?view=energie&norec"); pg.wait_for_timeout(700)
+    check("SP: ohne Recorder – Preis da, Kosten mit Hinweis", "ct/kWh" in pg.locator(f"{P} .enpnow").inner_text() and "Noch kein Verlauf" in pg.locator(f"{P} .enpcost").inner_text())
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'darstellung')
+    sec = pg.locator(f'{P} .set[data-sec="price"]')
+    check("SP: Einstellungen – Strompreis mit erkanntem Sensor", sec.count() == 1 and "erkannt: sensor.nordpool_kwh_de_eur" in sec.inner_text()
+          and all(pg.locator(f'{P} [data-set="price.{k}"]').count() == 1 for k in ("sensor", "use_sensor", "fixed_ct", "feed_in_ct", "surcharge_ct", "window_h")))
+    inp = pg.locator(f'{P} input[data-set="price.fixed_ct"]'); inp.fill("25.5"); inp.dispatch_event("change"); pg.wait_for_timeout(100)
+    check("SP: Einstellung landet im Entwurf", pg.evaluate(f"{PP}._draft.price.fixed_ct") == 25.5)
+    pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(250)
+    mp = b.new_page(viewport={"width": 390, "height": 900}); mp.goto(dense + "?view=energie"); mp.wait_for_timeout(800)
+    geo = mp.evaluate(f"""(() => {{ const R = document.querySelector('{P}').shadowRoot; const m = R.querySelector('.main'), c = R.querySelector('.enprice').getBoundingClientRect();
+      return [m.scrollWidth - m.clientWidth, c.right <= 390]; }})()""")
+    check("SP: Handy 390 px – Strompreis ohne seitliches Scrollen", geo[0] <= 0 and geo[1])
+    mp.close()
 
 
 def auswahl(args):
