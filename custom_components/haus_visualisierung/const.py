@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.4.0"
+VERSION = "1.6.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -63,9 +63,12 @@ DEFAULT_LAYOUT: dict = {
             "offline": False,          # Geräte nicht erreichbar
             "presence_away": True,     # Bewegung/Präsenz, während niemand zu Hause ist
             "alarm_panel": True,       # Alarmanlage (z. B. Alarmo) ausgelöst
+            "mold": True,              # Schimmelrisiko: Raumfeuchte zu hoch – jetzt lüften
         },
         "modes": {},                   # {feste Regel: [Hausmodi]} – fehlt = Standard (BUILTIN_MODES)
         "contacts_min": 0,             # Fenster erst nach … Minuten melden
+        "mold_hum": 65,                # Schimmelrisiko ab … % relativer Feuchte (Entwarnung 3 Punkte darunter)
+        "mold_min": 30,                # … erst nach … Minuten über der Grenze melden
         "rules": [],                   # eigene Regeln
     },
     "push": {                      # Push-Benachrichtigungen über die Companion-App
@@ -127,6 +130,6 @@ HOUSE_MODES = ["zuhause", "nacht", "abwesend", "urlaub"]
 HOUSE_MODE_NAMES = {"zuhause": "Zuhause", "nacht": "Nacht", "abwesend": "Abwesend", "urlaub": "Urlaub"}
 ARM_ACTIONS = ["none", "disarm", "arm_home", "arm_night", "arm_away", "arm_vacation"]
 # In welchen Hausmodi die festen Regeln gelten, wenn nichts eingestellt ist
-BUILTIN_MODES: dict[str, list[str]] = {"presence_away": ["abwesend", "urlaub"]}
+BUILTIN_MODES: dict[str, list[str]] = {"presence_away": ["abwesend", "urlaub"], "mold": ["zuhause"]}
 ACTION_TYPES = ["knx", "switch", "siren", "tts", "script"]
 ACTION_WHEN = ["neu", "eskalation"]

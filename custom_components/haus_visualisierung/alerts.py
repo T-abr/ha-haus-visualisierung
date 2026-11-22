@@ -2,13 +2,15 @@
 
 Die Regeln entsprechen denen im Panel (frontend/haus-visualisierung.js, evalAlerts):
 feste Regeln (Fenster, Fenster beim Heizen, Melder, Schloss, Garagentor, Batterien,
-offline) und eigene Regeln. So kommen Meldungen auch an, wenn kein Panel offen ist.
+offline, Schimmelrisiko) und eigene Regeln. So kommen Meldungen auch an, wenn kein Panel offen ist.
 """
 
 from __future__ import annotations
 
 import contextlib
 import logging
+import math
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -26,6 +28,7 @@ from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
 from .actions import ActionRunner
@@ -49,6 +52,8 @@ ROOM_SENSOR_DC = {
 ENERGY_DC = {"power", "energy", "current", "voltage", "power_factor", "apparent_power", "reactive_power"}
 UNAV = {"unavailable", "unknown"}
 STATELESS = {"scene", "button", "input_button", "event"}
+OUTDOOR_RE = re.compile(r"(au(ß|ss)en|garten|drau(ß|ss)en|outdoor|grundst(ü|ue)ck)", re.IGNORECASE)
+TECH_RE = re.compile(r"(vorlauf|r(ü|ue)cklauf|speicher|puffer|kessel|kamin|solar|kollektor|boiler|warmwasser|abgas|cpu)", re.IGNORECASE)
 LEVEL_ORDER = {"alarm": 3, "warn": 2, "info": 1}
 LEVEL_NAME = {"alarm": "Alarm", "warn": "Warnung", "info": "Hinweis"}
 
@@ -145,6 +150,37 @@ def classify(eid: str, st: State, layout: dict, pinned: bool) -> str | None:
     return "other" if pinned else None
 
 
+# Feuchte: Magnus-Formel über Wasser (Sonntag 1990) – dieselben Formeln wie im Panel
+MAG_A, MAG_B, MOLD_HYST = 17.62, 243.12, 3
+
+
+def dew_point(t: float | None, rh: float | None) -> float | None:
+    if t is None or rh is None or rh <= 0:
+        return None
+    g = math.log(min(rh, 100) / 100) + MAG_A * t / (MAG_B + t)
+    return MAG_B * g / (MAG_A - g)
+
+
+def abs_hum(t: float | None, rh: float | None) -> float | None:
+    """Absolute Feuchte in g/m³."""
+    if t is None or rh is None or rh < 0:
+        return None
+    return 216.7 * (min(rh, 100) / 100) * 6.112 * math.exp(MAG_A * t / (MAG_B + t)) / (273.15 + t)
+
+
+def vent_advice(t_in: float | None, rh_in: float | None, t_out: float | None, rh_out: float | None) -> str | None:
+    """gut (lohnt sich), wenig oder nicht (draußen feuchter) – nach absoluter Feuchte."""
+    a, b = abs_hum(t_in, rh_in), abs_hum(t_out, rh_out)
+    if a is None or b is None:
+        return None
+    d = a - b
+    return "gut" if d >= 2 else "wenig" if d >= 0.5 else "nicht"
+
+
+def _de(v: float, digits: int) -> str:
+    return f"{v:.{digits}f}".replace(".", ",")
+
+
 @dataclass
 class Alert:
     key: str
@@ -159,6 +195,9 @@ class _Room:
     area_id: str
     name: str
     groups: dict[str, list[str]]
+    temp_id: str | None = None
+    hum_id: str | None = None
+    indoor: bool = True
 
 
 class AlertMonitor:
@@ -175,6 +214,8 @@ class AlertMonitor:
         self._panels: list[str] = []
         self._all: set[str] = set()
         self._active: dict[str, Alert] = {}
+        self._mold: dict[str, dict] = {}  # area_id → {"since": Zeitpunkt über der Grenze, "on": gemeldet}
+        self._outdoor: dict[str, str] = {}
         self._last_sent: dict[str, float] = {}
         self._baseline_done = False
         self._eval_pending: Callable[[], None] | None = None
@@ -270,7 +311,17 @@ class AlertMonitor:
                 continue
             room = rooms.setdefault(area_id, _Room(area_id, area.name, {}))
             room.groups.setdefault(cat, []).append(eid)
+        floor_reg = fr.async_get(hass)
+        outdoor_floors = set(layout.get("outdoor_floors", []))
+        for room in rooms.values():
+            area = area_reg.async_get_area(room.area_id)
+            room.temp_id, room.hum_id = self._room_climate(room, area)
+            floor = floor_reg.async_get_floor(area.floor_id) if area and area.floor_id else None
+            room.indoor = not OUTDOOR_RE.search(room.name) and not (
+                floor and (floor.floor_id in outdoor_floors or OUTDOOR_RE.search(floor.name))
+            )
         self._rooms = list(rooms.values())
+        self._outdoor = self._find_outdoor()
         self._batteries = batteries
         self._area_of = {e: r for r in self._rooms for lst in r.groups.values() for e in lst}
         for b in batteries:
@@ -283,7 +334,83 @@ class AlertMonitor:
         self._all = {e for r in self._rooms for lst in r.groups.values() for e in lst}
         rules = layout.get("alerts", {}).get("rules", [])
         self._panels = hass.states.async_entity_ids("alarm_control_panel")
-        self._watch = self._all | set(batteries) | set(self._panels) | {r.get("entity") for r in rules if r.get("entity")}
+        self._watch = (self._all | set(batteries) | set(self._panels) | set(self._outdoor.values())
+                       | {r.get("entity") for r in rules if r.get("entity")})
+
+    def _room_climate(self, room: _Room, area: Any) -> tuple[str | None, str | None]:
+        """Temperatur- und Feuchtefühler des Raums – wie im Panel: Vorgabe des Bereichs, sonst der erste passende."""
+        get = self.hass.states.get
+        sensors = sorted(room.groups.get("sensor", []), key=lambda e: str((get(e).attributes.get("friendly_name") if get(e) else e) or e).lower())
+        t_id = getattr(area, "temperature_entity_id", None) if area else None
+        h_id = getattr(area, "humidity_entity_id", None) if area else None
+        if not t_id or get(t_id) is None:
+            t_id = next((e for e in sensors if (s := get(e)) and s.attributes.get("device_class") == "temperature"
+                         and not TECH_RE.search(str(s.attributes.get("friendly_name") or e))
+                         and ((v := num(s)) is None or v <= 35)), None)
+        if not h_id or get(h_id) is None:
+            h_id = next((e for e in sensors if (s := get(e)) and s.attributes.get("device_class") == "humidity"), None)
+        return t_id, h_id
+
+    def _find_outdoor(self) -> dict[str, str]:
+        """Außen: Temperatur (Heizung → Außenfühler oder nach Namen), Feuchte nach Namen, sonst Wetter-Entität."""
+        hass, layout = self.hass, self.layout
+        out: dict[str, str] = {}
+        pick = (layout.get("heating") or {}).get("outdoor")
+        for st in hass.states.async_all("sensor"):
+            dc = st.attributes.get("device_class")
+            if dc in ("temperature", "humidity") and dc not in out and OUTDOOR_RE.search(f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"):
+                out[dc] = st.entity_id
+        if pick and hass.states.get(pick):
+            out["temperature"] = pick
+        weather = (layout.get("wallpanel") or {}).get("weather")
+        if not weather or hass.states.get(weather) is None:
+            weather = next(iter(hass.states.async_entity_ids("weather")), None)
+        if weather:
+            out["weather"] = weather
+        return out
+
+    def _outdoor_now(self) -> tuple[float | None, float | None]:
+        get = self.hass.states.get
+        t = num(get(self._outdoor.get("temperature", "")))
+        rh = num(get(self._outdoor.get("humidity", "")))
+        if (w := get(self._outdoor.get("weather", ""))) is not None:
+            if t is None and isinstance(w.attributes.get("temperature"), (int, float)):
+                t = float(w.attributes["temperature"])
+            if rh is None and isinstance(w.attributes.get("humidity"), (int, float)):
+                rh = float(w.attributes["humidity"])
+        return t, rh
+
+    def _mold_alerts(self, cfg: dict, now: float) -> list[Alert]:
+        """Schimmelrisiko: Raumfeuchte ab der Grenze für mindestens … Minuten, Entwarnung 3 Punkte darunter.
+        Bei offenem Fenster im Raum wird schon gelüftet: keine Meldung."""
+        get = self.hass.states.get
+        limit = cfg.get("mold_hum") or 65
+        wait = cfg.get("mold_min", 30) * 60
+        t_out, rh_out = self._outdoor_now()
+        out: list[Alert] = []
+        seen: set[str] = set()
+        for r in self._rooms:
+            if not r.hum_id or not r.indoor:
+                continue
+            rh, t = num(get(r.hum_id)), num(get(r.temp_id)) if r.temp_id else None
+            prev = self._mold.get(r.area_id)
+            active = bool(prev and prev["on"])
+            if rh is None or not (rh >= limit or (active and rh > limit - MOLD_HYST)):
+                continue
+            since = prev["since"] if prev else now
+            on = active or now - since >= wait
+            self._mold[r.area_id] = {"since": since, "on": on}
+            seen.add(r.area_id)
+            if not on or any(is_on(get(e)) for e in r.groups.get("contact", [])):
+                continue
+            dp = dew_point(t, rh)
+            advice = vent_advice(t, rh, t_out, rh_out) if t is not None else None
+            detail = f"{rh:.0f} %" + (f" bei {_de(t, 1)}°" if t is not None else "") + (f" · Taupunkt {_de(dp, 1)}°" if dp is not None else "")
+            detail += " – draußen feuchter, besser heizen oder entfeuchten" if advice == "nicht" else " – jetzt lüften"
+            out.append(Alert(f"mold:{r.area_id}", "warn", f"Schimmelrisiko · {r.name}", detail, f"raum/{r.area_id}"))
+        for area_id in [k for k in self._mold if k not in seen]:
+            del self._mold[area_id]
+        return out
 
     # ---------- Auswertung (wie evalAlerts im Panel) ----------
     def _name(self, eid: str) -> str:
@@ -395,6 +522,10 @@ class AlertMonitor:
             n = sum(1 for e in self._all if is_unav(get(e)))
             if n:
                 out.append(Alert("offline", "info", f"{n} {'Gerät' if n == 1 else 'Geräte'} nicht erreichbar", path=""))
+        if b.get("mold", True) and mode_ok("mold"):
+            out.extend(self._mold_alerts(cfg, now))
+        else:
+            self._mold.clear()
         for i, rule in enumerate(cfg.get("rules", [])):
             ent = rule.get("entity")
             if rule.get("enabled") is False or not ent:

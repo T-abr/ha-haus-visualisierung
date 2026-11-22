@@ -34,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 # Feste Regel → Präfix des Meldungsschlüssels
 BUILTIN_PREFIX = {
     "contacts": "contact:", "window_heating": "heat:", "safety": "safety:", "alarm_panel": "alarmpanel:",
-    "presence_away": "presence:", "locks": "lock:", "garage": "garage:", "battery": "battery", "offline": "offline",
+    "presence_away": "presence:", "locks": "lock:", "garage": "garage:", "battery": "battery", "offline": "offline", "mold": "mold:",
 }
 LEVEL_NAME = {"alarm": "Alarm", "warn": "Warnung", "info": "Hinweis"}
 TYPE_NAME = {"knx": "KNX-Telegramm", "switch": "Schalter", "siren": "Sirene", "tts": "Durchsage", "script": "Skript"}

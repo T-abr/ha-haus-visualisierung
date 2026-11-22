@@ -3,7 +3,7 @@
  * Baut sich wie eine Dashboard-Strategy aus Etagen → Bereichen → Geräten auf,
  * hat aber ein eigenes Layout („Hausschnitt“).
  */
-const VERSION = "1.4.0";
+const VERSION = "1.6.0";
 const DOMAIN = "haus_visualisierung";
 
 if (!window.__HAUS_VIS_LOADED__) {
@@ -35,8 +35,8 @@ const DEFAULT_LAYOUT = {
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
   alerts: {
-    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true },
-    modes: {}, contacts_min: 0, rules: [],
+    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true, mold: true },
+    modes: {}, contacts_min: 0, mold_hum: 65, mold_min: 30, rules: [],
   },
   escalation: { enabled: true, minutes: 5, levels: ["alarm"], push_critical: true },
   alarm_actions: [],
@@ -47,7 +47,7 @@ const DEFAULT_LAYOUT = {
 const HOUSE_MODES = [["zuhause", "Zuhause", "mdi:home-account"], ["nacht", "Nacht", "mdi:weather-night"], ["abwesend", "Abwesend", "mdi:home-export-outline"], ["urlaub", "Urlaub", "mdi:airplane"]];
 const MODE_NAME = Object.fromEntries(HOUSE_MODES.map(([k, t]) => [k, t]));
 const MODE_ICON = Object.fromEntries(HOUSE_MODES.map(([k, , i]) => [k, i]));
-const BUILTIN_MODES = { presence_away: ["abwesend", "urlaub"] };
+const BUILTIN_MODES = { presence_away: ["abwesend", "urlaub"], mold: ["zuhause"] };
 const withDefaults = (l) => {
   const a = (l && l.alerts) || {};
   return {
@@ -521,7 +521,9 @@ function buildModel(h, L) {
   for (const b of batteries) if (b.areaId && areas.has(b.areaId)) eidArea.set(b.eid, areas.get(b.areaId));
   const _panelIds = Object.keys(h.entities || {}).filter((e) => e.startsWith("alarm_control_panel.") && h.states[e]);
   if (!_panelIds.length) for (const e in h.states) if (e.startsWith("alarm_control_panel.")) _panelIds.push(e);
-  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds, tech };
+  // Außenfühler für Feuchte und Lüftungshinweis (nur bei Änderungen an Bereichen, Geräten, Entitäten neu gesucht)
+  const _oc = { tId: outdoorTempId(h, { tech }, L), hId: outdoorHumId(h), wId: weatherId(h, L) };
+  return { areas, floors: ordered, upper, lower, outdoor, visibleAreas, agg, batteries, eidArea, _panelIds, _panels: _panelIds, tech, _oc, _outClim: Object.values(_oc).filter(Boolean) };
 }
 
 function shortFloor(name) {
@@ -551,8 +553,8 @@ function roomTileHTML(a, nav = true, opts = {}) {
         <span class="al al-heat" hidden title="Heizt">${icon("mdi:fire")}</span>
         <span class="al al-pres" hidden title="Präsenz"><i class="pulse"></i></span>
       </span></div>
-    <div class="room-clim"><span class="rt"></span><span class="rh"></span></div>
-    ${opts.spark ? sparkHTML(a) : ""}
+    <div class="room-clim"><span class="rt"></span><span class="rh"></span>${opts.dp && a.humId && a.tempId ? '<small class="rdp"></small>' : ""}</div>
+    ${opts.spark ? sparkHTML(a, opts.kind) : ""}
     ${opts.act ? '<div class="ract"></div>' : ""}
     <div class="room-foot">
       ${a.lights.length ? `<button class="mini ml" data-act="area-lights" data-area="${esc(a.id)}" title="Licht schalten">${icon("mdi:lightbulb-group")}<span></span></button>` : ""}
@@ -824,6 +826,7 @@ function updateRoom(el, ctx) {
   const s = areaState(ctx._hass, a);
   setText(el, ".rt", s.t !== null ? `${NF1.format(s.t)}°` : "");
   setText(el, ".rh", s.hu !== null ? `${NF0.format(s.hu)} %` : "");
+  if (el.querySelector(".rdp")) { const dp = dewPoint(s.t, s.hu); setText(el, ".rdp", dp !== null ? `Taupunkt ${NF1.format(dp)}°` : ""); }
   el.classList.toggle("lit", s.lightsOn > 0);
   const dense = isDense(ctx._layout), chip = el.classList.contains("rchip");
   const ml = el.querySelector(".ml");
@@ -949,7 +952,9 @@ function alertWatch(m, L) {
   const garages = m.visibleAreas.flatMap((a) => a.covers);
   const locks = m.visibleAreas.flatMap((a) => a.groups.lock || []);
   const pres = m.visibleAreas.flatMap((a) => a.presence);
-  return [...m.agg.contacts, ...m.agg.safety, ...m.agg.climates, ...m.agg.batteries, ...m.agg.unavailable, ...garages, ...locks, ...pres, ...(m._panelIds || []), ...r.map((x) => x.entity).filter(Boolean)];
+  // Schimmelrisiko: nur die Raumfeuchte. Temperatur und außen ändern bloß den Text; den frischt der 30-s-Takt auf.
+  const hum = (L.alerts && L.alerts.builtin && L.alerts.builtin.mold === false) ? [] : m.visibleAreas.map((a) => a.humId);
+  return [...m.agg.contacts, ...m.agg.safety, ...m.agg.climates, ...m.agg.batteries, ...m.agg.unavailable, ...garages, ...locks, ...pres, ...hum, ...(m._panelIds || []), ...r.map((x) => x.entity).filter(Boolean)].filter(Boolean);
 }
 /* Alarmmanager: Zustände aus dem Backend (neu, quittiert, stumm) und jüngstes Protokoll */
 let ALARMS = null;
@@ -1031,6 +1036,8 @@ function evalAlertsRaw(h, m, L) {
     const n = m.agg.unavailable.filter((e) => isUnav(h.states[e])).length;
     if (n) out.push({ key: "offline", level: "info", icon: "mdi:lan-disconnect", title: `${n} ${n === 1 ? "Gerät" : "Geräte"} nicht erreichbar`, detail: "" });
   }
+  if (B.mold) out.push(...moldAlerts(h, m, L, c));
+  else MOLD.clear();
   (c.rules || []).forEach((r, i) => {
     if (r.enabled === false || !r.entity) return;
     if (r.modes && r.modes.length && !r.modes.includes(mode)) return;
@@ -1750,6 +1757,61 @@ function updateWallbox(el, ctx) {
    Farben (dunkle Fläche, geprüft): innen #e26a1c, außen #2a9ad8. Eine gemeinsame Achse in °C. */
 const CL_IN = "#e26a1c", CL_OUT = "#2a9ad8";
 
+/* ---------- Feuchte: Taupunkt, absolute Feuchte, Lüftungshinweis, Schimmelrisiko ---------- */
+/* Magnus-Formel über Wasser (Sonntag 1990). Dieselben Formeln und Grenzen stehen im Backend (alerts.py). */
+const MAG_A = 17.62, MAG_B = 243.12, MOLD_HYST = 3;
+function dewPoint(t, rh) {
+  if (!finite(t) || !finite(rh) || rh <= 0) return null;
+  const g = Math.log(Math.min(rh, 100) / 100) + (MAG_A * t) / (MAG_B + t);
+  return (MAG_B * g) / (MAG_A - g);
+}
+/** Absolute Feuchte in g/m³. */
+function absHum(t, rh) {
+  if (!finite(t) || !finite(rh) || rh < 0) return null;
+  return (216.7 * (Math.min(rh, 100) / 100) * 6.112 * Math.exp((MAG_A * t) / (MAG_B + t))) / (273.15 + t);
+}
+/** Lüften lohnt sich, wenn draußen deutlich weniger Wasser in der Luft ist (absolute Feuchte, g/m³). */
+function ventAdvice(tIn, rhIn, tOut, rhOut) {
+  const a = absHum(tIn, rhIn), b = absHum(tOut, rhOut);
+  if (a === null || b === null) return null;
+  const d = a - b;
+  return d >= 2 ? { k: "gut", t: "Lüften lohnt sich", d } : d >= 0.5 ? { k: "wenig", t: "Lüften bringt wenig", d } : { k: "nicht", t: "Draußen feuchter", d };
+}
+const outdoorHumId = (h) => Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "humidity" && OUTDOOR_RE.test(`${e} ${h.states[e].attributes.friendly_name || ""}`)) || "";
+const weatherId = (h, L) => { const w = L.wallpanel && L.wallpanel.weather; return w && h.states[w] ? w : Object.keys(h.states).find((e) => e.startsWith("weather.")) || ""; };
+/** Außen jetzt: Temperatur und Feuchte aus den Fühlern, sonst aus der Wetter-Entität. Die IDs merkt sich das Modell. */
+function outdoorClim(h, m) {
+  const o = m._oc || {}, w = h.states[o.wId];
+  let t = num(h.states[o.tId]), rh = num(h.states[o.hId]);
+  if (w && t === null && finite(w.attributes.temperature)) t = w.attributes.temperature;
+  if (w && rh === null && finite(w.attributes.humidity)) rh = w.attributes.humidity;
+  return { ...o, t, rh };
+}
+const isIndoor = (m, a) => !OUTDOOR_RE.test(a.name) && !m.outdoor.some((f) => f.areas.includes(a));
+const humRooms = (m) => m.visibleAreas.filter((a) => a.humId && isIndoor(m, a));
+
+/* Schimmelrisiko: Raumfeuchte ab der Grenze (Standard 65 %) für mindestens … Minuten (Standard 30).
+   Rückfall erst 3 Prozentpunkte darunter. Während ein Fenster des Raums offen ist, wird schon gelüftet: keine Meldung. */
+const MOLD = new Map();
+function moldAlerts(h, m, L, c) {
+  const now = Date.now(), limit = c.mold_hum || 65, wait = (c.mold_min ?? 30) * 60000, book = (ALARMS && ALARMS.alarms) || {}, out = [];
+  const o = outdoorClim(h, m), seen = new Set();
+  for (const a of humRooms(m)) {
+    const key = `mold:${a.id}`, rh = num(h.states[a.humId]), t = num(h.states[a.tempId]);
+    const prev = MOLD.get(a.id), active = (prev && prev.on) || !!book[key];
+    if (rh === null || !(rh >= limit || (active && rh > limit - MOLD_HYST))) continue;
+    const since = prev ? prev.since : now, on = active || now - since >= wait;
+    MOLD.set(a.id, { since, on }); seen.add(a.id);
+    if (!on || a.contacts.some((e) => isOn(h.states[e]))) continue;
+    const dp = dewPoint(t, rh), adv = t !== null ? ventAdvice(t, rh, o.t, o.rh) : null;
+    out.push({ key, level: "warn", icon: "mdi:water-alert", title: `Schimmelrisiko · ${a.name}`,
+      detail: `${NF0.format(rh)} %${t !== null ? ` bei ${NF1.format(t)}°` : ""}${dp !== null ? ` · Taupunkt ${NF1.format(dp)}°` : ""} – ${adv && adv.k === "nicht" ? "draußen feuchter, besser heizen oder entfeuchten" : "jetzt lüften"}`,
+      eid: a.humId, to: `raum/${a.id}` });
+  }
+  for (const id of [...MOLD.keys()]) if (!seen.has(id)) MOLD.delete(id);
+  return out;
+}
+
 /** Lädt fehlende Verläufe gesammelt; cb läuft nach dem Laden. Ergebnis: true, solange noch geladen wird. */
 function trendEnsure(h, ids, cb) {
   const now = Date.now();
@@ -1782,15 +1844,29 @@ function outdoorTempId(h, m, L) {
   return Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "temperature" && OUTDOOR_RE.test(`${e} ${h.states[e].attributes.friendly_name || ""}`)) || "";
 }
 
-const climRooms = (m) => m.visibleAreas.filter((a) => a.tempId && !OUTDOOR_RE.test(a.name) && !m.outdoor.some((f) => f.areas.includes(a)));
+const climRooms = (m) => m.visibleAreas.filter((a) => a.tempId && isIndoor(m, a));
 
-function climTrendHTML() {
-  return `<div class="glass ctrend" data-u="climtrend">
-    <div class="trh"><span class="trt">${icon("mdi:chart-line")}Temperaturen 24 h</span>
+/* Zwei Kopfkarten mit derselben Mechanik: Temperaturen (°C) und Luftfeuchte (%). Innen immer orange, außen immer blau. */
+const CLIM_KIND = {
+  t: { title: "Temperaturen 24 h", ic: "mdi:chart-line", id: (a) => a.tempId, rooms: climRooms, out: (h, m, L) => outdoorTempId(h, m, L),
+    fmt: (v) => `${NF1.format(v)}°`, ax: (v) => `${v}°`, pad: 0.5, steps: [1, 2, 5, 10, 20] },
+  h: { title: "Luftfeuchte 24 h", ic: "mdi:water-percent", id: (a) => a.humId, rooms: humRooms, out: (h, m) => (m._oc && m._oc.hId) || "",
+    fmt: (v) => `${NF0.format(v)} %`, ax: (v) => `${v} %`, pad: 2, steps: [5, 10, 20, 25, 50] },
+};
+/** Alle Verlaufs-Fühler der Klimaseite – beide Karten und alle Raum-Verläufe in einer Abfrage. */
+function climPageIds(h, m, L) {
+  return [...new Set([...m.visibleAreas.flatMap((a) => [a.tempId, a.humId]), outdoorTempId(h, m, L), m._oc && m._oc.hId].filter(Boolean))];
+}
+const moldLimit = (L) => (L.alerts && L.alerts.mold_hum) || 65;
+
+function climTrendHTML(k = "t") {
+  const K = CLIM_KIND[k];
+  return `<div class="glass ctrend k-${k}" data-u="climtrend" data-kind="${k}">
+    <div class="trh"><span class="trt">${icon(K.ic)}${K.title}</span>
       <span class="ctl in"><i></i>Haus Ø<b></b></span><span class="ctl out"><i></i>Außen<b></b></span></div>
     <div class="ctstats"></div>
-    <div class="trc ctc"><svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><g class="trgrid"></g><g class="ctgrid"></g><path class="ctp out"/><path class="ctp in"/></svg>
-      <div class="cty"></div><span class="ctend in"></span><span class="ctend out"></span>
+    <div class="trc ctc"><svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><g class="trgrid"></g><g class="ctgrid"></g>${k === "h" ? '<rect class="ctband" x="0" width="1000"/><path class="ctlim"/>' : ""}<path class="ctp out"/><path class="ctp in"/></svg>
+      <div class="cty"></div><span class="ctend in"></span><span class="ctend out"></span>${k === "h" ? '<span class="ctlimt"></span>' : ""}
       <div class="trx"></div><div class="trcur"><i class="cin"></i><i class="cout"></i></div><div class="trtip"></div>
       <div class="trmsg">${icon("mdi:loading", "spin")}Lade Verlauf …</div></div></div>`;
 }
@@ -1812,38 +1888,65 @@ function avgSeries(list, start, now) {
   return out;
 }
 
-function updateClimTrend(el, ctx) {
-  const h = ctx._hass, m = ctx._model, now = Date.now(), start = now - TREND_MS;
-  const rooms = climRooms(m), out = outdoorTempId(h, m, ctx._layout);
-  // alle Fühler der Seite in einer Abfrage – auch Außenbereiche, die nur einen Raum-Verlauf haben
-  const ids = [...new Set([...m.visibleAreas.map((a) => a.tempId), out].filter(Boolean))];
-  const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="climtrend"],[data-u="spark"]').forEach((x) => x.isConnected && UPD[x.dataset.u].run(x, ctx));
-  const msg = el.querySelector(".trmsg");
-  if (trendEnsure(h, ids, rerun)) { setHidden(msg, false); return; }
-  const outS = (out && trendSeries(h, out)) || [];
-  // Kennzahlen jetzt
+const climStat = (lbl, val, sub = "", cls = "") => `<span class="cts${cls ? ` ${cls}` : ""}"><small>${lbl}</small><b>${val}</b>${sub ? `<em>${sub}</em>` : ""}</span>`;
+const avg = (vals) => (vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null);
+
+/** Kennzahlen der Temperatur-Karte; liefert [HTML, Haus Ø jetzt, außen jetzt]. */
+function climStatsT(h, m, rooms, out, outS, start) {
   const curs = rooms.map((a) => [a, num(h.states[a.tempId])]).filter(([, v]) => v !== null).sort((x, y) => x[1] - y[1]);
-  const avgNow = curs.length ? curs.reduce((s, [, v]) => s + v, 0) / curs.length : null;
-  const outNow = num(h.states[out]);
+  const avgNow = avg(curs.map(([, v]) => v)), outNow = num(h.states[out]);
   const outDay = trendScale(outS.filter(([t]) => t >= start).map((p) => p[1]), 0);
   const heating = m.visibleAreas.filter((a) => a.climates.some((c) => h.states[c] && h.states[c].attributes.hvac_action === "heating")).length;
-  const stat = (lbl, val, sub = "") => `<span class="cts"><small>${lbl}</small><b>${val}</b>${sub ? `<em>${sub}</em>` : ""}</span>`;
-  setHtml(el.querySelector(".ctstats"), [
-    avgNow !== null ? stat("Innen Ø", `${NF1.format(avgNow)}°`) : "",
-    curs.length > 1 ? stat("Kühlster Raum", `${NF1.format(curs[0][1])}°`, esc(curs[0][0].name)) : "",
-    curs.length > 1 ? stat("Wärmster Raum", `${NF1.format(curs[curs.length - 1][1])}°`, esc(curs[curs.length - 1][0].name)) : "",
-    outNow !== null ? stat("Außen", `${NF1.format(outNow)}°`, outDay ? `24 h: ${NF1.format(outDay.min)}° bis ${NF1.format(outDay.max)}°` : "") : "",
-    m.agg.climates.length ? stat("Heizt", `${heating} ${heating === 1 ? "Raum" : "Räume"}`) : "",
-  ].join(""));
-  setText(el, ".ctl.in b", avgNow !== null ? `${NF1.format(avgNow)}°` : "–");
-  setText(el, ".ctl.out b", outNow !== null ? `${NF1.format(outNow)}°` : "–");
+  return [[
+    avgNow !== null ? climStat("Innen Ø", `${NF1.format(avgNow)}°`) : "",
+    curs.length > 1 ? climStat("Kühlster Raum", `${NF1.format(curs[0][1])}°`, esc(curs[0][0].name)) : "",
+    curs.length > 1 ? climStat("Wärmster Raum", `${NF1.format(curs[curs.length - 1][1])}°`, esc(curs[curs.length - 1][0].name)) : "",
+    outNow !== null ? climStat("Außen", `${NF1.format(outNow)}°`, outDay ? `24 h: ${NF1.format(outDay.min)}° bis ${NF1.format(outDay.max)}°` : "") : "",
+    m.agg.climates.length ? climStat("Heizt", `${heating} ${heating === 1 ? "Raum" : "Räume"}`) : "",
+  ].join(""), avgNow, outNow];
+}
+
+/** Kennzahlen der Feuchte-Karte: Ø, feuchtester und trockenster Raum, Taupunkt, außen und Lüftungshinweis. */
+function climStatsH(h, m, rooms, L) {
+  const curs = rooms.map((a) => [a, num(h.states[a.humId]), num(h.states[a.tempId])]).filter(([, v]) => v !== null).sort((x, y) => x[1] - y[1]);
+  const avgNow = avg(curs.map(([, v]) => v));
+  const withT = curs.filter(([, , t]) => t !== null);
+  const dpAvg = avg(withT.map(([, rh, t]) => dewPoint(t, rh)).filter(finite));
+  const o = outdoorClim(h, m), oDp = dewPoint(o.t, o.rh);
+  // Lüftungshinweis aus dem Haus-Durchschnitt (Temperatur und Feuchte derselben Räume)
+  const adv = withT.length ? ventAdvice(avg(withT.map(([, , t]) => t)), avg(withT.map(([, rh]) => rh)), o.t, o.rh) : null;
+  const aIn = withT.length ? absHum(avg(withT.map(([, , t]) => t)), avg(withT.map(([, rh]) => rh))) : null, aOut = absHum(o.t, o.rh);
+  const hi = curs[curs.length - 1], lo = curs[0];
+  return [[
+    avgNow !== null ? climStat("Innen Ø", `${NF0.format(avgNow)} %`) : "",
+    curs.length > 1 ? climStat("Feuchtester Raum", `${NF0.format(hi[1])} %`, esc(hi[0].name), hi[1] >= moldLimit(L) ? "hot" : "") : "",
+    curs.length > 1 ? climStat("Trockenster Raum", `${NF0.format(lo[1])} %`, esc(lo[0].name)) : "",
+    dpAvg !== null ? climStat("Taupunkt innen", `${NF1.format(dpAvg)}°`, "Ø der Räume") : "",
+    o.rh !== null ? climStat("Außen", `${NF0.format(o.rh)} %`, oDp !== null ? `Taupunkt ${NF1.format(oDp)}°` : "") : "",
+    adv ? climStat("Lüften", adv.t, `innen ${NF1.format(aIn)} · außen ${NF1.format(aOut)} g/m³`, `vent ${adv.k}`) : "",
+  ].join(""), avgNow, o.hId ? num(h.states[o.hId]) : null];
+}
+
+function updateClimTrend(el, ctx) {
+  const h = ctx._hass, m = ctx._model, L = ctx._layout, now = Date.now(), start = now - TREND_MS;
+  const k = el.dataset.kind || "t", K = CLIM_KIND[k];
+  const rooms = K.rooms(m), out = K.out(h, m, L);
+  // alle Fühler der Seite in einer Abfrage – auch Außenbereiche und die andere Karte
+  const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="climtrend"],[data-u="spark"]').forEach((x) => x.isConnected && UPD[x.dataset.u].run(x, ctx));
+  const msg = el.querySelector(".trmsg");
+  if (trendEnsure(h, climPageIds(h, m, L), rerun)) { setHidden(msg, false); return; }
+  const outS = (out && trendSeries(h, out)) || [];
+  const [stats, avgNow, outNow] = k === "h" ? climStatsH(h, m, rooms, L) : climStatsT(h, m, rooms, out, outS, start);
+  setHtml(el.querySelector(".ctstats"), stats);
+  setText(el, ".ctl.in b", avgNow !== null ? K.fmt(avgNow) : "–");
+  setText(el, ".ctl.out b", outNow !== null ? K.fmt(outNow) : "–");
   setHidden(el.querySelector(".ctl.out"), !out);
   // Kurve höchstens alle 15 s neu rechnen (5-Minuten-Werte), Kennzahlen oben sofort
   if (el._drawn && now - el._drawn < 15000 && !el._force) {
     if (!el._tq) el._tq = setTimeout(() => { el._tq = 0; if (el.isConnected) { el._force = true; updateClimTrend(el, ctx); el._force = false; } }, 15000 - (now - el._drawn));
     return;
   }
-  const inner = rooms.map((a) => trendSeries(h, a.tempId)).filter((p) => p && p.length > 1);
+  const inner = rooms.map((a) => trendSeries(h, K.id(a))).filter((p) => p && p.length > 1);
   const S = { in: inner.length ? avgSeries(inner, start, now) : [], out: outS };
   if (S.in.length < 2 && S.out.length < 2) {
     setHidden(msg, false);
@@ -1852,12 +1955,13 @@ function updateClimTrend(el, ctx) {
   }
   setHidden(msg, true); el.classList.remove("nodata");
   el._drawn = now;
-  // eine Achse für beide Reihen, runde Teilstriche
+  // eine Achse für beide Reihen, höchstens vier Abschnitte, runde Teilstriche
   const all = [...S.in, ...S.out].filter(([t]) => t >= start).map((p) => p[1]).filter(finite);
-  const lo0 = Math.min(...all) - 0.5, hi0 = Math.max(...all) + 0.5;
-  // höchstens vier Abschnitte auf der Achse, runde Teilstriche
-  let step = 20, lo = Math.floor(lo0 / 20) * 20, hi = Math.ceil(hi0 / 20) * 20;
-  for (const s of [1, 2, 5, 10]) {
+  let lo0 = Math.min(...all) - K.pad, hi0 = Math.max(...all) + K.pad;
+  if (k === "h") { lo0 = Math.max(0, lo0); hi0 = Math.min(100, hi0); }
+  const big = K.steps[K.steps.length - 1];
+  let step = big, lo = Math.floor(lo0 / big) * big, hi = Math.ceil(hi0 / big) * big;
+  for (const s of K.steps) {
     const l = Math.floor(lo0 / s) * s, u = Math.ceil(hi0 / s) * s;
     if ((u - l) / s <= 4) { step = s; lo = l; hi = u; break; }
   }
@@ -1866,12 +1970,22 @@ function updateClimTrend(el, ctx) {
   el.querySelector(".ctp.out").setAttribute("d", trendPath(S.out, x, y));
   const ticks = []; for (let v = lo; v <= hi; v += step) ticks.push(v);
   el.querySelector(".ctgrid").innerHTML = ticks.map((v) => `<line x1="0" x2="1000" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`).join("");
-  setHtml(el.querySelector(".cty"), ticks.map((v) => `<span style="top:${y(v)}%">${v}°</span>`).join(""));
+  setHtml(el.querySelector(".cty"), ticks.map((v) => `<span style="top:${y(v)}%">${K.ax(v)}</span>`).join(""));
+  if (k === "h") {
+    // Wohlfühlbereich 40–60 % als Band, Grenze für Schimmelrisiko gestrichelt
+    const b0 = Math.max(lo, 40), b1 = Math.min(hi, 60), band = el.querySelector(".ctband");
+    band.setAttribute("y", b1 > b0 ? y(b1).toFixed(1) : "0"); band.setAttribute("height", b1 > b0 ? (y(b0) - y(b1)).toFixed(1) : "0");
+    const lim = moldLimit(L), on = lim > lo && lim < hi && L.alerts && L.alerts.builtin && L.alerts.builtin.mold !== false;
+    el.querySelector(".ctlim").setAttribute("d", on ? `M0 ${y(lim).toFixed(1)}H1000` : "");
+    const lt = el.querySelector(".ctlimt");
+    setHidden(lt, !on);
+    if (on) { lt.style.top = `${y(lim)}%`; lt.textContent = `Schimmel ab ${NF0.format(lim)} %`; }
+  }
   // Werte am Linienende (direkte Beschriftung)
-  for (const k of ["in", "out"]) {
-    const last = S[k][S[k].length - 1], lab = el.querySelector(`.ctend.${k}`);
+  for (const s of ["in", "out"]) {
+    const last = S[s][S[s].length - 1], lab = el.querySelector(`.ctend.${s}`);
     setHidden(lab, !last);
-    if (last) { lab.style.top = `${y(last[1])}%`; lab.textContent = `${NF1.format(last[1])}°`; }
+    if (last) { lab.style.top = `${y(last[1])}%`; lab.textContent = K.fmt(last[1]); }
   }
   const li = el.querySelector(".ctend.in"), lo2 = el.querySelector(".ctend.out");
   if (!li.hidden && !lo2.hidden && Math.abs(parseFloat(li.style.top) - parseFloat(lo2.style.top)) < 12) {
@@ -1886,7 +2000,7 @@ function updateClimTrend(el, ctx) {
     el.querySelector(".trgrid").innerHTML = tk.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
     el.querySelector(".trx").innerHTML = tk.filter((t) => x(t) < 900).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
   }
-  el._ct = { S, start, y };
+  el._ct = { S, start, y, fmt: K.fmt };
   if (el._hover !== undefined) climHover(el, el._hover);
 }
 
@@ -1899,36 +2013,47 @@ function climHover(el, frac) {
     const p = trendAt(T.S[k], t), dot = cur.querySelector(`i.${cls}`);
     if (!p) { dot.style.display = "none"; continue; }
     dot.style.display = ""; dot.style.top = `${T.y(p[1])}%`;
-    parts.push(`<span class="tk ${k}"><i></i>${lbl} <b>${NF1.format(p[1])}°</b></span>`);
+    parts.push(`<span class="tk ${k}"><i></i>${lbl} <b>${T.fmt(p[1])}</b></span>`);
   }
   tip.innerHTML = `<span>${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>${parts.join("")}`;
   cur.style.left = `${frac * 100}%`; tip.style.left = `${Math.min(Math.max(frac * 100, 15), 85)}%`;
   cur.classList.add("on"); tip.classList.add("on");
 }
 
-/* Verlauf je Raum: eine Reihe, Soll als gestrichelte Linie, Spanne der letzten 24 h */
-function sparkHTML(a) {
-  return a.tempId ? `<span class="kspark" data-u="spark" data-area="${esc(a.id)}"><svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"><path class="spset"/><path class="spl"/></svg><small class="sprg"></small><span class="sptip"></span></span>` : `<span class="kspark none"></span>`;
+/* Verlauf je Raum: eine Reihe der gewählten Größe. Temperatur mit Soll als gestrichelter Linie,
+   Feuchte mit der Grenze für Schimmelrisiko; dazu die Spanne der letzten 24 h. */
+function sparkHTML(a, k = "t") {
+  const id = k === "h" ? a.humId : a.tempId;
+  return id ? `<span class="kspark k-${k}" data-u="spark" data-kind="${k}" data-area="${esc(a.id)}"><svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"><path class="spset"/><path class="spl"/></svg><small class="sprg"></small><span class="sptip"></span></span>` : `<span class="kspark none"></span>`;
 }
 
 function updateSpark(el, ctx) {
-  const a = ctx._model.areas.get(el.dataset.area);
-  if (!a || !a.tempId) return;
-  const h = ctx._hass, now = Date.now(), start = now - TREND_MS;
-  if (trendEnsure(h, [a.tempId], () => el.isConnected && updateSpark(el, ctx))) return;
-  const pts = trendSeries(h, a.tempId) || [];
-  const cl = a.climates.map((c) => h.states[c]).find((s) => s && finite(s.attributes.temperature));
-  const soll = cl ? cl.attributes.temperature : null;
-  const sc = trendScale([...pts.filter(([t]) => t >= start).map((p) => p[1]), soll].filter(finite), 1.5);
+  const a = ctx._model.areas.get(el.dataset.area), k = el.dataset.kind || "t";
+  const eid = a && (k === "h" ? a.humId : a.tempId);
+  if (!eid) return;
+  const h = ctx._hass, L = ctx._layout, now = Date.now(), start = now - TREND_MS;
+  if (trendEnsure(h, [eid], () => el.isConnected && updateSpark(el, ctx))) return;
+  const pts = trendSeries(h, eid) || [];
+  let ref = null;
+  if (k === "h") ref = L.alerts && L.alerts.builtin && L.alerts.builtin.mold !== false ? moldLimit(L) : null;
+  else { const cl = a.climates.map((c) => h.states[c]).find((s) => s && finite(s.attributes.temperature)); ref = cl ? cl.attributes.temperature : null; }
+  const vals = pts.filter(([t]) => t >= start).map((p) => p[1]);
+  // die Feuchte-Grenze nur in die Skala nehmen, wenn sie in der Nähe liegt
+  const sc = trendScale([...vals, k === "t" || (ref !== null && vals.some((v) => v > ref - 15)) ? ref : null].filter(finite), k === "h" ? 10 : 1.5);
   if (!sc || pts.length < 2) { el.classList.add("empty"); el.querySelector(".spl").setAttribute("d", ""); setText(el, ".sprg", ""); return; }
   el.classList.remove("empty");
   const x = (t) => ((t - start) / TREND_MS) * 200, y = (v) => 38 - ((v - sc.lo) / (sc.hi - sc.lo)) * 36;
   el.querySelector(".spl").setAttribute("d", trendPath(pts, x, y));
-  el.querySelector(".spset").setAttribute("d", soll !== null ? `M0 ${y(soll).toFixed(1)}L200 ${y(soll).toFixed(1)}` : "");
-  const day = trendScale(pts.filter(([t]) => t >= start).map((p) => p[1]), 0);
-  setText(el, ".sprg", day ? `${NF1.format(day.min)}–${NF1.format(day.max)}°` : "");
-  el.title = `${a.name}: 24 h ${day ? `${NF1.format(day.min)} bis ${NF1.format(day.max)} °C` : ""}${soll !== null ? ` · Soll ${NF1.format(soll)} °C` : ""}`;
-  el._sp = { pts, start };
+  el.querySelector(".spset").setAttribute("d", ref !== null && ref >= sc.lo && ref <= sc.hi ? `M0 ${y(ref).toFixed(1)}L200 ${y(ref).toFixed(1)}` : "");
+  const day = trendScale(vals, 0);
+  if (k === "h") {
+    setText(el, ".sprg", day ? `${NF0.format(day.min)}–${NF0.format(day.max)} %` : "");
+    el.title = `${a.name}: Luftfeuchte 24 h ${day ? `${NF0.format(day.min)} bis ${NF0.format(day.max)} %` : ""}${ref !== null ? ` · Schimmelrisiko ab ${NF0.format(ref)} %` : ""}`;
+  } else {
+    setText(el, ".sprg", day ? `${NF1.format(day.min)}–${NF1.format(day.max)}°` : "");
+    el.title = `${a.name}: 24 h ${day ? `${NF1.format(day.min)} bis ${NF1.format(day.max)} °C` : ""}${ref !== null ? ` · Soll ${NF1.format(ref)} °C` : ""}`;
+  }
+  el._sp = { pts, start, fmt: k === "h" ? (v) => `${NF0.format(v)} %` : (v) => `${NF1.format(v)}°` };
 }
 
 function sparkHover(el, frac) {
@@ -1936,7 +2061,7 @@ function sparkHover(el, frac) {
   if (!T || frac === null) { tip.classList.remove("on"); return; }
   const t = T.start + frac * TREND_MS, p = trendAt(T.pts, t);
   if (!p) { tip.classList.remove("on"); return; }
-  tip.textContent = `${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} · ${NF1.format(p[1])}°`;
+  tip.textContent = `${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} · ${T.fmt(p[1])}`;
   tip.style.left = `${Math.min(Math.max(frac * 100, 20), 80)}%`;
   tip.classList.add("on");
 }
@@ -1962,8 +2087,10 @@ const UPD = {
   gcount: { watch: (el) => (el._eids = (el.dataset.eids || "").split(",").filter(Boolean)), run: updateGroupCount },
   heat: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.heat), run: updateHeat },
   wallbox: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.wb), run: updateWallbox },
-  climtrend: { watch: (el, c) => [...climRooms(c._model).map((a) => a.tempId), outdoorTempId(c._hass, c._model, c._layout), ...c._model.agg.climates].filter(Boolean), run: updateClimTrend },
-  spark: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, ...a.climates].filter(Boolean) : []; }, run: updateSpark },
+  climtrend: { watch: (el, c) => (el.dataset.kind === "h"
+    ? [...humRooms(c._model).flatMap((a) => [a.humId, a.tempId]), ...(c._model._outClim || [])]
+    : [...climRooms(c._model).map((a) => a.tempId), outdoorTempId(c._hass, c._model, c._layout), ...c._model.agg.climates]).filter(Boolean), run: updateClimTrend },
+  spark: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return !a ? [] : el.dataset.kind === "h" ? [a.humId].filter(Boolean) : [a.tempId, ...a.climates].filter(Boolean); }, run: updateSpark },
   trend: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, a.humId].filter(Boolean) : []; }, run: updateTrend },
 };
 
@@ -2341,7 +2468,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .only-on .rlist:not(:has(.tile.light.on)){display:none}
 .only-on .fhead:has(+ .rlist:not(:has(.tile.light.on))){display:none}
 .ktable{padding:2px 0}
-.ktable.withspark .khead,.ktable.withspark .krow{grid-template-columns:minmax(150px,230px) 70px 76px minmax(120px,190px) 1fr}
+.ktable.withspark .khead,.ktable.withspark .krow{grid-template-columns:minmax(150px,230px) 70px 96px minmax(120px,190px) 1fr}
 .kspark{position:relative;display:flex;align-items:center;gap:6px;height:34px;min-width:0;cursor:crosshair;touch-action:pan-y}
 .kspark svg{flex:1;min-width:60px;height:28px;overflow:visible}
 .kspark .spl{fill:none;stroke:#e26a1c;stroke-width:1.8;vector-effect:non-scaling-stroke;stroke-linejoin:round}
@@ -2353,6 +2480,15 @@ details[open]>summary.shead{padding-bottom:2px}
 .room .kspark{margin:2px 0 4px;position:relative;z-index:1}
 .narrow .krow .kna{display:none}
 .ctrend{padding:12px 16px 10px;margin-bottom:16px}
+.ctwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:0 16px}.dense .ctwrap{gap:0 12px}
+.ctband{fill:rgba(79,209,139,.08)}.ctlim{fill:none;stroke:var(--hv-warm);stroke-width:1;stroke-dasharray:5 4;vector-effect:non-scaling-stroke;opacity:.8}
+.ctlimt{position:absolute;right:4px;transform:translateY(-120%);font-size:10.5px;color:var(--hv-warm);opacity:.9;pointer-events:none}
+.cts.hot b{color:var(--hv-warm)}.cts.vent b{font-size:15px;line-height:1.45}.cts.vent.gut b{color:var(--hv-ok)}.cts.vent.nicht b{color:var(--hv-warm)}
+.cktog{display:inline-flex;align-items:center;gap:6px}.cktog small{font-size:11.5px;color:var(--hv-dim);margin-right:2px}
+.kspark.k-h .spl{stroke:#2a9ad8}.kspark.k-h .spset{stroke:var(--hv-warm);opacity:.7}
+.khum{display:flex;flex-direction:column;min-width:0;line-height:1.2}.rdp{font-size:11px;color:var(--hv-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
+.room-clim:has(.rdp){flex-wrap:wrap}.room-clim .rdp{flex-basis:100%;margin:0}
+.cty span{white-space:nowrap}.k-h .ctc{margin-left:42px}.narrow .k-h .ctc{margin-left:38px}
 .dense .ctrend{padding:9px 12px 8px;margin-bottom:12px;border-radius:16px}
 .ctl{display:inline-flex;align-items:baseline;gap:6px;font-size:13px;color:var(--hv-dim)}
 .ctl i{width:14px;height:3px;border-radius:2px;align-self:center}.ctl.in i{background:#e26a1c}.ctl.out i{background:#2a9ad8}
@@ -2372,7 +2508,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .ctrend.nodata .ctc{height:48px}.ctrend.nodata .cty,.ctrend.nodata .trx,.ctrend.nodata .ctend{display:none}
 .narrow .ktable.withspark .krow{grid-template-columns:1fr auto auto}.narrow .krow .kspark{grid-column:1/-1;order:5}
 .narrow .ctc{margin:0 34px 18px 30px}
-.khead,.krow{display:grid;grid-template-columns:minmax(150px,230px) 70px 76px 1fr;align-items:center;gap:10px;padding:6px 14px}
+.khead,.krow{display:grid;grid-template-columns:minmax(150px,230px) 70px 96px 1fr;align-items:center;gap:10px;padding:6px 14px}
 .khead{font-size:10.5px;color:var(--hv-faint);letter-spacing:.1em;text-transform:uppercase;padding-top:10px;padding-bottom:2px}
 .krow+.krow{border-top:1px solid var(--hv-line)}
 .kname{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;cursor:pointer}.kname ha-icon{--mdc-icon-size:18px;color:var(--hv-dim)}
@@ -4315,17 +4451,34 @@ class HausVisualisierungPanel extends HvBase {
       ${this._byFloor("cover", (a) => a.covers, btns)}`;
   }
 
+  /* Klimaseite: Kopfkarten (Temperatur, Feuchte) und Wahl der Größe für die Raum-Verläufe (je Gerät gemerkt) */
+  _climKindSel() {
+    if (!this._ck) { let v = null; try { v = localStorage.getItem("hv-clim-kind"); } catch (err) { /* egal */ } this._ck = v === "h" ? "h" : "t"; }
+    return this._ck === "h" && !humRooms(this._model).length ? "t" : this._ck;
+  }
+  _climKindTog() {
+    if (this._layout.show_trends === false || !humRooms(this._model).length) return "";
+    const k = this._climKindSel();
+    return `<span class="cktog" role="group" aria-label="Verlauf je Raum"><small>Verlauf je Raum</small>${[["t", "Temperatur"], ["h", "Feuchte"]].map(([v, t]) => `<button class="altab sm${k === v ? " on" : ""}" data-act="clim-kind" data-k="${v}" aria-pressed="${k === v}"><span>${t}</span></button>`).join("")}</span>`;
+  }
+  _climCards() {
+    const m = this._model;
+    if (this._layout.show_trends === false) return "";
+    const cards = [climRooms(m).length ? climTrendHTML("t") : "", humRooms(m).length ? climTrendHTML("h") : ""].filter(Boolean);
+    return cards.length ? `<div class="ctwrap">${cards.join("")}</div>` : "";
+  }
+
   _vClimate() {
     const m = this._model, h = this._hass;
     const rooms = m.visibleAreas.filter((a) => a.tempId || a.climates.length);
     if (!rooms.length) return pageEmpty("Klima", "mdi:thermometer-off", "Keine Temperatur-Sensoren oder Thermostate in den Bereichen gefunden.");
-    const tr = this._layout.show_trends !== false;
-    let out = `<div class="ptitle"><h1>Klima</h1><span class="psub" data-u="chip" data-k="temp"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span></div>
-      ${tr && climRooms(m).length ? climTrendHTML() : ""}`;
+    const tr = this._layout.show_trends !== false, k = this._climKindSel();
+    let out = `<div class="ptitle"><h1>Klima</h1><span class="psub" data-u="chip" data-k="temp"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span><span class="sp"></span>${this._climKindTog()}</div>
+      ${this._climCards()}`;
     for (const f of m.floors) {
       const list = f.areas.filter((a) => a.tempId || a.climates.length);
       if (!list.length) continue;
-      out += `<div class="fhead">${esc(f.name)}<span class="sp"></span></div><div class="rooms" style="padding:0">${list.map((a) => roomTileHTML(a, true, { spark: tr && !!a.tempId })).join("")}</div>`;
+      out += `<div class="fhead">${esc(f.name)}<span class="sp"></span></div><div class="rooms" style="padding:0">${list.map((a) => roomTileHTML(a, true, { spark: tr && !!(k === "h" ? a.humId : a.tempId), kind: k, dp: true })).join("")}</div>`;
       const cl = list.filter((a) => a.climates.length);
       if (cl.length) out += `<div class="sgrid" style="margin-top:14px">${cl.map((a) => sectionHTML(h, a, "climate", a.climates, a.name, a.icon, true)).join("")}</div>`;
     }
@@ -4519,21 +4672,21 @@ class HausVisualisierungPanel extends HvBase {
     const m = this._model, h = this._hass;
     const rooms = m.visibleAreas.filter((a) => a.tempId || a.climates.length);
     if (!rooms.length) return pageEmpty("Klima", "mdi:thermometer-off", "Keine Temperatur-Sensoren oder Thermostate in den Bereichen gefunden.");
-    const tr = this._layout.show_trends !== false;
+    const tr = this._layout.show_trends !== false, k = this._climKindSel();
     let out = `<div class="ptitle"><h1>Klima</h1><span class="psub" data-u="chip" data-k="temp"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span>
-      <span class="psub" data-u="chip" data-k="heat"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span></div>
-      ${tr && climRooms(m).length ? climTrendHTML() : ""}`;
+      <span class="psub" data-u="chip" data-k="heat"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span><span class="sp"></span>${this._climKindTog()}</div>
+      ${this._climCards()}`;
     for (const f of m.floors) {
       const list = f.areas.filter((a) => a.tempId || a.climates.length);
       if (!list.length) continue;
       out += `<div class="fhead">${esc(f.name)}<span class="sp"></span></div><div class="glass ktable${tr ? " withspark" : ""}">
-        <div class="khead"><span>Raum</span><span>Ist</span><span>Feuchte</span>${tr ? "<span>24 h</span>" : ""}<span>Thermostat</span></div>
+        <div class="khead"><span>Raum</span><span>Ist</span><span>Feuchte</span>${tr ? `<span>24 h${k === "h" ? " Feuchte" : ""}</span>` : ""}<span>Thermostat</span></div>
         ${list.map((a) => {
           const cl = a.climates[0];
           const cell = cl ? `<div class="tile row climate kcell" data-u="tile" data-eid="${esc(cl)}" data-act="more" data-long="1"><span class="tic">${icon("mdi:thermostat")}</span>
               <span class="rbtns"><button class="btn" data-act="clim" data-step="-1" data-eid="${esc(cl)}" title="Kälter">${icon("mdi:minus")}</button><span class="ttarget"></span><button class="btn" data-act="clim" data-step="1" data-eid="${esc(cl)}" title="Wärmer">${icon("mdi:plus")}</button></span>
               <span class="tstate"></span></div>` : `<span class="kna">–</span>`;
-          return `<div class="krow" data-u="room" data-area="${esc(a.id)}"><span class="kname" data-act="go" data-to="raum/${esc(a.id)}">${icon(a.icon)}${esc(a.name)}</span><span class="rt"></span><span class="rh"></span>${tr ? sparkHTML(a) : ""}${cell}</div>`;
+          return `<div class="krow" data-u="room" data-area="${esc(a.id)}"><span class="kname" data-act="go" data-to="raum/${esc(a.id)}">${icon(a.icon)}${esc(a.name)}</span><span class="rt"></span><span class="khum"><span class="rh"></span>${a.humId && a.tempId ? '<small class="rdp"></small>' : ""}</span>${tr ? sparkHTML(a, k) : ""}${cell}</div>`;
         }).join("")}</div>`;
     }
     return out;
@@ -4860,7 +5013,7 @@ class HausVisualisierungPanel extends HvBase {
     const types = [["knx", "KNX-Telegramm"], ["switch", "Schalter / Licht"], ["siren", "Sirene"], ["tts", "Durchsage (z. B. Sonos)"], ["script", "Skript"]];
     const whens = [["neu", "sofort bei neuer Meldung"], ["eskalation", "bei Eskalation"]];
     const bi = [["contacts", "Fenster oder Tür offen"], ["window_heating", "Fenster beim Heizen"], ["safety", "Melder ausgelöst"], ["alarm_panel", "Alarmanlage ausgelöst"],
-      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"]];
+      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"], ["mold", "Schimmelrisiko"]];
     const scopes = [["alarm", "alle Alarme"], ["warn", "Alarme und Warnungen"], ["all", "alle Meldungen"], ...bi.map(([k, t]) => [`b:${k}`, `Regel: ${t}`]),
       ...D.alerts.rules.map((r, i) => [`r:${i}`, `Eigene Regel: ${r.title || r.entity || i + 1}`])];
     const sel = (path, opts, cur, cls = "") => `<select class="inp ${cls}" data-set="${path}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${cur === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
@@ -4915,7 +5068,8 @@ class HausVisualisierungPanel extends HvBase {
     const B = A.builtin;
     const bi = [["contacts", "Fenster oder Tür offen", "Warnung"], ["window_heating", "Fenster offen, während der Raum heizt", "Warnung"], ["safety", "Melder ausgelöst (Rauch, Wasser, Gas …)", "Alarm"],
       ["locks", "Schloss entriegelt", "Warnung"], ["garage", "Garagentor oder Tor offen", "Warnung"], ["battery", "Batterien kritisch", "Warnung"], ["offline", "Geräte nicht erreichbar", "Hinweis"],
-      ["presence_away", "Bewegung erkannt, während niemand zu Hause ist", "Alarm"], ["alarm_panel", "Alarmanlage ausgelöst (z. B. Alarmo)", "Alarm"]];
+      ["presence_away", "Bewegung erkannt, während niemand zu Hause ist", "Alarm"], ["alarm_panel", "Alarmanlage ausgelöst (z. B. Alarmo)", "Alarm"],
+      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"]];
     const allM = HOUSE_MODES.map((x) => x[0]);
     const mchips = (path, cur) => `<span class="mchips" title="gilt in diesen Hausmodi">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
     const bmodes = (k) => (A.modes && A.modes[k] && A.modes[k].length ? A.modes[k] : BUILTIN_MODES[k] || allM);
@@ -4939,6 +5093,8 @@ class HausVisualisierungPanel extends HvBase {
       <p class="hint">Die Symbole je Regel legen fest, in welchen Hausmodi sie gilt (${HOUSE_MODES.map(([, t]) => t).join(", ")}). Beispiel: Bewegung ist nur bei Abwesend und Urlaub ein Alarm.</p>
       ${bi.map(([k, t, l]) => `<div class="srow"><span class="lbl">${t}<small>${l}</small></span>${mchips(`alerts.modes.${k}`, bmodes(k))}<label class="tgl"><input type="checkbox" data-set="alerts.builtin.${k}" data-bool="1" ${B[k] ? "checked" : ""}><span></span></label></div>`).join("")}
       <div class="srow"><span class="lbl">Fenster und Türen erst melden nach<small>Minuten offen; 0 = sofort</small></span><input class="inp s" type="number" min="0" max="240" data-set="alerts.contacts_min" data-num="1" value="${A.contacts_min || 0}"></div>
+      <div class="srow"><span class="lbl">Schimmelrisiko ab<small>% relative Raumfeuchte; Entwarnung 3 Prozentpunkte darunter</small></span><input class="inp s" type="number" min="50" max="90" data-set="alerts.mold_hum" data-num="1" value="${A.mold_hum || 65}"></div>
+      <div class="srow"><span class="lbl">Schimmelrisiko erst melden nach<small>Minuten über der Grenze, damit kurzes Duschen oder Kochen nicht meldet; nicht bei offenem Fenster im Raum</small></span><input class="inp s" type="number" min="0" max="240" data-set="alerts.mold_min" data-num="1" value="${A.mold_min ?? 30}"></div>
       <div class="fl-title">Eigene Regeln</div>
       ${rules || '<p class="hint">Noch keine eigenen Regeln. Beispiele: Speicher oben unter 45 °C, Kamin über 85 °C, Akku unter 15 %, Waschmaschine seit 3 Stunden an.</p>'}
       <div class="srow"><button class="pbtn" data-act="s-rule-add">${icon("mdi:plus")}Regel hinzufügen</button>
@@ -5115,6 +5271,7 @@ class HausVisualisierungPanel extends HvBase {
     const D = this._draft;
     switch (act) {
       case "go": this._go(t.dataset.to); return;
+      case "clim-kind": this._ck = t.dataset.k === "h" ? "h" : "t"; try { localStorage.setItem("hv-clim-kind", this._ck); } catch (err) { /* egal */ } this._render(); return;
       case "nav": this._go(t.dataset.to); return;
       case "link": this._openLink(t.dataset.path); return;
       case "nav-raw": this._navigate(t.dataset.path); return;
@@ -5497,4 +5654,4 @@ if (!window.customCards.some((c) => c.type === "haus-raum-card")) {
 }
 
 // Für Tests
-window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll, techCfg, curveFlow };
+window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll, techCfg, curveFlow, dewPoint, absHum, ventAdvice, MOLD };
