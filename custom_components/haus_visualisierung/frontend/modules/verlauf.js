@@ -76,6 +76,13 @@ function trendPush(rec, st) {
   if (i) p.splice(0, i);
 }
 
+/** Rechte Grenze (Anteil 0–1000) für Stundenbeschriftungen der Zeitachse, damit rechts Platz für „jetzt“ bleibt.
+    Abhängig von der Breite in Pixeln: auf dem Handy fällt eine Beschriftung kurz vor „jetzt“ weg. */
+const AXIS_NOW_PX = 58;
+function axisCut(trx) { const w = trx ? trx.clientWidth : 0; return w ? Math.min(900, 1000 - (AXIS_NOW_PX / w) * 1000) : 860; }
+/** Schlüssel für das Neuzeichnen der Zeitachse: neue Stunde oder deutlich andere Breite. */
+const axisKey = (trx, hour) => `${hour}|${Math.round((trx ? trx.clientWidth : 0) / 40)}`;
+
 function trendScale(vals, minSpan) {
   let lo = Infinity, hi = -Infinity;
   for (const v of vals) if (finite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
@@ -178,13 +185,14 @@ function updateTrend(el, ctx) {
   if (!S.t || !S.t.sc) el.querySelector(".tra").setAttribute("d", "");
   // Zeitachse: volle 6 Stunden (0, 6, 12, 18 Uhr)
   const hour = Math.floor(now / 3600000);
-  if (el._hour !== hour) {
-    el._hour = hour;
+  const trx = el.querySelector(".trx"), axk = axisKey(trx, hour);
+  if (el._hour !== axk) {
+    el._hour = axk;
     const ticks = [];
     const d0 = new Date(start); d0.setMinutes(0, 0, 0);
     for (let t = d0.getTime() + 3600000; t < now; t += 3600000) if (new Date(t).getHours() % 6 === 0) ticks.push(t);
     el.querySelector(".trgrid").innerHTML = ticks.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
-    el.querySelector(".trx").innerHTML = ticks.filter((t) => x(t) < 900).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
+    el.querySelector(".trx").innerHTML = ticks.filter((t) => x(t) < axisCut(trx)).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
   }
   if (el._hover !== undefined) trendHover(el, el._hover);
 }
@@ -220,4 +228,4 @@ function trendHover(el, frac) {
   cur.classList.add("on"); tip.classList.add("on");
 }
 
-export { finite, TREND, TREND_BUCKET, TREND_GAP, TREND_MS, TREND_TTL, trendAt, trendCardHTML, trendFetch, trendHover, trendPath, trendPush, trendScale, updateTrend };
+export { axisCut, axisKey, finite, TREND, TREND_BUCKET, TREND_GAP, TREND_MS, TREND_TTL, trendAt, trendCardHTML, trendFetch, trendHover, trendPath, trendPush, trendScale, updateTrend };

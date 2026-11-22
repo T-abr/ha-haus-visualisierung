@@ -4,6 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.8.1 – 2026-11-22
+
+### Behoben
+- **Zeitachse der Verläufe auf dem Handy:** Je nach Uhrzeit lag die letzte Stundenbeschriftung (z. B. „18 Uhr“) über „jetzt“. Der Platz für „jetzt“ richtet sich jetzt nach der Breite des Verlaufs in Pixeln statt nach festen 10 %; betrifft die Kopfkarten der Klimaseite, den Verlauf 24 h auf Raumseiten und die Energie-Seite. Bei geänderter Breite wird die Achse neu beschriftet.
+
+### Tests
+- Die vier Prüfungen „lange Namen – nichts überlappt“ (Klima- und Raumseite, kompakt und Komfort) schlugen nur zu bestimmten Uhrzeiten fehl (jeweils etwa 25 Minuten ab 2:25, 8:25, 14:25 und 20:25 Uhr); jetzt grün.
+
+### Performance
+- Unverändert gegenüber 1.8.0: eine zusätzliche Breitenabfrage je Verlauf und Aktualisierung (höchstens alle 15 s).
+
 ### Tests
 - Bedienprüfungen in 14 Gruppen mit 30 Abschnitten aufgeteilt, die jeweils auch einzeln laufen: `python3 tests/interact.py klima energie` (Übersicht mit `--liste`). Ohne Angabe läuft wie bisher alles, so auch in der CI.
 - Neu `tests/changed.py`: wählt anhand der Änderungen gegenüber `main` (auch nicht committete und neue Dateien) die passenden Gruppen aus, z. B. bei einer Änderung an `klima.js` nur Klima, Energie, Warnungen und die Handy-Prüfungen (≈ 1 min statt ≈ 3 min). Gemeinsam genutzte Module und das Harness lösen weiterhin alle Prüfungen aus.
