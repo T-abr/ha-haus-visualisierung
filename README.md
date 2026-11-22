@@ -54,5 +54,6 @@ Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
 - CI: GitHub Actions (`.github/workflows/tests.yml`) prüft bei jedem Pull Request und Push auf `main`
   die Versionen, die Backend-Tests und die Bedienprüfungen.
 - Version setzen: `python3 scripts/bump_version.py patch|minor|major`, ZIP bauen: `python3 scripts/build_zip.py`.
-- Release: nach dem Merge `git tag vX.Y.Z && git push origin vX.Y.Z`. Der Workflow „Release“ prüft, dass der Tag
+- Release: nach dem Merge auf GitHub → Actions → „Release“ → „Run workflow“ (legt den Tag `v<Version>` an) oder
+  `git tag vX.Y.Z && git push origin vX.Y.Z`. Der Workflow „Release“ prüft, dass der Tag
   zu `manifest.json` passt, baut das ZIP und veröffentlicht das Release mit dem CHANGELOG-Abschnitt.
