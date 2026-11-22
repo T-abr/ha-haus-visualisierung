@@ -93,7 +93,7 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
         else if (this._enHover) { enHover(this._enHover, null); this._enHover = null; }
         const spk = e.target.closest && e.target.closest(".kspark");
         if (spk && spk !== this._spHover && this._spHover) sparkHover(this._spHover, null);
-        if (spk) { clearTimeout(this._trHideT); this._spHover = spk; sparkHover(spk, frac(spk)); }
+        if (spk) { clearTimeout(this._trHideT); this._spHover = spk; sparkHover(spk, frac(spk.querySelector(".spw") || spk)); }
         else if (this._spHover) { sparkHover(this._spHover, null); this._spHover = null; }
         const hc = e.target.closest && e.target.closest(".hcc");
         if (hc) { const b = hc.getBoundingClientRect(); this._hcHover = hc; heatHover(hc, Math.min(1, Math.max(0, (e.clientX - b.left) / b.width))); }

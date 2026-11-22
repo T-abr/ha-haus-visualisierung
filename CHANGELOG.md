@@ -4,6 +4,21 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.8.0 – 2026-11-22
+
+### Verbessert – Raum-Verläufe auf der Klimaseite besser lesbar
+- **Gleiche Skalenhöhe für alle Räume:** Jede Temperaturkurve zeigt jetzt mindestens 6 °C um den eigenen Verlauf statt einer eigenen, eng gezogenen Achse. Gleiche Schwankungen sehen in jedem Raum gleich groß aus; ein Raum, der nur um 0,5° schwankt, wirkt nicht mehr wie einer mit 3°. Die Feuchte hat eine feste Skala von 30–80 % (bei Werten außerhalb erweitert).
+- **Größer:** Die Kurven in der Tabelle nutzen den freien Platz (bis ca. 440 statt 190 px breit, 38 statt 28 px hoch).
+- **Zeitbezug:** Die Nacht (22–6 Uhr) ist dezent schattiert, feine Striche markieren 0, 6, 12 und 18 Uhr. Ein Punkt am Linienende zeigt „jetzt“, daneben der aktuelle Wert fett und darunter die Spanne der letzten 24 h.
+- **Feuchte:** Wohlfühlband 40–60 % wie in der Kopfkarte; Abschnitte über der Grenze für Schimmelrisiko werden rot gezeichnet, Punkt und Wert ebenfalls, solange der Raum darüber liegt.
+- Der Zeiger beim Überfahren rechnet jetzt nur über die Kurve (vorher zählte die Beschriftung daneben mit).
+
+### Tests
+- Bedienung: 414 Prüfungen grün (3 neu): gleiche Skalenhöhe aller Raum-Verläufe (mind. 6°), Nacht, 6-Stunden-Striche, Punkt und Wert bei „jetzt“ und Breite der Kurve; bei der Feuchte feste Skala 30–80 %, Wohlfühlband und roter Abschnitt nur im Raum über der Grenze.
+
+### Performance
+- Großes Testhaus: Klimaseite Aufbau 19–35 ms (Vergleich auf demselben Rechner mit 1.7.1: 22–27 ms, Messrauschen), 0 Neuaufbauten, hass-Setter Ø 24–26 µs, Aktualisierer und DOM-Änderungen je Minute unverändert. Nacht und Zeitstriche werden höchstens alle 5 Minuten neu gezeichnet.
+
 ## 1.7.1 – 2026-11-22
 
 ### Umbau – Frontend in Module aufgeteilt
