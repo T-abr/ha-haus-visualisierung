@@ -91,11 +91,11 @@ function trendScale(vals, minSpan) {
   return { lo: mid - span / 2, hi: mid + span / 2, min: lo, max: hi };
 }
 
-/** SVG-Pfad mit Lücken bei fehlenden Werten oder Ausfällen über 65 Minuten. */
-function trendPath(pts, x, y) {
+/** SVG-Pfad mit Lücken bei fehlenden Werten oder Ausfällen über 65 Minuten (bzw. gap). */
+function trendPath(pts, x, y, gap = TREND_GAP) {
   let d = "", pen = false, lastT = 0;
   for (const [t, v] of pts) {
-    if (!finite(v) || (pen && t - lastT > TREND_GAP)) { pen = false; if (!finite(v)) continue; }
+    if (!finite(v) || (pen && t - lastT > gap)) { pen = false; if (!finite(v)) continue; }
     d += `${pen ? "L" : "M"}${x(t).toFixed(1)} ${y(v).toFixed(1)}`;
     pen = true; lastT = t;
   }
@@ -198,13 +198,13 @@ function updateTrend(el, ctx) {
 }
 
 /** Wert an einer Stelle (0…1) suchen – binäre Suche je Reihe. */
-function trendAt(pts, t) {
+function trendAt(pts, t, gap = TREND_GAP) {
   let lo = 0, hi = pts.length - 1;
   if (hi < 0) return null;
   while (lo < hi) { const mid = (lo + hi) >> 1; if (pts[mid][0] < t) lo = mid + 1; else hi = mid; }
   const a = pts[Math.max(0, lo - 1)], b = pts[lo];
   const p = Math.abs(a[0] - t) < Math.abs(b[0] - t) ? a : b;
-  return Math.abs(p[0] - t) <= TREND_GAP && finite(p[1]) ? p : null;
+  return Math.abs(p[0] - t) <= gap && finite(p[1]) ? p : null;
 }
 
 function trendHover(el, frac) {
@@ -228,4 +228,126 @@ function trendHover(el, frac) {
   cur.classList.add("on"); tip.classList.add("on");
 }
 
-export { axisCut, axisKey, finite, TREND, TREND_BUCKET, TREND_GAP, TREND_MS, TREND_TTL, trendAt, trendCardHTML, trendFetch, trendHover, trendPath, trendPush, trendScale, updateTrend };
+
+/* ------------------------------------------------------------------------ */
+/*  Zeiträume: 24 h, Woche, Monat, Jahr                                      */
+/* ------------------------------------------------------------------------ */
+/* 24 h kommt wie bisher aus der 5-Minuten-Statistik (TREND). Längere Zeiträume kommen aus der
+   Langzeitstatistik des Recorders: 7 und 30 Tage als Stundenmittel, 12 Monate als Tagesmittel.
+   Langzeitstatistik gibt es nur für Sensoren mit state_class (measurement); sie bleibt dauerhaft erhalten.
+   Die Wahl gilt je Karte und wird im Browser gemerkt. */
+const DAY_MS = 24 * 3600 * 1000;
+const RANGES = {
+  1: { label: "24 h", chip: "24 h" },
+  7: { label: "7 Tage", chip: "Woche", period: "hour", step: 3600000 },
+  30: { label: "30 Tage", chip: "Monat", period: "hour", step: 3600000 },
+  365: { label: "12 Monate", chip: "Jahr", period: "day", step: DAY_MS },
+};
+const RANGE = new Map(); // Karte → Tage
+function rangeGet(key) {
+  if (!RANGE.has(key)) { let v = null; try { v = Number(localStorage.getItem(`hv-range-${key}`)); } catch (err) { /* egal */ } RANGE.set(key, RANGES[v] ? v : 1); }
+  return RANGE.get(key);
+}
+function rangeSet(key, days) {
+  const d = RANGES[days] ? days : 1;
+  RANGE.set(key, d);
+  try { localStorage.setItem(`hv-range-${key}`, String(d)); } catch (err) { /* egal */ }
+  return d;
+}
+/** Umschalter für den Kopf einer Verlaufs-Karte. */
+const rangeChips = (key) => {
+  const cur = rangeGet(key);
+  return `<span class="rng" role="group" aria-label="Zeitraum">${Object.entries(RANGES).map(([d, R]) => `<button class="altab sm${Number(d) === cur ? " on" : ""}" data-act="range" data-rk="${key}" data-r="${d}" aria-pressed="${Number(d) === cur}"><span>${R.chip}</span></button>`).join("")}</span>`;
+};
+/** Lücke, ab der eine Linie unterbrochen wird: 2,5 Abstände der Werte. */
+const rangeGap = (days) => (days > 1 ? RANGES[days].step * 2.5 : TREND_GAP);
+
+const LONG = new Map(); // "period|Tage|eid" → { at, pts, loading }
+const LONG_TTL = 30 * 60 * 1000;
+const longKey = (period, days, e) => `${period}|${days}|${e}`;
+
+/** Langzeitstatistik (Mittelwerte) für mehrere Sensoren in einer Abfrage; Leistung immer in W. */
+async function longFetch(h, eids, days, period, start) {
+  const step = period === "day" ? DAY_MS : 3600000, out = {};
+  let stats = {};
+  try {
+    stats = (await h.callWS({ type: "recorder/statistics_during_period", start_time: new Date(start).toISOString(), statistic_ids: eids,
+      period, types: ["mean"], units: { power: "W" } })) || {};
+  } catch (err) { stats = {}; }
+  for (const e of eids) out[e] = (stats[e] || []).map((r) => [tsMs(r.start) + step / 2, r.mean]).filter(([t, v]) => finite(t) && finite(v));
+  return out;
+}
+
+/** Lädt fehlende Langzeit-Reihen gesammelt; cb läuft nach dem Laden. Ergebnis: true, solange noch geladen wird. */
+function longEnsure(h, eids, days, period = RANGES[days].period, start = Date.now() - days * DAY_MS, cb = () => {}) {
+  const now = Date.now();
+  const missing = eids.filter((e) => { const r = LONG.get(longKey(period, days, e)); return !r || (!r.loading && now - r.at > LONG_TTL); });
+  if (missing.length && h.callWS) {
+    for (const e of missing) LONG.set(longKey(period, days, e), { at: now, pts: [], loading: true });
+    longFetch(h, missing, days, period, start).then((res) => { for (const e of missing) LONG.set(longKey(period, days, e), { at: Date.now(), pts: res[e] || [], loading: false }); })
+      .catch(() => { for (const e of missing) LONG.set(longKey(period, days, e), { at: Date.now(), pts: [], loading: false }); })
+      .finally(cb);
+  }
+  return eids.some((e) => { const r = LONG.get(longKey(period, days, e)); return r && r.loading; });
+}
+
+/** Langzeit-Reihe eines Sensors; mit live hängt der aktuelle Wert bei „jetzt“ an. */
+function longSeries(h, eid, days, period = RANGES[days].period, live = true) {
+  const rec = eid && LONG.get(longKey(period, days, eid));
+  if (!rec || rec.loading || !rec.pts.length) return rec && !rec.loading ? [] : null;
+  const pts = rec.pts.slice(), cur = live ? num(h.states[eid]) : null;
+  if (cur !== null && pts[pts.length - 1][0] < Date.now()) pts.push([Date.now(), cur]);
+  return pts;
+}
+
+const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+const dm = (d) => `${d.getDate()}.${d.getMonth() + 1}.`;
+/** Zeitpunkt für den Zeiger: Uhrzeit (24 h), Tag und Stunde (Woche, Monat) oder Datum (Jahr). */
+function rangeClock(t, days) {
+  const d = new Date(t);
+  if (days === 1) return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  if (days === 7) return `${WD[d.getDay()]} ${d.getHours()} Uhr`;
+  if (days === 30) return `${WD[d.getDay()]} ${dm(d)} ${d.getHours()} Uhr`;
+  return `${dm(d)}${d.getFullYear()}`;
+}
+/** Teilstriche der Zeitachse: 24 h alle 6 Stunden, Woche je Tag, Monat je Montag, Jahr je Monatsanfang. */
+function rangeTicks(start, now, days) {
+  const out = [], d = new Date(start);
+  if (days === 1) {
+    d.setMinutes(0, 0, 0);
+    for (let t = d.getTime() + 3600000; t < now; t += 3600000) if (new Date(t).getHours() % 6 === 0) out.push([t, `${new Date(t).getHours()} Uhr`]);
+    return out;
+  }
+  if (days === 365) {
+    d.setDate(1); d.setHours(0, 0, 0, 0);
+    for (d.setMonth(d.getMonth() + 1); d.getTime() < now; d.setMonth(d.getMonth() + 1)) out.push([d.getTime(), d.getMonth() ? MON[d.getMonth()] : String(d.getFullYear())]);
+    return out;
+  }
+  d.setHours(0, 0, 0, 0);
+  for (d.setDate(d.getDate() + 1); d.getTime() < now; d.setDate(d.getDate() + 1)) {
+    if (days === 7) out.push([d.getTime(), WD[d.getDay()]]);
+    else if (d.getDay() === 1) out.push([d.getTime(), dm(d)]);
+  }
+  return out;
+}
+/** Zeitachse zeichnen (Gitter im SVG und Beschriftung darunter); nur bei neuer Stunde, Breite oder Zeitraum. */
+function rangeAxis(el, start, now, days, x, H = 100) {
+  const trx = el.querySelector(".trx"), key = `${days}|${axisKey(trx, Math.floor(now / 3600000))}`;
+  if (el._hour === key) return;
+  el._hour = key;
+  const tk = rangeTicks(start, now, days), cut = axisCut(trx);
+  el.querySelector(".trgrid").innerHTML = tk.map(([t]) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
+  // Woche: Wochentag mittig über dem Tag; sonst am Teilstrich. Beschriftungen mit zu wenig Abstand fallen weg.
+  const w = trx ? trx.clientWidth : 0, minGap = w ? (34 / w) * 1000 : 0;
+  let last = -1e9;
+  const lab = [];
+  for (const [t, txt] of tk) {
+    const p = days === 7 ? x(Math.min(t + DAY_MS / 2, now)) : x(t);
+    if (p >= cut || p - last < minGap) continue;
+    last = p; lab.push(`<span style="left:${(p / 10).toFixed(2)}%">${txt}</span>`);
+  }
+  trx.innerHTML = lab.join("") + `<span class="now">jetzt</span>`;
+}
+
+export { axisCut, DAY_MS, longEnsure, longSeries, rangeAxis, rangeChips, rangeClock, rangeGap, rangeGet, RANGES, rangeSet, rangeTicks, axisKey, finite, TREND, TREND_BUCKET, TREND_GAP, TREND_MS, TREND_TTL, trendAt, trendCardHTML, trendFetch, trendHover, trendPath, trendPush, trendScale, tsMs, updateTrend };

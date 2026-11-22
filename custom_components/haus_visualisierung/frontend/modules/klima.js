@@ -1,7 +1,7 @@
 /* Haus Visualisierung – Klimaseite: Temperaturen und Feuchte 24 h, Taupunkt, absolute Feuchte, Lüftungshinweis. */
 
 import { dc, esc, icon, NF0, NF1, num, OUTDOOR_RE, setHidden, setHtml, setText, UPD } from "./grundlagen.js";
-import { axisCut, axisKey, finite, TREND, TREND_BUCKET, TREND_GAP, TREND_MS, TREND_TTL, trendAt, trendFetch, trendPath, trendPush, trendScale } from "./verlauf.js";
+import { DAY_MS, finite, longEnsure, longSeries, rangeAxis, rangeChips, rangeClock, rangeGap, rangeGet, RANGES, TREND, TREND_BUCKET, TREND_GAP, TREND_MS, TREND_TTL, trendAt, trendFetch, trendPath, trendPush, trendScale } from "./verlauf.js";
 
 /* ---------- Klimaseite: Temperaturen 24 h (Haus Ø und Außen) und Verlauf je Raum ---------- */
 /* Eine Recorder-Abfrage für alle Räume und die Außentemperatur (über die Kopfkarte), danach fortgeschrieben.
@@ -77,9 +77,9 @@ const climRooms = (m) => m.visibleAreas.filter((a) => a.tempId && isIndoor(m, a)
 
 /* Zwei Kopfkarten mit derselben Mechanik: Temperaturen (°C) und Luftfeuchte (%). Innen immer orange, außen immer blau. */
 const CLIM_KIND = {
-  t: { title: "Temperaturen 24 h", ic: "mdi:chart-line", id: (a) => a.tempId, rooms: climRooms, out: (h, m, L) => outdoorTempId(h, m, L),
+  t: { title: "Temperaturen", ic: "mdi:chart-line", id: (a) => a.tempId, rooms: climRooms, out: (h, m, L) => outdoorTempId(h, m, L),
     fmt: (v) => `${NF1.format(v)}°`, ax: (v) => `${v}°`, pad: 0.5, steps: [1, 2, 5, 10, 20] },
-  h: { title: "Luftfeuchte 24 h", ic: "mdi:water-percent", id: (a) => a.humId, rooms: humRooms, out: (h, m) => (m._oc && m._oc.hId) || "",
+  h: { title: "Luftfeuchte", ic: "mdi:water-percent", id: (a) => a.humId, rooms: humRooms, out: (h, m) => (m._oc && m._oc.hId) || "",
     fmt: (v) => `${NF0.format(v)} %`, ax: (v) => `${v} %`, pad: 2, steps: [5, 10, 20, 25, 50] },
 };
 /** Alle Verlaufs-Fühler der Klimaseite – beide Karten und alle Raum-Verläufe in einer Abfrage. */
@@ -91,7 +91,7 @@ const moldLimit = (L) => (L.alerts && L.alerts.mold_hum) || 65;
 function climTrendHTML(k = "t") {
   const K = CLIM_KIND[k];
   return `<div class="glass ctrend k-${k}" data-u="climtrend" data-kind="${k}">
-    <div class="trh"><span class="trt">${icon(K.ic)}${K.title}</span>
+    <div class="trh"><span class="trt">${icon(K.ic)}${K.title} <span class="trr">${RANGES[rangeGet(`klima-${k}`)].label}</span></span>${rangeChips(`klima-${k}`)}<i class="trbr"></i>
       <span class="ctl in"><i></i>Haus Ø<b></b></span><span class="ctl out"><i></i>Außen<b></b></span></div>
     <div class="ctstats"></div>
     <div class="trc ctc"><svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><g class="trgrid"></g><g class="ctgrid"></g>${k === "h" ? '<rect class="ctband" x="0" width="1000"/><path class="ctlim"/>' : ""}<path class="ctp out"/><path class="ctp in"/></svg>
@@ -100,20 +100,20 @@ function climTrendHTML(k = "t") {
       <div class="trmsg">${icon("mdi:loading", "spin")}Lade Verlauf …</div></div></div>`;
 }
 
-/** Durchschnitt mehrerer Reihen je 5 Minuten. */
-function avgSeries(list, start, now) {
-  const n = Math.ceil((now - start) / TREND_BUCKET) + 1, sum = new Float64Array(n), cnt = new Uint16Array(n);
+/** Durchschnitt mehrerer Reihen je 5 Minuten (bzw. je step bei längeren Zeiträumen). */
+function avgSeries(list, start, now, step = TREND_BUCKET, gap = TREND_GAP) {
+  const n = Math.ceil((now - start) / step) + 1, sum = new Float64Array(n), cnt = new Uint16Array(n);
   for (const pts of list) {
     let i = 0;
     for (let k = 0; k < n; k++) {
-      const t = start + k * TREND_BUCKET;
+      const t = Math.min(now, start + k * step);
       while (i < pts.length - 1 && pts[i + 1][0] <= t) i++;
       const p = pts[i];
-      if (p && p[0] <= t + TREND_BUCKET && t - p[0] <= TREND_GAP && finite(p[1])) { sum[k] += p[1]; cnt[k]++; }
+      if (p && p[0] <= t + step && t - p[0] <= gap && finite(p[1])) { sum[k] += p[1]; cnt[k]++; }
     }
   }
   const out = [];
-  for (let k = 0; k < n; k++) if (cnt[k]) out.push([Math.min(now, start + k * TREND_BUCKET), sum[k] / cnt[k]]);
+  for (let k = 0; k < n; k++) if (cnt[k]) out.push([Math.min(now, start + k * step), sum[k] / cnt[k]]);
   return out;
 }
 
@@ -121,7 +121,7 @@ const climStat = (lbl, val, sub = "", cls = "") => `<span class="cts${cls ? ` ${
 const avg = (vals) => (vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null);
 
 /** Kennzahlen der Temperatur-Karte; liefert [HTML, Haus Ø jetzt, außen jetzt]. */
-function climStatsT(h, m, rooms, out, outS, start) {
+function climStatsT(h, m, rooms, out, outS, start, lbl = "24 h") {
   const curs = rooms.map((a) => [a, num(h.states[a.tempId])]).filter(([, v]) => v !== null).sort((x, y) => x[1] - y[1]);
   const avgNow = avg(curs.map(([, v]) => v)), outNow = num(h.states[out]);
   const outDay = trendScale(outS.filter(([t]) => t >= start).map((p) => p[1]), 0);
@@ -130,7 +130,7 @@ function climStatsT(h, m, rooms, out, outS, start) {
     avgNow !== null ? climStat("Innen Ø", `${NF1.format(avgNow)}°`) : "",
     curs.length > 1 ? climStat("Kühlster Raum", `${NF1.format(curs[0][1])}°`, esc(curs[0][0].name)) : "",
     curs.length > 1 ? climStat("Wärmster Raum", `${NF1.format(curs[curs.length - 1][1])}°`, esc(curs[curs.length - 1][0].name)) : "",
-    outNow !== null ? climStat("Außen", `${NF1.format(outNow)}°`, outDay ? `24 h: ${NF1.format(outDay.min)}° bis ${NF1.format(outDay.max)}°` : "") : "",
+    outNow !== null ? climStat("Außen", `${NF1.format(outNow)}°`, outDay ? `${lbl}: ${NF1.format(outDay.min)}° bis ${NF1.format(outDay.max)}°` : "") : "",
     m.agg.climates.length ? climStat("Heizt", `${heating} ${heating === 1 ? "Raum" : "Räume"}`) : "",
   ].join(""), avgNow, outNow];
 }
@@ -157,15 +157,28 @@ function climStatsH(h, m, rooms, L) {
 }
 
 function updateClimTrend(el, ctx) {
-  const h = ctx._hass, m = ctx._model, L = ctx._layout, now = Date.now(), start = now - TREND_MS;
+  const h = ctx._hass, m = ctx._model, L = ctx._layout, now = Date.now();
   const k = el.dataset.kind || "t", K = CLIM_KIND[k];
+  const days = rangeGet(`klima-${k}`), span = days * DAY_MS, start = now - span, R = RANGES[days], gap = rangeGap(days);
   const rooms = K.rooms(m), out = K.out(h, m, L);
-  // alle Fühler der Seite in einer Abfrage – auch Außenbereiche und die andere Karte
-  const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="climtrend"],[data-u="spark"]').forEach((x) => x.isConnected && UPD[x.dataset.u].run(x, ctx));
   const msg = el.querySelector(".trmsg");
-  if (trendEnsure(h, climPageIds(h, m, L), rerun)) { setHidden(msg, false); return; }
-  const outS = (out && trendSeries(h, out)) || [];
-  const [stats, avgNow, outNow] = k === "h" ? climStatsH(h, m, rooms, L) : climStatsT(h, m, rooms, out, outS, start);
+  el.classList.toggle("long", days > 1);
+  setText(el, ".trr", R.label);
+  let outS;
+  if (days === 1) {
+    // alle Fühler der Seite in einer Abfrage – auch Außenbereiche und die andere Karte
+    const rerun = () => ctx.shadowRoot.querySelectorAll('[data-u="climtrend"],[data-u="spark"]').forEach((x) => x.isConnected && UPD[x.dataset.u].run(x, ctx));
+    if (trendEnsure(h, climPageIds(h, m, L), rerun)) { setHidden(msg, false); msg.innerHTML = `${icon("mdi:loading", "spin")}Lade Verlauf …`; return; }
+    outS = (out && trendSeries(h, out)) || [];
+  } else {
+    // Langzeitstatistik nur für die Fühler dieser Karte
+    const ids = [...rooms.map((a) => K.id(a)), out].filter(Boolean);
+    const again = () => { if (el.isConnected) { el._force = true; updateClimTrend(el, ctx); el._force = false; } };
+    if (longEnsure(h, ids, days, R.period, start, again)) { setHidden(msg, false); msg.innerHTML = `${icon("mdi:loading", "spin")}Lade ${R.label} …`; el.classList.remove("nodata"); return; }
+    outS = (out && longSeries(h, out, days, R.period)) || [];
+  }
+  const ser = (eid) => (days === 1 ? trendSeries(h, eid) : longSeries(h, eid, days, R.period));
+  const [stats, avgNow, outNow] = k === "h" ? climStatsH(h, m, rooms, L) : climStatsT(h, m, rooms, out, outS, start, R.label);
   setHtml(el.querySelector(".ctstats"), stats);
   setText(el, ".ctl.in b", avgNow !== null ? K.fmt(avgNow) : "–");
   setText(el, ".ctl.out b", outNow !== null ? K.fmt(outNow) : "–");
@@ -175,11 +188,18 @@ function updateClimTrend(el, ctx) {
     if (!el._tq) el._tq = setTimeout(() => { el._tq = 0; if (el.isConnected) { el._force = true; updateClimTrend(el, ctx); el._force = false; } }, 15000 - (now - el._drawn));
     return;
   }
-  const inner = rooms.map((a) => trendSeries(h, K.id(a))).filter((p) => p && p.length > 1);
-  const S = { in: inner.length ? avgSeries(inner, start, now) : [], out: outS };
+  const inner = rooms.map((a) => ser(K.id(a))).filter((p) => p && p.length > 1);
+  const S = { in: inner.length ? (days === 1 ? avgSeries(inner, start, now) : avgSeries(inner, start, now, R.step, gap)) : [], out: outS };
   if (S.in.length < 2 && S.out.length < 2) {
     setHidden(msg, false);
-    msg.innerHTML = `${icon("mdi:chart-line-variant")}Noch kein Verlauf aufgezeichnet (Recorder).`;
+    msg.innerHTML = days === 1 ? `${icon("mdi:chart-line-variant")}Noch kein Verlauf aufgezeichnet (Recorder).`
+      : `${icon("mdi:chart-line-variant")}Keine Langzeitstatistik für ${R.label} (Sensoren brauchen state_class).`;
+    // alte Kurven nicht unter dem Hinweis stehen lassen
+    el.querySelectorAll(".ctp,.ctlim").forEach((p) => p.setAttribute("d", ""));
+    for (const g of [".ctgrid", ".trgrid"]) el.querySelector(g).innerHTML = "";
+    const band = el.querySelector(".ctband"); if (band) band.setAttribute("height", "0");
+    setHidden(el.querySelector(".ctlimt"), true);
+    el._ct = null; el._hour = null; el._drawn = 0;
     el.classList.add("nodata"); return;
   }
   setHidden(msg, true); el.classList.remove("nodata");
@@ -194,9 +214,9 @@ function updateClimTrend(el, ctx) {
     const l = Math.floor(lo0 / s) * s, u = Math.ceil(hi0 / s) * s;
     if ((u - l) / s <= 4) { step = s; lo = l; hi = u; break; }
   }
-  const H = 100, pad = 4, x = (t) => ((t - start) / TREND_MS) * 1000, y = (v) => H - pad - ((v - lo) / (hi - lo)) * (H - 2 * pad);
-  el.querySelector(".ctp.in").setAttribute("d", trendPath(S.in, x, y));
-  el.querySelector(".ctp.out").setAttribute("d", trendPath(S.out, x, y));
+  const H = 100, pad = 4, x = (t) => ((t - start) / span) * 1000, y = (v) => H - pad - ((v - lo) / (hi - lo)) * (H - 2 * pad);
+  el.querySelector(".ctp.in").setAttribute("d", trendPath(S.in, x, y, gap));
+  el.querySelector(".ctp.out").setAttribute("d", trendPath(S.out, x, y, gap));
   const ticks = []; for (let v = lo; v <= hi; v += step) ticks.push(v);
   el.querySelector(".ctgrid").innerHTML = ticks.map((v) => `<line x1="0" x2="1000" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`).join("");
   setHtml(el.querySelector(".cty"), ticks.map((v) => `<span style="top:${y(v)}%">${K.ax(v)}</span>`).join(""));
@@ -221,16 +241,8 @@ function updateClimTrend(el, ctx) {
     const up = parseFloat(li.style.top) < parseFloat(lo2.style.top) ? li : lo2, dn = up === li ? lo2 : li;
     up.style.top = `${parseFloat(up.style.top) - 6}%`; dn.style.top = `${parseFloat(dn.style.top) + 6}%`;
   }
-  const hour = Math.floor(now / 3600000);
-  const trx = el.querySelector(".trx"), axk = axisKey(trx, hour);
-  if (el._hour !== axk) {
-    el._hour = axk;
-    const tk = []; const d0 = new Date(start); d0.setMinutes(0, 0, 0);
-    for (let t = d0.getTime() + 3600000; t < now; t += 3600000) if (new Date(t).getHours() % 6 === 0) tk.push(t);
-    el.querySelector(".trgrid").innerHTML = tk.map((t) => `<line x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="0" y2="${H}"/>`).join("");
-    el.querySelector(".trx").innerHTML = tk.filter((t) => x(t) < axisCut(trx)).map((t) => `<span style="left:${(x(t) / 10).toFixed(2)}%">${new Date(t).getHours()} Uhr</span>`).join("") + `<span class="now">jetzt</span>`;
-  }
-  el._ct = { S, start, y, fmt: K.fmt };
+  rangeAxis(el, start, now, days, x, H);
+  el._ct = { S, start, span, days, gap, y, fmt: K.fmt };
   if (el._hover !== undefined) climHover(el, el._hover);
 }
 
@@ -238,14 +250,14 @@ function climHover(el, frac) {
   const T = el._ct, tip = el.querySelector(".trtip"), cur = el.querySelector(".trcur");
   if (!T || frac === null) { el._hover = undefined; cur.classList.remove("on"); tip.classList.remove("on"); return; }
   el._hover = frac;
-  const t = T.start + frac * TREND_MS, parts = [];
+  const t = T.start + frac * T.span, parts = [];
   for (const [k, cls, lbl] of [["in", "cin", "Haus Ø"], ["out", "cout", "Außen"]]) {
-    const p = trendAt(T.S[k], t), dot = cur.querySelector(`i.${cls}`);
+    const p = trendAt(T.S[k], t, T.gap), dot = cur.querySelector(`i.${cls}`);
     if (!p) { dot.style.display = "none"; continue; }
     dot.style.display = ""; dot.style.top = `${T.y(p[1])}%`;
     parts.push(`<span class="tk ${k}"><i></i>${lbl} <b>${T.fmt(p[1])}</b></span>`);
   }
-  tip.innerHTML = `<span>${new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>${parts.join("")}`;
+  tip.innerHTML = `<span>${rangeClock(t, T.days)}</span>${parts.join("")}`;
   cur.style.left = `${frac * 100}%`; tip.style.left = `${Math.min(Math.max(frac * 100, 15), 85)}%`;
   cur.classList.add("on"); tip.classList.add("on");
 }

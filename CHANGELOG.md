@@ -20,6 +20,15 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Backend: `tests/backend/test_shading.py` prüft die Einstellungen (Grenze 18–40 °C, nur `cover.*` mit gültiger Richtung).
 - Das Harness liefert Standort und eine Tagesvorhersage (`__api.fcSet(...)`).
 
+### Neu – Woche, Monat und Jahr in den Verläufen
+- **Zeitraum umschalten:** Die Kopfkarten der Klimaseite (Temperaturen, Luftfeuchte) und der Verlauf auf der Energie-Seite haben einen Umschalter „24 h · Woche · Monat · Jahr“. Die Wahl gilt je Karte und wird im Browser gemerkt; beim Umschalten wird nur die Karte neu gezeichnet.
+- **Langzeitstatistik des Recorders:** Woche und Monat kommen als Stundenmittel, das Jahr als Tagesmittel. Diese Statistik bleibt in Home Assistant dauerhaft erhalten, auch wenn der Verlauf nach 10 Tagen gelöscht wird. Sensoren ohne `state_class` haben keine Langzeitstatistik; die Karte sagt das dann.
+- **Klima:** Haus Ø und Außen über 7 bzw. 30 Tage oder 12 Monate; Achse mit Wochentagen, Datum der Montage bzw. Monaten; der Zeiger zeigt Tag und Stunde bzw. das Datum; die Spanne außen gilt für den gewählten Zeitraum.
+- **Energie:** Statt der Leistungskurve Balken mit Erzeugung und Verbrauch in kWh je Tag (Woche, Monat) bzw. je Monat (Jahr), darüber die Summen (erzeugt, verbraucht, bezogen, eingespeist, Autarkie, Eigenverbrauch), der beste Tag bzw. Monat der PV und der Verbrauch im Schnitt pro Tag. Der Zeiger zeigt je Balken Erzeugung, Verbrauch, Bezug und Einspeisung. Beim Jahr bleibt das Netz bei Stundenmitteln, damit Bezug und Einspeisung eines Tages nicht gegeneinander aufgehen.
+
+### Performance
+- 24 h unverändert. Woche, Monat und Jahr laden je eine Abfrage pro Karte (Energie-Jahr zwei), danach 30 Minuten aus dem Speicher; die Balken werden höchstens jede Minute neu gezeichnet.
+
 ### Neu – Strompreis und Stromkosten
 - **Karte „Strompreis“ auf der Seite „Energie“:** Preis jetzt mit Einordnung (günstig, mittel, teuer), Ø heute und das günstigste Zeitfenster der nächsten Stunden (Länge einstellbar, Standard 3 h). Liefert der Preissensor Preise für später, zeigen Balken die Stundenpreise bis morgen; die laufende Stunde und das günstigste Fenster sind hervorgehoben.
 - **Kosten heute:** Netzbezug in € (je 5 Minuten mit dem Preis dieser Zeit), Einspeisevergütung, was eigener Strom (PV und Speicher) gespart hat, und die Bilanz – aus demselben Verlauf wie „Heute“, ohne zusätzliche Abfrage.

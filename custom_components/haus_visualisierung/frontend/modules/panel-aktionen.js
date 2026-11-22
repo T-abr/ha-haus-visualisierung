@@ -2,7 +2,8 @@
  * Wird in panel.js mit den anderen Teilen zur Klasse des Panels zusammengesetzt. */
 
 import { DOMAIN } from "./version.js";
-import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, withDefaults } from "./grundlagen.js";
+import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, UPD, withDefaults } from "./grundlagen.js";
+import { rangeSet } from "./verlauf.js";
 import { buildModel } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
 
@@ -11,6 +12,17 @@ const AktionenMixin = (Base) => class extends Base {
     const D = this._draft;
     switch (act) {
       case "go": this._go(t.dataset.to); return;
+      case "range": {
+        // Zeitraum einer Verlaufs-Karte: nur diese Karte neu zeichnen, kein Neuaufbau der Seite
+        const card = t.closest("[data-u]"), d = rangeSet(t.dataset.rk, Number(t.dataset.r));
+        if (!card) return;
+        card.querySelectorAll('[data-act="range"]').forEach((b) => { const on = Number(b.dataset.r) === d; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+        card._hour = null; card._drawn = 0; card._barsAt = 0;
+        if (card._hover !== undefined) card._hover = undefined;
+        card.querySelectorAll(".trcur,.trtip").forEach((n) => n.classList.remove("on"));
+        card._force = true; UPD[card.dataset.u].run(card, this); card._force = false;
+        return;
+      }
       case "clim-kind": this._ck = t.dataset.k === "h" ? "h" : "t"; try { localStorage.setItem("hv-clim-kind", this._ck); } catch (err) { /* egal */ } this._render(); return;
       case "nav": this._go(t.dataset.to); return;
       case "link": this._openLink(t.dataset.path); return;
