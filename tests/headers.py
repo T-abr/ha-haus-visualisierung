@@ -1,27 +1,22 @@
 """Screenshots der Kopfzeilen-Varianten (python3 tests/headers.py)."""
-import functools
-import http.server
-import threading
-from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).parent / "harness"
-h = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
-http.server.SimpleHTTPRequestHandler.log_message = lambda *a: None
-srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), h); threading.Thread(target=srv.serve_forever, daemon=True).start()
+from harness_server import launch, start
+
+srv, ORIGIN = start()
 VARS = [("chips", "Heute: Chips mit Text"), ("kompakt", "A · Kompakt (Symbol + Zahl)"), ("satz", "B · Satz + Hinweise"), ("leiste", "C · Kennzahlen-Leiste")]
 P = "haus-visualisierung-panel"
 errs = []
 shots = {}
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
+    b = launch(p)
     for hs, _ in VARS:
         for w in (1440, 1100, 400):
             pg = b.new_page(viewport={"width": w, "height": 900}, device_scale_factor=1)
             pg.on("pageerror", lambda e: errs.append(str(e)))
-            pg.goto(f"http://127.0.0.1:{srv.server_port}/index.html?ov=cockpit&hs={hs}"); pg.wait_for_timeout(600)
+            pg.goto(f"{ORIGIN}/index.html?ov=cockpit&hs={hs}"); pg.wait_for_timeout(600)
             hgt = pg.evaluate(f"(() => {{ const R = document.querySelector('{P}').shadowRoot; const e = R.querySelector('.dtop, .hbar'); const r = e.getBoundingClientRect(); return Math.ceil(r.bottom + 10); }})()")
             f = f"/tmp/hdr-{hs}-{w}.png"; pg.screenshot(path=f, clip={"x": 0, "y": 0, "width": w, "height": hgt}); shots[(hs, w)] = (f, hgt - 24)
             pg.close()

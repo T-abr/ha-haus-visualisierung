@@ -4,6 +4,10 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Tests
+- Tests laufen automatisch bei jedem Pull Request und Push auf `main` (GitHub Actions): Versionsprüfung, Backend-Tests und Bedienprüfungen im Browser.
+- Die Browser-Prüfungen laden die echte Frontend-Datei statt einer Kopie im Harness; `tests/harness/panel.js` ist entfernt. `tests/interact.py` meldet Fehler jetzt auch über den Rückgabewert.
+
 ## 1.4.0 – 2026-11-22
 
 ### Neu – Temperaturverläufe auf der Klimaseite
