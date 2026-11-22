@@ -23,10 +23,10 @@ from .const import (
     DEFAULT_REQUIRE_ADMIN,
     DEFAULT_THEME,
     DOMAIN,
+    FRONTEND_URL,
     MODULE_URL,
     PANEL_COMPONENT,
     PANEL_URL_PATH,
-    STATIC_URL,
     VERSION,
 )
 from .store import LayoutStore
@@ -49,9 +49,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(STATIC_URL, str(frontend_dir), False)]
+        [StaticPathConfig(FRONTEND_URL, str(frontend_dir), False)]
     )
-    # Die Karten (haus-raum-card, haus-hausschnitt-card) stecken im selben Modul.
+    # Die Karten (haus-raum-card, haus-hausschnitt-card) lädt derselbe Einstiegspunkt.
     frontend.add_extra_js_url(hass, MODULE_URL)
 
     async_register_websocket(hass)

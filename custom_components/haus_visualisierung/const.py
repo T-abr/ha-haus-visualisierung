@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
 STATIC_URL = "/haus_visualisierung_static"
-MODULE_URL = f"{STATIC_URL}/haus-visualisierung.js?v={VERSION}"
+# Die Version steckt im Pfad, damit auch die nachgeladenen Module (frontend/modules/) nach einem
+# Update neu geladen werden: relative Importe übernehmen den Pfad, aber keine ?v=-Angabe.
+FRONTEND_URL = f"{STATIC_URL}/{VERSION}"
+MODULE_URL = f"{FRONTEND_URL}/haus-visualisierung.js"
 
 STORAGE_KEY = DOMAIN
 STORAGE_VERSION = 1

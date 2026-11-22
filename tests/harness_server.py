@@ -1,9 +1,9 @@
 """Gemeinsamer Webserver und Browserstart für die Bedien- und Screenshot-Prüfungen.
 
-Der Server liefert tests/harness/ aus. Unter /haus-visualisierung.js liefert er direkt die
-echte Frontend-Datei der Integration, damit nie eine veraltete Kopie getestet wird. Sie liegt
-bewusst auf derselben Ebene wie das Harness, damit relative Importe (z. B. ./test-panels.js)
-wie bisher aufgelöst werden.
+Der Server liefert tests/harness/ aus. Unter /haus-visualisierung.js und /modules/… liefert er
+direkt das echte Frontend der Integration (Einstiegspunkt und Module), damit nie eine veraltete
+Kopie getestet wird. Es liegt bewusst auf derselben Ebene wie das Harness, damit relative Importe
+(z. B. ./test-panels.js) wie bisher aufgelöst werden.
 """
 import functools
 import http.server
@@ -12,13 +12,20 @@ import threading
 from pathlib import Path
 
 HARNESS = Path(__file__).parent / "harness"
-PANEL = Path(__file__).parents[1] / "custom_components" / "haus_visualisierung" / "frontend" / "haus-visualisierung.js"
+FRONTEND = Path(__file__).parents[1] / "custom_components" / "haus_visualisierung" / "frontend"
+PANEL = FRONTEND / "haus-visualisierung.js"
+MODULES = FRONTEND / "modules"
 
 
 class _Handler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
-        if path.split("?", 1)[0].split("#", 1)[0] == "/" + PANEL.name:
+        p = path.split("?", 1)[0].split("#", 1)[0]
+        if p == "/" + PANEL.name:
             return str(PANEL)
+        if p.startswith("/modules/"):
+            f = (MODULES / p[len("/modules/"):]).resolve()
+            if f.parent == MODULES.resolve():
+                return str(f)
         return super().translate_path(path)
 
     def end_headers(self):
