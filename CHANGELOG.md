@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.9.0 – 2026-11-22
+
 ### Neu – Wettervorhersage und Beschattung nach Sonne
 - **Karte „Sonne & Wetter“** oben auf der Seite Beschattung: Vorhersage für fünf Tage (Lage, Höchst- und Tiefstwert, Regen), heiße Tage hervorgehoben, dazu der aktuelle Sonnenstand. Die Vorhersage kommt über das Abo `weather/subscribe_forecast` von Home Assistant (täglich, sonst stündlich zusammengefasst; ältere Wetter-Integrationen über das Attribut `forecast`).
 - **Beschattungshinweise** aus Vorhersage, Sonnenstand am Standort von Home Assistant und Ausrichtung der Fenster:
@@ -19,6 +21,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Neue Gruppe `wetter` der Bedienprüfungen (23 Prüfungen): Abo der Vorhersage, Karte mit fünf Tagen, Aktualisierung bei neuer Vorhersage, allgemeiner Hinweis ohne Ausrichtung, Hinweise je Seite und Reihenfolge, Kopfzeile, Hinweise zu festen Uhrzeiten (vor der Sonne, mittags, abends), „Schließen“ nur mit Rückfrage und nur für die offenen Rollos der Seite (eigene Seite mit fester Uhrzeit), Bildschirmschoner, Ausrichtung aus dem Namen und Speichern.
 - Backend: `tests/backend/test_shading.py` prüft die Einstellungen (Grenze 18–40 °C, nur `cover.*` mit gültiger Richtung).
 - Das Harness liefert Standort und eine Tagesvorhersage (`__api.fcSet(...)`).
+
+### Performance
+- Großes Testhaus (`tests/perf/measure.py`, alle drei Neuerungen zusammen): Aufbau 7,6–25,4 ms je Seite, 0 Neuaufbauten, hass-Setter Ø 20–39 µs. Die Vorhersage kommt per Abo (eins je Wetter-Entität, nur solange ein Panel offen ist); die Sonnenzeiten werden je Tag und Seite einmal berechnet (144 Schritte) und gemerkt, die Karte „Sonne & Wetter“ frischt sich bei Rollo-Änderungen, neuer Vorhersage und alle 30 s auf.
 
 ### Neu – Woche, Monat und Jahr in den Verläufen
 - **Zeitraum umschalten:** Die Kopfkarten der Klimaseite (Temperaturen, Luftfeuchte) und der Verlauf auf der Energie-Seite haben einen Umschalter „24 h · Woche · Monat · Jahr“. Die Wahl gilt je Karte und wird im Browser gemerkt; beim Umschalten wird nur die Karte neu gezeichnet.
