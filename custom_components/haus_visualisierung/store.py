@@ -55,6 +55,8 @@ def _alerts(raw: dict) -> dict:
             if isinstance(raw["builtin"].get(key), bool):
                 out["builtin"][key] = raw["builtin"][key]
     out["contacts_min"] = _int(raw.get("contacts_min"), 0, 240, 0)
+    out["mold_hum"] = _int(raw.get("mold_hum"), 50, 90, 65)
+    out["mold_min"] = _int(raw.get("mold_min"), 0, 240, 30)
     if isinstance(raw.get("modes"), dict):
         out["modes"] = {k: _modes(v) for k, v in raw["modes"].items() if k in out["builtin"] and isinstance(v, list)}
     rules = []

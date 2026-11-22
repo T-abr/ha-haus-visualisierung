@@ -98,11 +98,11 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     ent("binary_sensor.evcc_lp1_connected", "on", { friendly_name: "Wallbox Fahrzeug angesteckt", device_class: "plug" }, "einfahrt");
     ent("binary_sensor.evcc_lp1_charging", "on", { friendly_name: "Wallbox lädt", device_class: "battery_charging" }, "einfahrt");
     ent("sensor.evcc_lp1_vehicle_range", 312, { friendly_name: "Auto Reichweite", device_class: "distance", unit_of_measurement: "km" }, "einfahrt");
-    light("light.garten_wege", "Garten Wegebeleuchtung", "garten", false, null); temp("sensor.aussen_temperatur", "Außentemperatur", "garten", 6.8);
+    light("light.garten_wege", "Garten Wegebeleuchtung", "garten", false, null); temp("sensor.aussen_temperatur", "Außentemperatur", "garten", 6.8); hum("sensor.aussen_feuchte", "Außen Luftfeuchte", "garten", 86);
     ent("lawn_mower.luba", "docked", { friendly_name: "Mähroboter" }, "garten");
     light("light.terrasse", "Terrasse Licht", "terrasse", false, 50);
 
-    ent("weather.forecast_home", "partlycloudy", { friendly_name: "Zuhause", temperature: 7, temperature_unit: "°C" });
+    ent("weather.forecast_home", "partlycloudy", { friendly_name: "Zuhause", temperature: 7, temperature_unit: "°C", humidity: 88 });
     ent("person.tobias", "home", { friendly_name: "Tobias" });
     ent("person.zweite_person", "home", { friendly_name: "Zweite Person" });
     ent("sensor.growatt_modbus_pv_power", 3240, { friendly_name: "PV-Leistung", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
