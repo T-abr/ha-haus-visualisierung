@@ -53,6 +53,12 @@ Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
   `python3 tests/perf/measure.py` (Performance). Abhängigkeiten: `pip install -r tests/requirements.txt`.
   Die Browser-Prüfungen laden direkt `custom_components/haus_visualisierung/frontend/haus-visualisierung.js`
   und die Module daneben (über `tests/harness_server.py`), eine Kopie im Harness gibt es nicht.
+- Nur geänderte Teile prüfen (während der Entwicklung): `python3 tests/changed.py` vergleicht mit `main`
+  (inkl. nicht committeter und neuer Dateien) und führt nur die passenden Gruppen der Bedienprüfungen aus,
+  dazu `pytest`, wenn Python-Code oder Frontend betroffen ist. `--zeigen` zeigt nur die Auswahl.
+  Gruppen gezielt: `python3 tests/interact.py klima energie`, Übersicht: `python3 tests/interact.py --liste`.
+  Welche Datei welche Gruppen auslöst, steht in `GRUPPEN_FUER` in `tests/changed.py`; gemeinsam genutzte Module,
+  das Harness und neue, dort nicht eingetragene Frontend-Dateien lösen alle Gruppen aus. Die CI prüft immer alles.
 - Frontend: `frontend/haus-visualisierung.js` ist nur der Einstiegspunkt; der Code steckt in ES-Modulen unter
   `frontend/modules/` (ohne Build-Schritt). Das Panel setzt sich aus `panel.js` und den Teilen `panel-*.js` zusammen.
   Die Versionsnummer des Frontends steht in `frontend/modules/version.js`.

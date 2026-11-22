@@ -1,4 +1,12 @@
-"""Bedientest mit dem Test-Harness (python3 tests/interact.py)."""
+"""Bedientest mit dem Test-Harness.
+
+    python3 tests/interact.py                 alle Abschnitte (so läuft es in der CI)
+    python3 tests/interact.py klima energie   nur diese Gruppen bzw. Abschnitte
+    python3 tests/interact.py --liste         Gruppen und Abschnitte anzeigen
+
+Jeder Abschnitt ist eine Funktion mit @gruppe("…") und beginnt mit pg.goto(…), damit er auch allein
+läuft. Welche Gruppen zu geänderten Dateien gehören, wählt tests/changed.py aus.
+"""
 import sys
 from pathlib import Path
 
@@ -13,6 +21,17 @@ ok, fail = [], []
 
 def check(name, cond):
     (ok if cond else fail).append(name)
+
+
+ABSCHNITTE = []  # (Gruppe, Funktion) in der Reihenfolge der Datei
+
+
+def gruppe(name):
+    """Abschnitt einer Gruppe zuordnen. Gruppen und Dateien: tests/changed.py (GRUPPEN_FUER)."""
+    def reg(fn):
+        ABSCHNITTE.append((name, fn))
+        return fn
+    return reg
 
 
 def stab(pg, name):
@@ -32,14 +51,19 @@ def drag(handle, target, after=False, steps=12):
     for i in range(1, steps + 1): pg.mouse.move(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps); pg.wait_for_timeout(16)
     pg.mouse.up(); pg.wait_for_timeout(200)
 
-with sync_playwright() as p:
-    b = launch(p)
-    pg = b.new_page(viewport={"width": 1440, "height": 1000})
-    errs = []
-    pg.on("pageerror", lambda e: errs.append(str(e)))
+P = "haus-visualisierung-panel"
+log = lambda: pg.evaluate("window.__api.log.map(x => x[0] + '.' + x[1])")
+# Gemeinsame Ausdrücke, die mehrere Abschnitte nutzen
+PP = f"document.querySelector('{P}')"
+R = f"document.querySelector('{P}').shadowRoot"
+ring = "window.__api.set('event.g6_entry_doorbell', new Date().toISOString(), { event_type: 'ring' })"
+OVL = (Path(__file__).parent / "overlap.js").read_text()
+WIDE = """(() => { const R = document.querySelector('haus-visualisierung-panel').shadowRoot; const W = innerWidth; return [...R.querySelectorAll('.main *')].filter(e => { const r = e.getBoundingClientRect(); return r.width && r.right > W + 1 && !e.closest('.ground'); }).slice(0, 4).map(e => e.tagName.toLowerCase() + '.' + String(e.className).split(' ').join('.')); })()"""
+
+
+@gruppe("basis")
+def grundbedienung():
     pg.goto(base); pg.wait_for_timeout(600)
-    P = "haus-visualisierung-panel"
-    log = lambda: pg.evaluate("window.__api.log.map(x => x[0] + '.' + x[1])")
 
     # Raumkachel: Licht-Knopf schaltet alle Lichter des Raums
     pg.locator(f"{P} .room[data-area=wohnzimmer] .ml").click(); pg.wait_for_timeout(150)
@@ -100,6 +124,9 @@ with sync_playwright() as p:
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(250)
     order = pg.evaluate(f"[...document.querySelector('{P}').shadowRoot.querySelectorAll('.floor[data-floor=eg] .room')].map(r => r.dataset.area)")
     check("Reihenfolge geändert", order.index("wohnzimmer") < order.index("kuche"))
+
+@gruppe("basis")
+def kompakt():
     # ---------- Kompakt-Modus ----------
     pg.goto(dense); pg.wait_for_timeout(600)
     n0 = len(log())
@@ -142,6 +169,9 @@ with sync_playwright() as p:
     pg.locator(f'{P} [data-act=s-save]').click(); pg.wait_for_timeout(300)
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(250)
     check("K: Umschalten auf Komfort", pg.locator(f"{P} .roof").count() == 1 and pg.locator(f"{P} .roofc").count() == 0)
+
+@gruppe("basis")
+def uebersicht_varianten():
     # ---------- Übersicht-Varianten ----------
     pg.goto(dense + "?ov=fokus"); pg.wait_for_timeout(500)
     check("V: Fokus zeigt Küche aktiv", pg.locator(f"{P} .factive .room[data-area=kuche]").count() == 1)
@@ -163,6 +193,9 @@ with sync_playwright() as p:
     check("A: Automatisch auf dem Handy direkt Aktiv-Fokus", pg.locator(f"{P} .factive").count() == 1)
     pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(400)
     check("A: zurück zum Cockpit", pg.locator(f"{P} .cockpit").count() == 1)
+
+@gruppe("basis")
+def navigation_schmal():
     # ---------- Feste Navigation in der schmalen Ansicht ----------
     rail_js = f"(() => {{ const r = document.querySelector('{P}').shadowRoot.querySelector('.rail').getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), Math.round(r.left), Math.round(r.width)]; }})()"
     pg.set_viewport_size({"width": 400, "height": 860})
@@ -186,6 +219,9 @@ with sync_playwright() as p:
     t, bt, l, w = pg.evaluate(rail_js)
     check("N: Letzter Inhalt nicht von der Leiste verdeckt", last_row <= t)
     pg.set_viewport_size({"width": 1440, "height": 1000})
+
+@gruppe("basis")
+def seitenfuellend():
     # ---------- Seitenfüllend, Navigation links fest ----------
     geo = f"""(() => {{ const R = document.querySelector('{P}').shadowRoot; const a = R.querySelector('.app').getBoundingClientRect();
       const r = R.querySelector('.rail').getBoundingClientRect(); const m = R.querySelector('.main'); const w = R.querySelector('.wrap').getBoundingClientRect();
@@ -210,6 +246,9 @@ with sync_playwright() as p:
     pg.goto(dense + "?view=batterien"); pg.wait_for_timeout(400)
     check("F: kurze Seite füllt die Höhe", pg.evaluate(geo)["appH"] == 900)
     pg.set_viewport_size({"width": 1440, "height": 1000})
+
+@gruppe("panels")
+def eingebettete_panels():
     # ---------- Eingebettete Panels ----------
     R = f"document.querySelector('{P}').shadowRoot"
     pg.set_viewport_size({"width": 1440, "height": 900})
@@ -250,6 +289,9 @@ with sync_playwright() as p:
     pg.goto(dense + "?view=extern/gibt-es-nicht"); pg.wait_for_timeout(400)
     check("E: nicht einbettbar → Hinweis mit Knopf", pg.locator(f"{P} .extwrap [data-act=nav-raw]").count() == 1)
     pg.set_viewport_size({"width": 1440, "height": 1000})
+
+@gruppe("kopfzeile")
+def kopfzeile():
     # ---------- Kopfzeile ----------
     pg.set_viewport_size({"width": 1100, "height": 900})
     pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
@@ -267,6 +309,9 @@ with sync_playwright() as p:
     hdr = pg.evaluate(f"(() => {{ const R = document.querySelector('{P}').shadowRoot; const d = R.querySelector('.dtop').getBoundingClientRect(); const w = R.querySelector('.hright').getBoundingClientRect(); return Math.round(w.top - d.top); }})()")
     check("K-Kopf: Chips mit Text – Wetter/Personen bleiben oben", hdr <= 30)
     pg.set_viewport_size({"width": 1440, "height": 1000})
+
+@gruppe("warnungen")
+def warnungen():
     # ---------- Warnungen ----------
     pg.set_viewport_size({"width": 1440, "height": 1000})
     pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
@@ -308,6 +353,9 @@ with sync_playwright() as p:
     pg.evaluate(f"(() => {{ const p = document.querySelector('{P}'); p.shadowRoot.querySelectorAll('[data-u=alerts]').forEach(el => p._binds && 0); p._flushAlerts = 1; }})()")
     pg.evaluate(f"(() => {{ const p = document.querySelector('{P}'); p.hass = {{ ...window.__api.hass }}; p._pending.add('binary_sensor.kuche_fenster'); p._schedule(); }})()"); pg.wait_for_timeout(200)
     check("W: Fenster nach Mindestdauer gemeldet", pg.locator(f"{A} .sst").inner_text() == "Küche · Fenster offen")
+
+@gruppe("basis")
+def schnellzugriff_abfrage():
     # ---------- Abfrage im Schnellzugriff ----------
     pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
     n0 = len(log())
@@ -334,6 +382,9 @@ with sync_playwright() as p:
     pg.goto(dense + "?view=raum/wohnzimmer"); pg.wait_for_timeout(400)
     n0 = len(log()); pg.locator(f'{P} .hero .schip').first.click(); pg.wait_for_timeout(150)
     check("Q: Szenen in Räumen ohne Abfrage", pg.locator(f"{P} .modal").count() == 0 and len(log()) == n0 + 1)
+
+@gruppe("push")
+def push_einstellungen():
     # ---------- Push-Einstellungen ----------
     pg.goto(dense + "?view=einstellungen/meldungen"); pg.wait_for_timeout(600)
     check("P: Empfänger gelistet", pg.locator(f"{P} .tchip").count() == 2 and "Keine Auswahl = alle Handys" in pg.locator(f"{P} .set", has_text="Push-Benachrichtigungen").inner_text())
@@ -352,8 +403,10 @@ with sync_playwright() as p:
     check("P: Testmeldung", "mobile_app_pixel" in pg.locator(f"{P} .toast").inner_text())
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
     pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(300)
+
+@gruppe("klingel")
+def klingel_overlay():
     # ---------- Klingel-Overlay ----------
-    ring = "window.__api.set('event.g6_entry_doorbell', new Date().toISOString(), { event_type: 'ring' })"
     pg.set_viewport_size({"width": 1440, "height": 900})
     pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
     pg.evaluate("window.__api.set('event.g6_entry_doorbell', '2026-11-18T08:00:00.000+00:00', { friendly_name: 'Neu' })"); pg.wait_for_timeout(150)
@@ -401,6 +454,9 @@ with sync_playwright() as p:
     pg.evaluate("(() => { const p = document.querySelector('" + P + "'); p._layout = { ...p._layout, doorbell: { ...p._layout.doorbell, enabled: false } }; })()")
     pg.evaluate(ring); pg.wait_for_timeout(300)
     check("B: abgeschaltet → kein Overlay", pg.locator(f"{P} .bellbg").count() == 0)
+
+@gruppe("warnungen")
+def warnungen_fokus():
     # ---------- Warnungen im Aktiv-Fokus ----------
     pg.set_viewport_size({"width": 400, "height": 860})
     pg.goto(dense + "?ov=fokus"); pg.wait_for_timeout(500)
@@ -422,6 +478,9 @@ with sync_playwright() as p:
     pg.evaluate("window.__api.set('binary_sensor.wohnzimmer_rauchmelder', 'off'); window.__api.set('lock.haustur', 'locked')"); pg.wait_for_timeout(300)
     check("F-W: nach Behebung wieder ruhig", pg.locator(f"{P} .factive .room[data-area=eingang]").count() == 0 and "ralarm" not in (pg.locator(f"{P} .factive .room[data-area=wohnzimmer]").get_attribute("class") or ""))
     pg.set_viewport_size({"width": 1440, "height": 1000})
+
+@gruppe("panels")
+def dashboards_einbetten():
     # ---------- Dashboards einbetten ----------
     pg.set_viewport_size({"width": 1440, "height": 900})
     pg.goto(dense + "?view=extern/map"); pg.wait_for_timeout(600)
@@ -438,6 +497,9 @@ with sync_playwright() as p:
     pg.evaluate(ring); pg.wait_for_timeout(300)
     pg.locator(f"{P} .bellbg [data-act=bell-protect]").click(); pg.wait_for_timeout(400)
     check("D: Klingel → Kamera-Dashboard eingebettet", pg.locator(f"{P} .extwrap ha-panel-lovelace").count() == 1 and pg.locator(f"{P} .bellbg").count() == 0)
+
+@gruppe("klingel")
+def tueroeffner():
     # ---------- Türöffner: Schalter, Taste, Test mit ungespeicherten Angaben ----------
     pg.goto(dense + "?view=einstellungen/meldungen"); pg.wait_for_timeout(500)
     lk = pg.locator(f'{P} input[data-set="doorbell.lock"]'); lk.fill("switch.tueroeffner"); lk.dispatch_event("change"); pg.wait_for_timeout(200)
@@ -461,6 +523,9 @@ with sync_playwright() as p:
     stab(pg, "darstellung")
     ov = pg.evaluate(f"(() => {{ const R = document.querySelector('{P}').shadowRoot; const e = R.querySelector('.lmode').getBoundingClientRect(); const d = R.querySelector('[data-act=s-link-del]').getBoundingClientRect(); return e.right <= d.left; }})()")
     check("T: Darstellungs-Auswahl überlappt nicht", ov)
+
+@gruppe("panels")
+def verknuepfte_seiten_farben():
     # ---------- Verknüpfte Seiten in den Farben der Haus Visualisierung ----------
     LV = "customElements.get('ha-panel-lovelace') || customElements.define('ha-panel-lovelace', class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: 'open' }).innerHTML = '<style>:host{display:block;background:var(--primary-background-color,#fafafa)}.card{background:var(--ha-card-background,var(--card-background-color,#fff));border-radius:var(--ha-card-border-radius,12px);color:var(--primary-text-color,#212121);backdrop-filter:var(--ha-card-backdrop-filter,none);height:80px}.hdr{background:var(--app-header-background-color,#03a9f4)}</style><div class=hdr>Kopf</div><div class=card>Karte</div>'; } set hass(h) {} set panel(p) {} set route(r) {} })"
     def setlinks(mode):
@@ -498,8 +563,10 @@ with sync_playwright() as p:
     # Einstellungen
     pg.goto(dense + "?view=einstellungen/darstellung"); pg.wait_for_timeout(500)
     check("TH: Auswahl Darstellung (Haus-Farben Standard)", pg.locator(f'{P} select[data-set="links.0.mode"]').input_value() == "theme" and pg.locator(f'{P} select[data-set="links.0.mode"] option').count() == 3)
+
+@gruppe("handy")
+def handy_fokus():
     # ---------- Aktiv-Fokus auf dem Handy (iPhone 14 = 390 px, iPhone SE = 375/320 px) ----------
-    OVL = (Path(__file__).parent / "overlap.js").read_text()
     for w, hgt in ((390, 844), (375, 667), (320, 640)):
         ctx = b.new_context(viewport={"width": w, "height": hgt}, device_scale_factor=2, is_mobile=True, has_touch=True)
         mp = ctx.new_page(); mp.on("pageerror", lambda e: errs.append(str(e)))
@@ -517,13 +584,15 @@ with sync_playwright() as p:
         ps = mp.evaluate(f"(() => {{ const p = [...document.querySelector('{P}').shadowRoot.querySelectorAll('.person')].map(x => x.getBoundingClientRect()); return p.every((r, i) => i === 0 || r.left >= p[i-1].right); }})()")
         check(f"FH-{w}: Personen überlappen nicht", ps)
         ctx.close()
+
+@gruppe("handy")
+def handy_lange_namen():
     # ---------- Handy mit langen Namen (z. B. UniFi Protect): Felder nie breiter als der Bildschirm ----------
     LONG = """(() => { const api = window.__api, H = api.hass, p = document.querySelector('haus-visualisierung-panel');
       const names = ['G6 Entry Türklingel Person erkannt', 'Wohnungseingangstür Kontakt Erdgeschoss', 'Rauchwarnmelder Schlafzimmer Obergeschoss', 'Haustür Nuki Smart Lock Pro', 'Bewegungsmelder Flur Treppenhaus Präsenz'];
       Object.keys(H.states).forEach((e, i) => { const n = names[i % names.length]; api.set(e, H.states[e].state, { friendly_name: n }); if (H.entities && H.entities[e]) H.entities[e] = { ...H.entities[e], name: n }; });
       try { api.set('lock.haustur','unlocked') } catch(x){}
       p._model = null; p._dirty = true; p._flush(); })()"""
-    WIDE = """(() => { const R = document.querySelector('haus-visualisierung-panel').shadowRoot; const W = innerWidth; return [...R.querySelectorAll('.main *')].filter(e => { const r = e.getBoundingClientRect(); return r.width && r.right > W + 1 && !e.closest('.ground'); }).slice(0, 4).map(e => e.tagName.toLowerCase() + '.' + String(e.className).split(' ').join('.')); })()"""
     ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
     mp = ctx.new_page(); mp.on("pageerror", lambda e: errs.append(str(e)))
     for v in ("sicherheit", "licht", "beschattung", "klima", "batterien", "raum/eingang", "raum/wohnzimmer"):
@@ -540,6 +609,9 @@ with sync_playwright() as p:
     st = mp.evaluate("(() => { const R = document.querySelector('haus-visualisierung-panel').shadowRoot; return [...R.querySelectorAll('.tile.row.bin .tstate')].every(s => s.getBoundingClientRect().width <= s.closest('.tile').getBoundingClientRect().width * 0.47); })()")
     check("LN: lange Zustände nehmen höchstens knapp die Hälfte der Zeile ein", st)
     ctx.close()
+
+@gruppe("alarme")
+def alarmmanager():
     # ---------- Alarmmanager (0.11.0) ----------
     pg.set_viewport_size({"width": 1440, "height": 1000})
     pg.goto(dense); pg.wait_for_timeout(600)
@@ -624,6 +696,9 @@ with sync_playwright() as p:
     check("AM-Handy: nichts überlappt, nichts zu breit", not ov and not wide)
     if ov or wide: print("     ", ov[:3], wide)
     ctx.close()
+
+@gruppe("alarme")
+def hausmodus():
     # ---------- Hausmodus (0.12.0) ----------
     pg.set_viewport_size({"width": 1440, "height": 1000})
     pg.evaluate("sessionStorage.removeItem('hv-alarms')")
@@ -679,6 +754,9 @@ with sync_playwright() as p:
         if ov or wide: print("     ", ov[:3], wide)
     check("HM-Handy: Modus-Symbol in der Kopfzeile ohne Text", mp.locator(f"{P} .hmode .hml").is_hidden() if mp.locator(f"{P} .hmode").count() else True)
     ctx.close()
+
+@gruppe("alarme")
+def eskalation():
     # ---------- Eskalation und Aktionen (0.13.0) ----------
     pg.set_viewport_size({"width": 1440, "height": 1000})
     pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
@@ -723,6 +801,9 @@ with sync_playwright() as p:
     sr = pg.locator(f"{P} .alstatrow").first
     check("AC: Fehlalarm-Auswertung mit Dauer und Hinweis", "Ø 42 s" in sr.inner_text() and "5× unter 1 Min." in sr.inner_text() and "nie quittiert" in sr.inner_text()
           and "kurz" in (sr.locator(".fa").get_attribute("title") or ""))
+
+@gruppe("verlauf")
+def verlauf_raumseiten():
     # ---------- Verlauf 24 h auf Raumseiten (1.1.0) ----------
     R = f"document.querySelector('{P}').shadowRoot"
     wsl = lambda kind: [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == kind]
@@ -763,6 +844,9 @@ with sync_playwright() as p:
     pg.goto(dense + "?view=raum/wohnzimmer"); pg.wait_for_timeout(400)
     pg.evaluate(f"(() => {{ const p = document.querySelector('{P}'); p._layout = {{ ...p._layout, show_trends: false }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(200)
     check("TR: abschaltbar (Darstellung → Verlauf auf Raumseiten)", pg.locator(f"{P} .trend").count() == 0)
+
+@gruppe("einstellungen")
+def einstellungen_reiter():
     # ---------- Einstellungen mit Reitern und Sortieren per Ziehen (1.1.0) ----------
     pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
     check("ST: fünf Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 5 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
@@ -819,6 +903,9 @@ with sync_playwright() as p:
     mp.wait_for_timeout(2700)
     check("TR-Handy: Anzeige verschwindet nach kurzer Zeit", "on" not in mp.locator(f"{P} .trend .trtip").get_attribute("class"))
     ctx.close()
+
+@gruppe("technik")
+def heizung():
     # ---------- Heizung im Heizungsraum (1.2.0) ----------
     R = f"document.querySelector('{P}').shadowRoot"
     pg.set_viewport_size({"width": 1440, "height": 1000})
@@ -851,6 +938,9 @@ with sync_playwright() as p:
     check("HZ: Speicherfühler öffnet Details", pg.evaluate("window.__moreInfo") == "sensor.speicher_oben")
     pg.goto(dense + "?view=raum/wohnzimmer"); pg.wait_for_timeout(400)
     check("HZ: Karte nur im Heizungsraum", pg.locator(f"{P} .tech").count() == 0)
+
+@gruppe("technik")
+def wallbox():
     # ---------- Wallbox in der Einfahrt (1.2.0) ----------
     pg.goto(dense + "?view=raum/einfahrt"); pg.wait_for_timeout(600)
     wb = pg.locator(f"{P} .tech.wb")
@@ -868,6 +958,9 @@ with sync_playwright() as p:
     check("WB: angesteckt, lädt nicht", "Angesteckt – lädt nicht" in wb.inner_text() and "charging" not in wb.get_attribute("class"))
     pg.evaluate("window.__api.set('binary_sensor.evcc_lp1_connected', 'off')"); pg.wait_for_timeout(200)
     check("WB: kein Fahrzeug", "Kein Fahrzeug" in wb.inner_text())
+
+@gruppe("technik")
+def technik_einstellungen():
     # ---------- Einstellungen → Technik (1.2.0) ----------
     pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(600)
     fd = pg.locator(f"{P} .techfound")
@@ -902,6 +995,9 @@ with sync_playwright() as p:
             check(f"TE-Handy {k or 'kompakt&'}{v}: nichts breiter als der Bildschirm, nichts überlappt", not wide and not ov)
             if wide or ov: print("     ", wide[:3], ov[:3])
     ctx.close()
+
+@gruppe("wandpanel")
+def wandpanel():
     # ---------- Wandpanel (1.3.0) ----------
     pg.set_viewport_size({"width": 1280, "height": 800})
     PP = f"document.querySelector('{P}')"
@@ -977,6 +1073,9 @@ with sync_playwright() as p:
     mp.touchscreen.tap(195, 420); mp.wait_for_timeout(200)
     check("WP-Handy: Antippen weckt auf", mp.locator(f"{P} .saver").count() == 0)
     ctx.close()
+
+@gruppe("warnungen")
+def verzoegerung_heizen():
     # ---------- 1.3.1: Verzögerung gilt auch für „Fenster offen beim Heizen“ ----------
     pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
     PP = f"document.querySelector('{P}')"
@@ -987,6 +1086,9 @@ with sync_playwright() as p:
     # Fenster seit 11 Minuten offen: Zeitpunkt der letzten Änderung zurückdatieren
     pg.evaluate("(() => { const H = window.__api.hass, st = H.states['binary_sensor.kuche_fenster']; H.states = { ...H.states, 'binary_sensor.kuche_fenster': { ...st, last_changed: new Date(Date.now() - 11 * 60000).toISOString() } }; })()")
     check("FH: nach 11 Min. „Fenster offen beim Heizen“", "heat:kuche" in keys() and "contact:binary_sensor.kuche_fenster" not in keys())
+
+@gruppe("klima")
+def klima_temperatur():
     # ---------- Klimaseite mit Temperaturverläufen (1.4.0) ----------
     pg.set_viewport_size({"width": 1440, "height": 1000})
     R = f"document.querySelector('{P}').shadowRoot"
@@ -1030,6 +1132,9 @@ with sync_playwright() as p:
     check("KL: ohne Recorder – Hinweis", "Noch kein Verlauf" in pg.locator(f"{P} .ctrend.k-t").inner_text() and "Noch kein Verlauf" in pg.locator(f"{P} .ctrend.k-h").inner_text())
     pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, show_trends: false }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(200)
     check("KL: abschaltbar – keine Kopfkarte, keine Spalte", pg.locator(f"{P} .ctrend").count() == 0 and pg.locator(f"{P} .kspark").count() == 0 and "24" not in pg.locator(f"{P} .khead").first.inner_text())
+
+@gruppe("klima")
+def klima_feuchte():
     # ---------- Klimaseite: Luftfeuchte, Taupunkt, Lüftungshinweis, Schimmelrisiko (1.5.0) ----------
     import math
     def dp(t, rh):
@@ -1132,6 +1237,9 @@ with sync_playwright() as p:
     ov = pg.evaluate(f"(() => {{ const r = {R}; const m = r.querySelector('.main') || r.querySelector('.content') || document.documentElement; return [...r.querySelectorAll('.ctrend, .cktog, .ktable')].some(e => e.getBoundingClientRect().right > 391); }})()")
     check("KF: Handy 390 px – beide Karten und Umschalter ohne Überbreite", not ov and pg.locator(f"{P} .ctrend").count() == 2)
     pg.set_viewport_size({"width": 1440, "height": 1000})
+
+@gruppe("energie")
+def energie():
     # ---------- Energie-Seite (1.5.0) ----------
     pg.set_viewport_size({"width": 1440, "height": 1000})
     pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(600)
@@ -1191,6 +1299,37 @@ with sync_playwright() as p:
       return [m.scrollWidth - m.clientWidth, ov, Math.min(...n.map(r => r.left)), Math.max(...n.map(r => r.right))]; }})()""")
     check("EN: Handy 390 px – nichts überlappt, kein seitliches Scrollen", geo[0] <= 0 and geo[1] == 0 and geo[2] >= 0 and geo[3] <= 390)
     mp.close()
+
+
+def auswahl(args):
+    """Abschnitte zu den Namen (Gruppe oder Abschnitt) auf der Kommandozeile; ohne Namen alle."""
+    if not args:
+        return ABSCHNITTE
+    namen = {g for g, _ in ABSCHNITTE} | {fn.__name__ for _, fn in ABSCHNITTE}
+    falsch = [a for a in args if a not in namen]
+    if falsch:
+        sys.exit(f"Unbekannt: {', '.join(falsch)}. Übersicht: python3 tests/interact.py --liste")
+    return [(g, fn) for g, fn in ABSCHNITTE if g in args or fn.__name__ in args]
+
+
+args = sys.argv[1:]
+if "--liste" in args:
+    for g in dict.fromkeys(g for g, _ in ABSCHNITTE):
+        print(f"{g}: {', '.join(fn.__name__ for x, fn in ABSCHNITTE if x == g)}")
+    sys.exit(0)
+gewaehlt = auswahl(args)
+if args:
+    print(f"Nur {len(gewaehlt)} von {len(ABSCHNITTE)} Abschnitten: {', '.join(fn.__name__ for _, fn in gewaehlt)}")
+
+with sync_playwright() as p:
+    b = launch(p)
+    pg = b.new_page(viewport={"width": 1440, "height": 1000})
+    errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    # Seite schon auf dem Harness-Ursprung, damit Abschnitte vor ihrem ersten goto den Speicher leeren können
+    pg.goto(f"{ORIGIN}/mock-hass.js")
+    for _, abschnitt in gewaehlt:
+        abschnitt()
     check("Keine JS-Fehler", not errs)
     b.close()
 srv.shutdown()
