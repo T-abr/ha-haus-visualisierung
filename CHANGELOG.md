@@ -4,6 +4,22 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.7.1 – 2026-11-22
+
+### Umbau – Frontend in Module aufgeteilt
+- Die bisher über 6.000 Zeilen lange `frontend/haus-visualisierung.js` ist jetzt ein kleiner Einstiegspunkt, der 23 ES-Module aus `frontend/modules/` lädt: Grundlagen, Hausmodell, HTML-Bausteine, Aktualisierer, Warnungen, Verlauf, Technik, Klima, Energie, Stile, Basisklasse, Karten und das Panel. Das Panel ist in Teile gegliedert (Klingel, Wandpanel, Alarmseite, Ansichten, Kompakt-Seiten, Einstellungen, Aktionen), die zu einer Klasse zusammengesetzt werden.
+- Reiner Umbau ohne neue Funktion und ohne Build-Schritt: Home Assistant lädt die Module direkt. Der Code ist unverändert verschoben; angepasst sind nur die Zusammensetzung des Panels aus seinen Teilen, die Tabelle der Aktualisierer (wird in `bindungen.js` gefüllt, damit die Module nicht im Kreis voneinander abhängen) und relative `module_url` eingebetteter Panels, die wie bisher gegen den Einstiegspunkt aufgelöst werden.
+- **Pfad mit Version:** Das Frontend liegt jetzt unter `/haus_visualisierung_static/<Version>/`. So lädt der Browser nach einem Update auch alle Module neu und mischt keine alten mit neuen Dateien.
+- Die Versionsnummer des Frontends steht in `frontend/modules/version.js`; `scripts/bump_version.py` und `scripts/check_version.py` sind angepasst. Das Installations-ZIP und das Release enthalten die Module automatisch.
+
+### Tests
+- Bedienung: alle 411 Prüfungen unverändert grün. Der Test-Server liefert Einstiegspunkt und Module direkt aus der Integration.
+- Backend: neu `test_frontend.py` (21 Backend-Tests): jeder Import zeigt auf eine vorhandene Datei, kein Modul ist verwaist, und Home Assistant liefert Einstiegspunkt und Module unter dem Pfad mit Version aus.
+
+### Performance
+- Großes Testhaus wie bei 1.7.0: 0 Neuaufbauten, hass-Setter Ø 23–41 µs, Aufbau der Seiten 6–25 ms (vorher 9–33 ms, Messrauschen). Aktualisierer und DOM-Änderungen je Minute gleich.
+- Erstes Laden im Test ohne Browser-Cache: Panel nach ≈ 180 ms statt ≈ 140 ms sichtbar, weil 24 statt einer Datei geladen werden. Danach kein Unterschied.
+
 ## 1.7.0 – 2026-11-22
 
 ### Neu – Energie-Seite

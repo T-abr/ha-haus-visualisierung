@@ -7,11 +7,11 @@ ROOT = Path(__file__).resolve().parents[1]
 COMP = ROOT / "custom_components" / "haus_visualisierung"
 MANIFEST = COMP / "manifest.json"
 CONST = COMP / "const.py"
-JS = COMP / "frontend" / "haus-visualisierung.js"
+JS = COMP / "frontend" / "modules" / "version.js"
 CHANGELOG = ROOT / "CHANGELOG.md"
 
 CONST_RE = re.compile(r'^VERSION = "([^"]+)"', re.M)
-JS_RE = re.compile(r'^const VERSION = "([^"]+)";', re.M)
+JS_RE = re.compile(r'^const VERSION = "([^"]+)";', re.M)  # in frontend/modules/version.js
 
 
 def manifest_version() -> str:
@@ -24,7 +24,7 @@ def found_versions() -> dict[str, str | None]:
     return {
         "manifest.json": manifest_version(),
         "const.py": c.group(1) if c else None,
-        "haus-visualisierung.js": j.group(1) if j else None,
+        "frontend/modules/version.js": j.group(1) if j else None,
     }
 
 

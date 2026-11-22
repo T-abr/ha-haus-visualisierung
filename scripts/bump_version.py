@@ -4,7 +4,7 @@
   python3 scripts/bump_version.py patch|minor|major|X.Y.Z [--commit] [--tag]
 
 Einzige Quelle ist manifest.json. Das Skript überträgt die Nummer nach const.py und ins
-Frontend und macht aus „## Unveröffentlicht“ im CHANGELOG.md den neuen Versionsabschnitt.
+Frontend (frontend/modules/version.js) und macht aus „## Unveröffentlicht“ im CHANGELOG.md den neuen Versionsabschnitt.
 Ohne Abschnitt „### Performance“ (Ergebnis von tests/perf/measure.py) wird keine Version gesetzt.
 """
 import argparse
