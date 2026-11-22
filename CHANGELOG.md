@@ -23,8 +23,10 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - **Einstellungen → Darstellung → Energie:** neu „Speicher-Leistung“ (leer = automatisch erkannt), „Vorzeichen umkehren“ für Netz und Speicher, Seite abschaltbar. Neue Einstellung `energy`.
 
 ### Tests
-- Bedienung: 23 neue Prüfungen (381 Prüfungen): Navigation, Tipp auf die Energie-Karte, eine gesammelte Abfrage, Fluss mit allen Knoten und Flussrichtungen, Kennzahlen jetzt und heute, Verlauf mit Zeiger, Wallbox, Live-Werte ohne Neuaufbau und ohne Abfrage, Vorzeichen umkehren, Details per Tipp, abschaltbar, ohne Recorder, Komfort, Einstellungen, Handy 390 px ohne Überlappung. Die Prüfung „Energie-Karte öffnet Solar“ geht jetzt über die Energie-Seite.
+- Bedienung: 23 neue Prüfungen (381 Prüfungen, laufen jetzt bei jedem PR): Navigation, Tipp auf die Energie-Karte, eine gesammelte Abfrage, Fluss mit allen Knoten und Flussrichtungen, Kennzahlen jetzt und heute, Verlauf mit Zeiger, Wallbox, Live-Werte ohne Neuaufbau und ohne Abfrage, Vorzeichen umkehren, Details per Tipp, abschaltbar, ohne Recorder, Komfort, Einstellungen, Handy 390 px ohne Überlappung. Die Prüfung „Energie-Karte öffnet Solar“ geht jetzt über die Energie-Seite.
 - Backend: Einstellung `energy` wird geprüft (15 Backend-Tests).
+- Tests laufen automatisch bei jedem Pull Request und Push auf `main` (GitHub Actions): Versionsprüfung, Backend-Tests und Bedienprüfungen im Browser.
+- Die Browser-Prüfungen laden die echte Frontend-Datei statt einer Kopie im Harness; `tests/harness/panel.js` ist entfernt. `tests/interact.py` meldet Fehler jetzt auch über den Rückgabewert.
 - Testhaus: Speicher-Leistung ergänzt, Netz passend zur Bilanz (5,5 kW Bezug), Energie-Sensoren mit Statistik und Tagesgang.
 
 ### Performance

@@ -5,22 +5,18 @@ Feuchte, Fensterkontakt, Bewegungsmelder, Batterie (≈ 400 Entitäten) plus 300
 Sensoren. Alle 250 ms ändert sich ein Zustand – abwechselnd ein fremder Sensor und
 eine Entität aus den Räumen. Werte werden auf eine Minute hochgerechnet.
 """
-import functools
-import http.server
 import json
 import sys
-import threading
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).parents[1] / "harness"
+sys.path.insert(0, str(Path(__file__).parents[1]))
+from harness_server import launch, start  # noqa: E402
+
 SECONDS = 20
-handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
-http.server.SimpleHTTPRequestHandler.log_message = lambda *a: None
-srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-threading.Thread(target=srv.serve_forever, daemon=True).start()
-base = f"http://127.0.0.1:{srv.server_port}/index.html?big"
+srv, ORIGIN = start()
+base = f"{ORIGIN}/index.html?big"
 
 JS_RUN = """async (seconds) => {
   const p = window.__panel, api = window.__api;
@@ -56,7 +52,7 @@ JS_RUN = """async (seconds) => {
 
 rows = []
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
+    b = launch(p)
     for view in ["", "ov=cockpit", "ov=fokus", "raum/a1_1", "licht", "alarme", "klima", "energie"]:
         pg = b.new_page(viewport={"width": 1440, "height": 1000})
         pg.goto(base + (f"&{view}" if view.startswith("ov=") else f"&view={view}" if view else ""))

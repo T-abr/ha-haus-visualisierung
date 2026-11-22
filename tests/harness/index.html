@@ -4,7 +4,7 @@
 <body><div id="host"></div>
 <script type="module">
 await import("./ha-icon-stub.js");
-await import("./panel.js");
+await import("./haus-visualisierung.js");
 const { makeHass } = await import("./mock-hass.js");
 const q = new URLSearchParams(location.search);
 const api = makeHass({ big: q.has("big"), komfort: q.has("komfort"), ov: q.get("ov") || "haus", hs: q.get("hs") || "kompakt" });

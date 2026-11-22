@@ -32,23 +32,16 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
 
 ## Installation
 
-### Über HACS (empfohlen)
-
-1. HACS öffnen → Menü oben rechts (⋮) → **Benutzerdefinierte Repositories**.
-2. Repository `https://github.com/T-abr/ha-haus-visualisierung` eintragen, Typ **Integration**, hinzufügen.
-3. „Haus Visualisierung“ in HACS suchen → **Herunterladen**.
-4. Home Assistant neu starten.
-5. Einstellungen → Geräte & Dienste → Integration hinzufügen → „Haus Visualisierung“.
-
-Neue Versionen zeigt HACS danach als Update an; ein Klick auf **Aktualisieren** und ein Neustart genügen.
-
-### Von Hand
-
 1. ZIP `haus_visualisierung_vX.Y.Z.zip` aus den [Releases](https://github.com/T-abr/ha-haus-visualisierung/releases)
    laden und entpacken (oder das Repository klonen).
 2. `custom_components/haus_visualisierung` nach `/config/custom_components/` kopieren.
 3. Home Assistant neu starten.
 4. Einstellungen → Geräte & Dienste → Integration hinzufügen → „Haus Visualisierung“.
+
+**HACS:** Das Repository ist für HACS vorbereitet (`hacs.json`). HACS installiert aber nur aus öffentlichen
+Repositories. Solange dieses privat ist, geht die Installation nur wie oben beschrieben. Wird es öffentlich:
+HACS → ⋮ → Benutzerdefinierte Repositories → `https://github.com/T-abr/ha-haus-visualisierung`, Typ Integration,
+dann „Haus Visualisierung“ herunterladen und Home Assistant neu starten. Updates kommen danach per Klick.
 
 Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
 
@@ -57,8 +50,12 @@ Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
 - Handbuch: Projekt-Dokument „Haus Visualisierung – Benutzerhandbuch“; Änderungen: `CHANGELOG.md`;
   Performance: `PERFORMANCE.md`.
 - Tests: `pytest` (Backend in echter HA-Instanz), `python3 tests/interact.py` (Bedienung im Browser),
-  `python3 tests/perf/measure.py` (Performance).
+  `python3 tests/perf/measure.py` (Performance). Abhängigkeiten: `pip install -r tests/requirements.txt`.
+  Die Browser-Prüfungen laden direkt `custom_components/haus_visualisierung/frontend/haus-visualisierung.js`
+  (über `tests/harness_server.py`), eine Kopie im Harness gibt es nicht.
+- CI: GitHub Actions (`.github/workflows/tests.yml`) prüft bei jedem Pull Request und Push auf `main`
+  die Versionen, die Backend-Tests und die Bedienprüfungen.
 - Version setzen: `python3 scripts/bump_version.py patch|minor|major`, ZIP bauen: `python3 scripts/build_zip.py`.
-- Release: nach dem Merge `git tag vX.Y.Z && git push origin vX.Y.Z`. Der Workflow „Release“ prüft, dass der Tag
-  zu `manifest.json` passt, baut das ZIP und veröffentlicht das Release mit dem CHANGELOG-Abschnitt; HACS bietet
-  es danach als Update an.
+- Release: nach dem Merge auf GitHub → Actions → „Release“ → „Run workflow“ (legt den Tag `v<Version>` an) oder
+  `git tag vX.Y.Z && git push origin vX.Y.Z`. Der Workflow „Release“ prüft, dass der Tag
+  zu `manifest.json` passt, baut das ZIP und veröffentlicht das Release mit dem CHANGELOG-Abschnitt.
