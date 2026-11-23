@@ -168,10 +168,10 @@ const WandpanelMixin = (Base) => class extends Base {
     const al = this._model ? evalAlerts(h, this._model, this._layout) : [];
     const top = al.length ? al.reduce((a, b) => (LEVELS[b.level] > LEVELS[a.level] ? b : a)) : null;
     setHtml(el.querySelector(".svstat"), top ? `<span class="${top.level}">${icon(LEVEL_ICON[top.level])}${al.length === 1 ? esc(top.title) : `${al.length} Meldungen · ${esc(top.title)}`}</span>` : `<span class="ok">${icon("mdi:shield-check")}Alles in Ordnung</span>`);
-    // gegen Einbrennen: jede Minute ein Stück versetzen
+    // Standard: mittig. Auf Wunsch gegen Einbrennen jede Minute ein Stück versetzen.
     const box = el.querySelector(".svbox");
     const k = minute % 9, dx = ((k % 3) - 1) * 6, dy = (Math.floor(k / 3) - 1) * 5;
-    box.style.transform = `translate(${dx}vw,${dy}vh)`;
+    box.style.transform = W.wander ? `translate(${dx}vw,${dy}vh)` : "";
   }
 };
 

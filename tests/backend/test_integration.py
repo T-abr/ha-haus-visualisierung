@@ -90,12 +90,12 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
 
     # 1.3.0: Wandpanel
     await client.send_json({"id": 8, "type": f"{DOMAIN}/save", "layout": {"wallpanel": {
-        "saver_min": 0, "black_min": 9999, "return_min": -3, "fullscreen": False, "night_dim": "ja",
+        "saver_min": 0, "black_min": 9999, "return_min": -3, "fullscreen": False, "night_dim": "ja", "wander": True,
         "weather": "sensor.kein_wetter", "wake_entity": "binary_sensor.flur_bewegung", "evil": 1}}})
     got = [await client.receive_json(), await client.receive_json()]
     wp = next(m for m in got if m["id"] == 8 and m["type"] == "result")["result"]["layout"]["wallpanel"]
     assert wp["saver_min"] == 0 and wp["black_min"] == 600 and wp["return_min"] == 0 and wp["fullscreen"] is False
-    assert wp["night_dim"] is True and wp["weather"] == "" and wp["wake_entity"] == "binary_sensor.flur_bewegung" and "evil" not in wp
+    assert wp["night_dim"] is True and wp["wander"] is True and wp["weather"] == "" and wp["wake_entity"] == "binary_sensor.flur_bewegung" and "evil" not in wp
 
     # 1.5.0: Energie-Seite
     await client.send_json({"id": 9, "type": f"{DOMAIN}/save", "layout": {"energy": {

@@ -124,7 +124,7 @@ DEFAULT_LAYOUT: dict = {
     },
     "wallpanel": {                 # Wandpanel (welches Gerät eins ist, merkt sich der Browser)
         "saver_min": 5, "black_min": 0, "return_min": 2, "fullscreen": True, "hide_sidebar": True,
-        "wake_alarm": True, "night_dim": True, "weather": "", "wake_entity": "",
+        "wake_alarm": True, "night_dim": True, "wander": False, "weather": "", "wake_entity": "",
     },
     "shading": {                   # Beschattung: Hinweise nach Vorhersage, Sonnenstand und Ausrichtung
         "enabled": True, "hot": 26,    # heißer Tag ab °C (Vorhersage)

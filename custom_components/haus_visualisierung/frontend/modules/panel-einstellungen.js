@@ -190,6 +190,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${tg("hide_sidebar", "Seitenleiste von Home Assistant ausblenden", "nur auf Wandpanels; wird beim Ausschalten zurückgesetzt")}
       ${tg("wake_alarm", "Bei neuem Alarm aufwecken", "Klingel weckt immer")}
       ${tg("night_dim", "Nachts dunkler", "im Hausmodus Nacht und von 23 bis 6 Uhr")}
+      ${tg("wander", "Bildschirmschoner wandern lassen", "aus = Uhr und Infos bleiben mittig; an = jede Minute ein Stück versetzt gegen Einbrennen (bei OLED sinnvoll, LCDs wie im iPad brennen kaum ein)")}
       <div class="srow"><span class="lbl">Wetter<small>leer = automatisch${autoW ? ` (${esc(autoW)})` : ""}</small></span><input class="inp w" list="dl-weather" data-set="wallpanel.weather" value="${esc(W.weather || "")}" placeholder="weather.…"></div>
       <div class="srow"><span class="lbl">Bewegungsmelder am Panel<small>weckt wie eine Berührung, z. B. binary_sensor.flur_bewegung</small></span><input class="inp w" list="dl-motion" data-set="wallpanel.wake_entity" value="${esc(W.wake_entity || "")}" placeholder="binary_sensor.…"></div>
       <div class="srow"><button class="pbtn" data-act="s-saver-test">${icon("mdi:power-sleep")}Bildschirmschoner zeigen</button><span class="lbl"><small>Tippen beendet ihn wieder.</small></span></div>

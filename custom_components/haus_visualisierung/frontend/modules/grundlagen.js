@@ -18,7 +18,7 @@ const DEFAULT_LAYOUT = {
   confirm_quick: true, show_trends: true,
   heating: { enabled: true, area: "", tank: [], tank_min: 30, tank_max: 65, stove: "", stove_pump: "", stove_hot: 50, curve: "", mixer: "", flow: "", outdoor: "",
     manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 } },
-  wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, weather: "", wake_entity: "" },
+  wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "" },
   shading: { enabled: true, hot: 26, facing: {} },
   forecast: { enabled: true, solar: true, solar_today: "", solar_tomorrow: "" },
   wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },

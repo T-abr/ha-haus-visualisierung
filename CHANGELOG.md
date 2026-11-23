@@ -4,6 +4,13 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Geändert – Bildschirmschoner bleibt mittig
+- Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
+- Neue Einstellung **Einstellungen → Wandpanel → „Bildschirmschoner wandern lassen“** (`wallpanel.wander`, Standard aus) für alle, die den Einbrenn-Schutz wollen (z. B. OLED). LCDs wie im iPad brennen praktisch nicht ein.
+
+### Tests
+- Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
+
 ## 1.10.0 – 2026-11-23
 
 ### Neu – Vorhersage auf der Übersicht
