@@ -8,6 +8,7 @@ import { rbShift } from "./rueckblick.js";
 import { buildModel } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
 import { simAction } from "./anwesenheit.js";
+import { defaultAction } from "./standard.js";
 import { applList } from "./geraete.js";
 import { maintCall, newTask } from "./wartung.js";
 import { adoptDevice, displaysForSave, newDisplay, togglePage } from "./wanddisplay.js";
@@ -81,6 +82,7 @@ const AktionenMixin = (Base) => class extends Base {
       return;
     }
     if (act.startsWith("s-sim-") && simAction(this, act, t)) return;
+    if (act.startsWith("s-std-") && await defaultAction(this, act)) return;
     if (!D) return;
     const h = this._hass;
     switch (act) {
