@@ -354,6 +354,9 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       }
       const hum = /feuchte|humid/.test(eid), amp = hum ? 6 : 1.4;
       const ph = (s) => Math.sin(((new Date(s).getHours() + new Date(s).getMinutes() / 60) - 9) / 24 * 2 * Math.PI);
+      // Preis (€/kWh): Schwankung relativ zum Preis und nie negativ – sonst hängen die Kosten im Rückblick
+      // von der Uhrzeit des Testlaufs ab (mit 1,4 € Ausschlag wurden sie mittags negativ)
+      if (/nordpool|preis|price/.test(eid)) return Math.max(0.05, base + base * 0.3 * (ph(t) - ph(Date.now())));
       return base + amp * (ph(t) - ph(Date.now())) + (hum ? 1.5 : 0.15) * Math.sin(t / 2.7e6);
     },
     /* nachgebautes Alarm-Backend (alarms.py) */

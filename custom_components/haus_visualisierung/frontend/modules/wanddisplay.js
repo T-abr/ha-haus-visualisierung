@@ -28,7 +28,7 @@ function newDisplay(list) {
   let id = "flur", n = 2;
   while (ids.has(id)) id = `flur_${n++}`;
   return { id, name: n > 2 ? `Flur ${n - 1}` : "Flur", pages: ["start", "energie", "klima", "haus"], tiles: [...DEFAULT_TILES],
-    hint: true, bright_day: 80, bright_night: 10, wake: true, device: "", custom: [] };
+    hint: true, bright_day: 80, bright_night: 10, wake: true, device: "", custom: [], saver: false, saver_min: 5, saver_bright: 20 };
 }
 
 /** Seite ein- bzw. ausschalten (Start bleibt immer), Reihenfolge wie DISPLAY_PAGES */
@@ -101,6 +101,11 @@ function displaySettingsHTML(ctx, D) {
       <div class="srow"><span class="lbl">Helligkeit Tag / Nacht<small>in %; Nacht gilt im Hausmodus „Nacht“ (0 = aus bis zur Berührung)</small></span>
         <input class="inp s" type="number" min="10" max="100" data-set="displays.${i}.bright_day" data-num="1" value="${d.bright_day ?? 80}">
         <input class="inp s" type="number" min="0" max="100" data-set="displays.${i}.bright_night" data-num="1" value="${d.bright_night ?? 10}"></div>
+      <div class="srow"><span class="lbl">Bildschirmschoner<small>wie am Wandpanel: große Uhr, Wetter, Müll und Termine, Meldungen; Tippen weckt</small></span>
+        <label class="tgl"><input type="checkbox" data-set="displays.${i}.saver" data-bool="1" ${d.saver ? "checked" : ""}><span></span></label></div>
+      ${d.saver ? `<div class="srow"><span class="lbl">Schoner nach / Helligkeit<small>Minuten ohne Berührung; Helligkeit in % (0 = aus, nachts gilt die geringere)</small></span>
+        <input class="inp s" type="number" min="1" max="120" data-set="displays.${i}.saver_min" data-num="1" value="${d.saver_min ?? 5}">
+        <input class="inp s" type="number" min="0" max="100" data-set="displays.${i}.saver_bright" data-num="1" value="${d.saver_bright ?? 20}"></div>` : ""}
       <div class="srow"><span class="lbl">Aufwecken bei Alarm<small>neue Alarm-Meldung schaltet das Display hell</small></span>
         <label class="tgl"><input type="checkbox" data-set="displays.${i}.wake" data-bool="1" ${d.wake !== false ? "checked" : ""}><span></span></label></div>
     </div>`;

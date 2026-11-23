@@ -2058,6 +2058,10 @@ def displays():
     ent.fill("light.kueche"); ent.dispatch_event("change")
     pg.locator(f"{P} [data-disp-tile='0.1']").select_option(""); pg.wait_for_timeout(150)
     pg.locator(f"{P} [data-set='displays.0.bright_night']").fill("0")
+    pg.locator(f"{P} .tgl:has([data-set='displays.0.saver'])").click(); pg.wait_for_timeout(150)
+    smin = pg.locator(f"{P} [data-set='displays.0.saver_min']")
+    check("WD: Bildschirmschoner einschaltbar, Wartezeit erscheint", smin.count() == 1)
+    smin.fill("10"); smin.dispatch_event("change")
     # Eigene Seite: anlegen, zwei Entitäten (eine leer bleibt weg), Symbol, Reihenfolge
     pg.locator(f"{P} [data-act=s-disp-cust][data-op=page-add]").click(); pg.wait_for_timeout(150)
     check("WD: eigene Seite angelegt", pg.locator(f"{P} .dcp").count() == 1)
@@ -2085,6 +2089,7 @@ def displays():
     d = saved[0] if saved else {}
     check("WD: gespeichert mit Kennung aus dem Namen, Seiten, Kacheln ohne Lücke", len(saved) == 1 and d["id"] == "kueche_oben" and d["name"] == "Küche Oben"
           and d["pages"] == ["start", "energie", "haus"] and d["tiles"] == ["pv_jetzt", "klima_mittel", "entity:light.kueche"] and d["bright_night"] == 0)
+    check("WD: Bildschirmschoner gespeichert", d.get("saver") is True and d.get("saver_min") == 10 and d.get("saver_bright") == 20)
     check("WD: eigene Seite gespeichert, leere Entität weggelassen", d.get("custom") == [{"name": "Wohnzimmer", "icon": "sofa", "tiles": [
         {"entity": "scene.abend", "name": "Abend", "icon": "palette"}, {"entity": "light.kueche", "name": "", "icon": ""}]}])
     check("WD: Kennung und Entität angezeigt", "sensor.haus_display_kueche_oben" in pg.locator(f"{P} .dcard").inner_text())

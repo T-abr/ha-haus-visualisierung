@@ -30,7 +30,8 @@ def test_sanitize() -> None:
     ] + [{"name": f"d{i}"} for i in range(9)]})["displays"]
     a, b, c = out[:3]
     assert a == {"id": "flur_oben", "name": "Flur Oben", "pages": ["start", "klima", "haus"], "tiles": ["pv_jetzt", "entity:light.flur"],
-                 "hint": False, "bright_day": 100, "bright_night": 0, "wake": True, "device": "", "custom": []}
+                 "hint": False, "bright_day": 100, "bright_night": 0, "wake": True, "device": "", "custom": [],
+                 "saver": False, "saver_min": 5, "saver_bright": 20}
     assert b["id"] == "flur_oben_2" and b["tiles"] == ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"] and b["pages"] == ["start"]
     wz, leer, b3 = b["custom"]
     assert wz["name"] == "Wohnzimmer mit sehr" and wz["icon"] == "sofa" and len(wz["tiles"]) == 6
@@ -88,7 +89,7 @@ async def test_display_flow(hass: HomeAssistant, freezer: FrozenDateTimeFactory)
     assert hass.states.get("sensor.haus_display_flur") is None
     await store.async_save({
         "header": {"pv": "sensor.pv", "grid": "sensor.netz", "power": "sensor.haus", "battery": "sensor.akku_soc"},
-        "displays": [{"name": "Flur", "pages": ["energie", "klima", "haus"]}],
+        "displays": [{"name": "Flur", "pages": ["energie", "klima", "haus"], "saver": True, "saver_min": 300}],
     })
     await _tick(hass)
     await _tick(hass)
@@ -98,6 +99,13 @@ async def test_display_flow(hass: HomeAssistant, freezer: FrozenDateTimeFactory)
 
     cfg = _attr(hass, eid, "einstellungen")
     assert cfg["seiten"] == ["start", "energie", "klima", "haus"] and cfg["hell_nacht"] == 10 and cfg["nacht"] is False
+    assert cfg["schoner"] == 120 and cfg["schoner_hell"] == 20
+
+    sv = _attr(hass, eid, "schoner")
+    assert sv["zeile"] == [{"i": "weather-partly-cloudy", "t": "7°"}, {"i": "solar-power-variant", "t": "3,2 kW"},
+                           {"i": "calendar", "t": "Morgen 15°"}, {"i": "home-account", "t": "Zuhause"}]
+    assert sv["termine"] == [{"i": "recycle", "f": "#f2c230", "t": "Morgen: Gelbe Tonne", "hot": True}]
+    assert sv["hinweis"] is None and sv["status"]["i"] in ("bell-alert", "alarm-light")
 
     kopf = _attr(hass, eid, "kopf")
     assert kopf["wetter"] == {"i": "weather-partly-cloudy", "t": "7°", "txt": "Teils bewölkt", "morgen": "morgen 15°"}
@@ -105,6 +113,8 @@ async def test_display_flow(hass: HomeAssistant, freezer: FrozenDateTimeFactory)
 
     pv, heute, klima, morgen = _attr(hass, eid, "kacheln")
     assert pv["v"] == "3,2 kW" and pv["s"] == "Haus 612 W · Netz −2,4 kW" and pv["b"] == 78 and pv["u"] == "Akku 78 %"
+    assert pv["sr"] == "Haus #63c7ff 612 W# · Netz #b39cff −2,4 kW#"
+    assert klima["vr"] == "20,0°  #9aa3b2 50 %#"
     assert heute["n"] == "Heute" and heute["v"].endswith("kWh")
     assert klima["v"] == "20,0°  50 %" and klima["u"] == "Außen 7,2°"
     assert morgen["n"] == "Morgen" and morgen["v"] == "Gelbe Tonne" and morgen["i"] == "recycle" and morgen["hot"] is True
@@ -241,7 +251,8 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     assert sent["protokoll"] == str(PROTOCOL) and json.loads(sent["einstellungen"])["name"] == "Flur"
     # leeres Haus ohne Meldungen: ruhige Hinweiszeile statt leerer Fläche
     assert json.loads(sent["hinweis"]) == {"i": "shield-check", "f": "#4fd18b", "n": "Alles in Ordnung", "s": "Keine offenen Meldungen", "knopf": "", "ziel": ""}
-    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "eigene", "haus"}
+    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "schoner", "eigene", "haus"}
+    assert json.loads(sent["schoner"]) is None
     assert json.loads(sent["eigene"]) == []
     n = len(calls)
     await _tick(hass, 31)
@@ -253,7 +264,7 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     # „hallo“ nach dem Verbinden → alles neu; Tipp mit Gerätenamen wirkt auf das zugeordnete Display
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "hallo"}, blocking=True)
     await hass.async_block_till_done()
-    assert len(calls) == n + 10
+    assert len(calls) == n + 11
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "modus:abwesend"}, blocking=True)
     await _tick(hass)
     assert monitor.house.mode == "abwesend"

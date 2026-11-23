@@ -713,7 +713,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     for (let i = 0; i < path.length - 1; i++) o = o[path[i]] = o[path[i]] ?? {};
     o[path[path.length - 1]] = v;
     this._dirtySettings = true;
-    if ((/^(heating|wallbox)\./.test(t.dataset.set) && e.type === "change" && !/\.manual\./.test(t.dataset.set)) || (/^displays\.\d+\.custom\.\d+\.(icon|tiles\.\d+\.(icon|entity))$/.test(t.dataset.set) && e.type === "change") || /^alerts\.rules\.\d+\.op$/.test(t.dataset.set) || /^alarm_actions\.\d+\.type$/.test(t.dataset.set) || (t.dataset.set === "doorbell.lock" && e.type === "change")) { this._rerenderSettings(); return; }
+    if ((/^(heating|wallbox)\./.test(t.dataset.set) && e.type === "change" && !/\.manual\./.test(t.dataset.set)) || (/^displays\.\d+\.saver$/.test(t.dataset.set) && e.type === "change") || (/^displays\.\d+\.custom\.\d+\.(icon|tiles\.\d+\.(icon|entity))$/.test(t.dataset.set) && e.type === "change") || /^alerts\.rules\.\d+\.op$/.test(t.dataset.set) || /^alarm_actions\.\d+\.type$/.test(t.dataset.set) || (t.dataset.set === "doorbell.lock" && e.type === "change")) { this._rerenderSettings(); return; }
     const msg = this.shadowRoot.querySelector(".savebar .msg");
     if (msg) msg.textContent = "Ungespeicherte Änderungen";
   }

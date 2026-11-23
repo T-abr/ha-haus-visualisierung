@@ -52,8 +52,11 @@ Palette der Visualisierung.
 
 ```json
 {"name": "Flur", "seiten": ["start", "energie", "klima", "haus"], "hinweis": true,
- "hell_tag": 80, "hell_nacht": 10, "wecken": true, "nacht": false}
+ "hell_tag": 80, "hell_nacht": 10, "wecken": true, "nacht": false, "schoner": 5, "schoner_hell": 20}
 ```
+
+`schoner`: Minuten ohne Berührung bis zum Bildschirmschoner (0 = aus), `schoner_hell`: Helligkeit dabei in %
+(gilt die geringere aus Schoner und Tag/Nacht). Ab Firmware 0.4.0.
 
 `seiten`: Reihenfolge im Dock, `start` immer zuerst. `hell_*` in %, `hell_nacht` gilt, solange `nacht` (Hausmodus
 „Nacht“) wahr ist; 0 = dunkel bis zur Berührung. `wecken`: bei neuer Alarm-Meldung hell schalten.
@@ -66,6 +69,18 @@ Palette der Visualisierung.
 ```
 
 `wetter` fehlt ohne Wetter-Entität. Die Uhrzeit nimmt die Firmware von Home Assistant (Zeitquelle).
+
+### `schoner`
+
+Inhalt des Bildschirmschoners (nur wenn eingeschaltet, sonst `null`), wie am Wandpanel:
+
+```json
+{"zeile": [{"i": "weather-partly-cloudy", "t": "7°"}, {"i": "solar-power-variant", "t": "3,2 kW"},
+           {"i": "calendar", "t": "Morgen 15°"}, {"i": "home-account", "t": "Zuhause"}],
+ "termine": [{"i": "recycle", "f": "#f2c230", "t": "Morgen: Gelbe Tonne", "hot": true}],
+ "hinweis": {"i": "check-circle-outline", "t": "Waschmaschine fertig"},
+ "status": {"i": "shield-check", "f": "#4fd18b", "t": "Alles in Ordnung"}}
+```
 
 ### `eigene`
 
@@ -96,6 +111,7 @@ Liste mit 1–4 Kacheln für die Startseite, in der eingestellten Reihenfolge:
 | `n` | Überschrift (klein) |
 | `v`, `vf` | Hauptwert und seine Farbe (`""` = Textfarbe) |
 | `s` | Zeile darunter |
+| `vr`, `sr` | wie `v`/`s`, aber mit farbigen Abschnitten im LVGL-Recolor-Format `#rrggbb Text#` (z. B. „Haus #63c7ff 612 W#“); Firmware ab 0.4.0 nimmt diese, ältere `v`/`s` |
 | `b`, `bf` | Balken 0–100 und Farbe; `-1` = kein Balken |
 | `u` | unterste Zeile (klein) |
 | `hot` | hervorheben (gelber Rahmen, z. B. Mülltonne am Vorabend) |
@@ -161,7 +177,7 @@ data: {display: haus-display-a1b2c3, ziel: "gn:light.kueche"}
 | `gn:<entity_id>` | diesen Gute-Nacht-Punkt schließen bzw. ausschalten (nur wenn er gerade offen ist) |
 | `gn_alle` | alle offenen Punkte mit Aktion schließen |
 | `modus:<zuhause\|nacht\|abwesend\|urlaub>` | Hausmodus setzen (die Firmware zeigt vorher den Gute-Nacht-Check, wenn `gute_nacht.n > 0`) |
-| `kachel:<0–3>` | Kachel angetippt: `entity:`-Kacheln schalten (Licht, Schalter, Lüfter, Abdeckung, Schloss, Helfer umschalten; Szene, Skript, Taster auslösen). Ab der nächsten Firmware öffnen Energie-, Klima-, Meldungs- und Geräte-Kacheln stattdessen ihre Seite, wenn sie eingeschaltet ist, und melden nichts. |
+| `kachel:<0–3>` | Kachel angetippt: `entity:`-Kacheln schalten (Licht, Schalter, Lüfter, Abdeckung, Schloss, Helfer umschalten; Szene, Skript, Taster auslösen). Ab Firmware 0.4.0 öffnen Energie-, Klima-, Meldungs- und Geräte-Kacheln stattdessen ihre Seite, wenn sie eingeschaltet ist, und melden nichts. |
 | `eigen:<seite>:<kachel>` | Kachel einer eigenen Seite angetippt (Seite 0–2, Kachel 0–5): schaltet wie eine `entity:`-Kachel |
 | `geraet_ok` | fertige Haushaltsgeräte quittieren |
 | `hallo` | Gerät ist (neu) verbunden: alle Bereiche neu schicken; nicht zugeordnetes Gerät bekommt `protokoll` = `""` |
@@ -175,6 +191,7 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
+| 1 (eigene Seiten, Bildschirmschoner, farbige Werte, Kacheln antippbar) | ab 1.15.0 | ab 0.4.0 |
 | 1 (Push, Update über das Netz, API-Schlüssel je Gerät) | ab 1.14.0 | ab 0.3.0 |
 | 1 (Push, Einrichten im Panel) | ab 1.13.0 | ab 0.2.0 |
 | 1 (Abo der Entität) | ab 1.12.0 | 0.1.x |
