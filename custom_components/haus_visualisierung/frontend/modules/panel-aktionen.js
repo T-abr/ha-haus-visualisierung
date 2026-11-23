@@ -10,6 +10,7 @@ import { ALARMS } from "./warnungen.js";
 import { simAction } from "./anwesenheit.js";
 import { applList } from "./geraete.js";
 import { maintCall, newTask } from "./wartung.js";
+import { displaysForSave, newDisplay, togglePage } from "./wanddisplay.js";
 
 const AktionenMixin = (Base) => class extends Base {
   async _actionExtra(act, t) {
@@ -200,6 +201,9 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-appl-del": D.appliances.items = D.appliances.items.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-wt-add": case "s-wt-tpl": D.maintenance.tasks = [...(D.maintenance.tasks || []), newTask(t.dataset.tpl)]; break;
       case "s-wt-del": D.maintenance.tasks = D.maintenance.tasks.filter((_, i) => i !== Number(t.dataset.i)); break;
+      case "s-disp-add": D.displays = [...(D.displays || []), newDisplay(D.displays)]; break;
+      case "s-disp-del": D.displays = D.displays.filter((_, i) => i !== Number(t.dataset.i)); break;
+      case "s-disp-page": { const d = D.displays[Number(t.dataset.i)]; if (d) d.pages = togglePage(d, t.dataset.page); break; }
       case "s-link-add": D.links = [...(D.links || []), { title: "", icon: "mdi:link", path: "", embed: true, mode: "theme" }]; break;
       case "s-link-del": D.links = D.links.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-tab": {
@@ -213,7 +217,7 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-reset": this._draft = null; this._dirtySettings = false; this._dirty = true; this._flush(); return;
       case "s-save": {
         try {
-          const res = await h.callWS({ type: `${DOMAIN}/save`, layout: D });
+          const res = await h.callWS({ type: `${DOMAIN}/save`, layout: { ...D, displays: displaysForSave(D.displays) } });
           this._layout = withDefaults(res.layout);
           this._draft = structuredClone(this._layout);
           this._dirtySettings = false;

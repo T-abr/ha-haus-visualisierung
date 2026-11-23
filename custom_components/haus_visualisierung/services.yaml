@@ -1,0 +1,12 @@
+display_tap:
+  fields:
+    display:
+      required: true
+      example: flur
+      selector:
+        text:
+    ziel:
+      required: true
+      example: "gn:light.kueche"
+      selector:
+        text:

@@ -12,14 +12,16 @@ import { simSettingsHTML } from "./anwesenheit.js";
 import { calKind } from "./termine.js";
 import { applList } from "./geraete.js";
 import { maintSettingsHTML } from "./wartung.js";
+import { displayInput, displaySettingsHTML } from "./wanddisplay.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
-const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
+const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
 const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
   alarme: ["house_mode", "presence_sim", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
   technik: ["heating", "wallbox", "shading", "appliances", "maintenance"],
+  displays: ["displays"],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
@@ -102,6 +104,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setAppl(D)}
       ${this._setShade(D)}
       ${maintSettingsHTML(D)}`;
+    else if (tab === "displays") body = displaySettingsHTML(this, D);
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
       ${this._setBell(D)}`;
@@ -676,6 +679,15 @@ const EinstellungenMixin = (Base) => class extends Base {
       if (msg) msg.textContent = "Ungespeicherte Änderungen";
       return;
     }
+    if (t.dataset && (t.dataset.dispTile || t.dataset.dispEnt) && e.type === "change" && this._draft) {
+      const redraw = displayInput(this._draft, t, this._layout.displays);
+      this._dirtySettings = true;
+      if (redraw) { this._rerenderSettings(); return; }
+      const msg = this.shadowRoot.querySelector(".savebar .msg");
+      if (msg) msg.textContent = "Ungespeicherte Änderungen";
+      return;
+    }
+    if (t.dataset && t.dataset.dispName && e.type === "change" && this._draft) displayInput(this._draft, t, this._layout.displays);
     if (t.dataset && t.dataset.shadeFace && e.type === "change" && this._draft) {
       const S = this._draft.shading = { ...(this._draft.shading || {}) }, F = S.facing = { ...(S.facing || {}) };
       if (t.value) F[t.dataset.shadeFace] = t.value; else delete F[t.dataset.shadeFace];

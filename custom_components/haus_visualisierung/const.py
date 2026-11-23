@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -99,6 +99,7 @@ DEFAULT_LAYOUT: dict = {
         "critical": True,              # Alarme als kritische Meldung (laut, auch bei „Nicht stören“)
         "persistent": False,           # zusätzlich als Benachrichtigung in Home Assistant
     },
+    "displays": [],                # Wanddisplays (display.py): [{id, name, pages, tiles, hint, bright_day, bright_night, wake}]
     "house_mode": {                # Hausmodus (Zuhause, Nacht, Abwesend, Urlaub)
         "enabled": True,
         "auto_away": True,             # alle Personen weg → Abwesend, jemand kommt → Zuhause

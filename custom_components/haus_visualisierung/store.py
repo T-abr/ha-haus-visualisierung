@@ -19,6 +19,7 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
+from .display import sanitize_displays
 from .maintenance import UNITS as MAINT_UNITS
 
 _LIST_OF_STR = (
@@ -505,6 +506,8 @@ def sanitize(raw: Any) -> dict:
         result["appliances"] = _appliances(raw["appliances"])
     if isinstance(raw.get("maintenance"), dict):
         result["maintenance"] = _maintenance(raw["maintenance"])
+    if isinstance(raw.get("displays"), list):
+        result["displays"] = sanitize_displays(raw["displays"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 

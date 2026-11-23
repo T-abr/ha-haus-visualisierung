@@ -29,5 +29,21 @@
         }
       }
     }
+  },
+  "services": {
+    "display_tap": {
+      "name": "Display: Tippen",
+      "description": "Meldet einen Tipp auf einem Wanddisplay (Gute-Nacht-Punkt schließen, Hausmodus, Kachel). Wird von der Display-Firmware aufgerufen.",
+      "fields": {
+        "display": {
+          "name": "Display",
+          "description": "Kennung des Displays aus den Einstellungen (Reiter „Displays“)."
+        },
+        "ziel": {
+          "name": "Ziel",
+          "description": "Was angetippt wurde, z. B. gn:light.kueche, gn_alle, modus:nacht, kachel:0, geraet_ok."
+        }
+      }
+    }
   }
 }

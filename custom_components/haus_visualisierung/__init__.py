@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import voluptuous as vol
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
@@ -29,6 +30,7 @@ from .const import (
     PANEL_URL_PATH,
     VERSION,
 )
+from .display import SERVICE_TAP, DisplayHub
 from .maintenance import MaintenanceBook
 from .store import LayoutStore
 from .websocket import async_register_websocket
@@ -36,6 +38,7 @@ from .websocket import async_register_websocket
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+TAP_SCHEMA = vol.Schema({vol.Required("display"): vol.All(str, vol.Length(max=40)), vol.Required("ziel"): vol.All(str, vol.Length(max=200))})
 PLATFORMS = ["select", "sensor"]
 
 
@@ -98,6 +101,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await monitor.async_start()
     hass.data[DOMAIN]["monitor"] = monitor
     entry.async_on_unload(monitor.async_stop)
+    # Wanddisplays (ESPHome): Inhalte je Display als sensor.haus_display_<id>, Tippen über den Dienst
+    hub = DisplayHub(hass, monitor)
+    await hub.async_start()
+    hass.data[DOMAIN]["displays"] = hub
+    entry.async_on_unload(hub.async_stop)
+    hass.services.async_register(DOMAIN, SERVICE_TAP, hub.async_tap, schema=TAP_SCHEMA)
+    entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, SERVICE_TAP))
     # Hausmodus (select.hausmodus) und Anzahl aktiver Meldungen (sensor.haus_alarme_aktiv)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -112,4 +122,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     frontend.async_remove_panel(hass, PANEL_URL_PATH)
     hass.data[DOMAIN].pop("monitor", None)
+    hass.data[DOMAIN].pop("displays", None)
     return ok

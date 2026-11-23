@@ -851,7 +851,7 @@ def verlauf_raumseiten():
 def einstellungen_reiter():
     # ---------- Einstellungen mit Reitern und Sortieren per Ziehen (1.1.0) ----------
     pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
-    check("ST: fünf Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 5 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
+    check("ST: sechs Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 6 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
           and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 0)
     stab(pg, "raeume")
     check("ST: Reiter „Räume“ zeigt Etagen und Favoriten", pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Favoriten')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 0)
@@ -999,7 +999,7 @@ def technik_einstellungen():
     # ---------- Einstellungen → Technik (1.2.0) ----------
     pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(600)
     fd = pg.locator(f"{P} .techfound")
-    check("TE: Reiter Technik zeigt Erkanntes", pg.locator(f"{P} .stab").count() == 5 and "3 Speicherfühler" in fd.first.inner_text() and "Heizkurve sensor.heizkurve_soll_vorlauftemperatur" in fd.first.inner_text() and "Lademodus" in fd.nth(1).inner_text())
+    check("TE: Reiter Technik zeigt Erkanntes", pg.locator(f"{P} .stab").count() == 6 and "3 Speicherfühler" in fd.first.inner_text() and "Heizkurve sensor.heizkurve_soll_vorlauftemperatur" in fd.first.inner_text() and "Lademodus" in fd.nth(1).inner_text())
     check("TE: Platzhalter nennt automatische Zuordnung", "sensor.kamin_temperatur" in (pg.locator(f'{P} input[data-set="heating.stove"]').get_attribute("placeholder") or ""))
     D = lambda k: pg.evaluate(f"document.querySelector('{P}')._draft.{k}")
     drag(pg.locator(f'{P} [data-sort=tank] .pin[data-sort-id="sensor.speicher_unten"]'), pg.locator(f'{P} [data-sort=tank] .pin[data-sort-id="sensor.speicher_oben"]'))
@@ -2003,6 +2003,43 @@ def wartung():
         pg.locator(f"{P} [data-act=s-wt-del]").first.click(); pg.wait_for_timeout(120)
     pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
     check("WT: alle Aufgaben gelöscht – keine Seite Wartung mehr", pg.locator(f"{P} .wtask").count() == 0 and pg.locator(f'{P} .nav[data-to="wartung"]').count() == 0)
+
+
+@gruppe("displays")
+def displays():
+    # ---------- Wanddisplays: Reiter „Displays“, Seiten, Kacheln, Entität, Speichern ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=einstellungen/displays"); pg.wait_for_timeout(500)
+    check("WD: Reiter Displays mit Hinweis auf die Firmware", pg.locator(f"{P} .set h2:has-text('Wanddisplays')").count() == 1
+          and pg.locator(f"{P} .set a[href*='ha-haus-display']").count() == 1)
+    pg.locator(f"{P} [data-act=s-disp-add]").click(); pg.wait_for_timeout(150)
+    check("WD: neues Display mit Standard-Kacheln und allen Seiten", pg.locator(f"{P} .dcard").count() == 1
+          and pg.locator(f"{P} .dpage.on").count() == 4 and pg.locator(f"{P} [data-disp-tile]").count() == 4)
+    name = pg.locator(f"{P} [data-disp-name='0']")
+    name.fill("Küche Oben"); name.dispatch_event("change"); pg.wait_for_timeout(100)
+    pg.locator(f"{P} [data-act=s-disp-page][data-page=klima]").click(); pg.wait_for_timeout(150)
+    check("WD: Seite Klima abgewählt, Start bleibt", pg.locator(f"{P} .dpage.on").count() == 3
+          and pg.locator(f"{P} [data-act=s-disp-page][data-page=start]").is_disabled())
+    pg.locator(f"{P} [data-disp-tile='0.3']").select_option("entity:"); pg.wait_for_timeout(150)
+    ent = pg.locator(f"{P} [data-disp-ent='0.3']")
+    check("WD: Entität wählbar", ent.count() == 1)
+    ent.fill("light.kueche"); ent.dispatch_event("change")
+    pg.locator(f"{P} [data-disp-tile='0.1']").select_option(""); pg.wait_for_timeout(150)
+    pg.locator(f"{P} [data-set='displays.0.bright_night']").fill("0")
+    check("WD: Entwurf ungespeichert markiert", "dirty" in pg.locator(f"{P} .stab[data-tab=displays]").get_attribute("class"))
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.displays)")
+    d = saved[0] if saved else {}
+    check("WD: gespeichert mit Kennung aus dem Namen, Seiten, Kacheln ohne Lücke", len(saved) == 1 and d["id"] == "kueche_oben" and d["name"] == "Küche Oben"
+          and d["pages"] == ["start", "energie", "haus"] and d["tiles"] == ["pv_jetzt", "klima_mittel", "entity:light.kueche"] and d["bright_night"] == 0)
+    check("WD: Kennung und Entität angezeigt", "sensor.haus_display_kueche_oben" in pg.locator(f"{P} .dcard").inner_text())
+    pg.locator(f"{P} [data-act=s-disp-del]").click(); pg.wait_for_timeout(150)
+    check("WD: entfernt", pg.locator(f"{P} .dcard").count() == 0)
+    pg.locator(f"{P} [data-act=s-reset]").click(); pg.wait_for_timeout(150)
+    pg.set_viewport_size({"width": 390, "height": 844})
+    pg.goto(dense + "?view=einstellungen/displays"); pg.wait_for_timeout(500)
+    check("WD: Handy ohne Überbreite", not pg.evaluate(WIDE))
+    pg.set_viewport_size({"width": 1440, "height": 1000})
 
 
 def auswahl(args):

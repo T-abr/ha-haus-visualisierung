@@ -4,6 +4,20 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.12.0 – 2026-11-23
+
+### Neu – Wanddisplays (ESP32-S3 mit ESPHome)
+- **Einstellungen → Displays** (neuer Reiter, `displays`): bis zu sechs Wanddisplays mit Name, Seiten (Start, Energie, Klima, Haus), bis zu vier **Kacheln** auf der Startseite (PV jetzt, Energie heute, Raumklima Ø, Müll und Termine, Wetter, Meldungen, Haushaltsgeräte, Strompreis oder eine Entität), Hinweiszeile, Helligkeit Tag/Nacht und Aufwecken bei Alarm. Änderungen wirken nach dem Speichern sofort, ohne neu zu flashen.
+- Je Display die Entität **`sensor.haus_display_<kennung>`**: Zustand = Protokollversion, Attribute mit fertig formatierten Inhalten (Kopf mit Wetter und Hausmodus, Kacheln, Hinweis, Energiefluss, Räume, **Gute-Nacht-Check**, Hausmodus und Meldungen). Gute-Nacht-Check, Müll/Termine (Kalender-API), Wetter (Vorhersage) und Energie heute (selbst aufsummiert, übersteht Neustarts) rechnet dafür jetzt auch das Backend.
+- Dienst **`haus_visualisierung.display_tap`**: Gute-Nacht-Punkt oder alle schließen, Hausmodus setzen, Entitäts-Kachel schalten, fertige Geräte quittieren.
+- Schnittstelle versioniert in `DISPLAY_PROTOKOLL.md` (Protokoll 1); Firmware im Repository **ha-haus-display**.
+
+### Performance
+- Großes Testhaus (`tests/perf/measure.py`): Aufbau 6,4–37 ms je Seite (Übersicht 16–21,7 ms), 0 Neuaufbauten, hass-Setter Ø 18–42 µs. Der Reiter „Displays“ wird nur in den Einstellungen gebaut. Im Backend rechnet der Display-Hub nur, wenn ein Display eingerichtet ist (gebündelt, höchstens einmal je Sekunde bzw. alle 30 s); Kalender alle 15 min, Wetter alle 30 min.
+
+### Tests
+- `tests/backend/test_display.py` (Einstellungen, Inhalte, Tippen, Energie heute, Entfernen) und Bedienprüfung „displays“.
+
 ## 1.11.0 – 2026-11-23
 
 ### Neu – Gute-Nacht- und Verlassen-Check
