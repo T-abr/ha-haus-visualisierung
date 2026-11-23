@@ -130,6 +130,10 @@ DEFAULT_LAYOUT: dict = {
         "enabled": True, "hot": 26,    # heißer Tag ab °C (Vorhersage)
         "facing": {},                  # {cover_id: "N"|"NO"|"O"|"SO"|"S"|"SW"|"W"|"NW"|"-"}, fehlt = aus dem Namen
     },
+    "forecast": {                  # Karte „Vorhersage“ auf der Übersicht: Wetter und Solarprognose
+        "enabled": True, "solar": True,
+        "solar_today": "", "solar_tomorrow": "",   # leer = automatisch (Forecast.Solar, Solcast)
+    },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",
         "energy": "", "connected": "", "charging": "", "range": "",
