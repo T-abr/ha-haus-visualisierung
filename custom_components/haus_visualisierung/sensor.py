@@ -6,13 +6,39 @@ from __future__ import annotations
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
+from .display import PROTOCOL
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     async_add_entities([HausAlarmeSensor(entry), HausGeraeteSensor(entry)])
+    hub = hass.data[DOMAIN].get("displays")
+    if hub is None:
+        return
+    # Wanddisplays: je eingerichtetem Display eine Entität; neue kommen hinzu, gelöschte verschwinden
+    known: dict[str, HausDisplaySensor] = {}
+
+    @callback
+    def _sync() -> None:
+        ids = {d["id"] for d in hub.displays}
+        new = [HausDisplaySensor(entry, hub, did) for did in ids if did not in known]
+        for ent in new:
+            known[ent.display_id] = ent
+        if new:
+            async_add_entities(new)
+        reg = er.async_get(hass)
+        for did in [k for k in known if k not in ids]:
+            ent = known.pop(did)
+            if ent.entity_id and reg.async_get(ent.entity_id):
+                reg.async_remove(ent.entity_id)
+            elif ent.hass:
+                hass.async_create_task(ent.async_remove())
+
+    _sync()
+    entry.async_on_unload(hub.async_add_listener(_sync))
 
 
 class HausAlarmeSensor(SensorEntity):
@@ -110,3 +136,42 @@ class HausGeraeteSensor(SensorEntity):
     @callback
     def _changed(self) -> None:
         self.async_write_ha_state()
+
+
+class HausDisplaySensor(SensorEntity):
+    """Inhalte eines Wanddisplays (Protokoll siehe DISPLAY_PROTOKOLL.md): Zustand = Protokollversion,
+    Attribute = fertig formatierte JSON-Texte je Bereich."""
+
+    _attr_has_entity_name = False
+    _attr_should_poll = False
+    _attr_icon = "mdi:tablet-dashboard"
+    # Ändert sich laufend und ist nur für das Display gedacht: nicht in den Recorder
+    _unrecorded_attributes = frozenset({"einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "haus"})
+
+    def __init__(self, entry: ConfigEntry, hub, display_id: str) -> None:
+        self._hub = hub
+        self.display_id = display_id
+        self._attr_unique_id = f"{entry.entry_id}_display_{display_id}"
+        self.entity_id = f"sensor.haus_display_{display_id}"
+        d = next((x for x in hub.displays if x["id"] == display_id), {})
+        self._attr_name = f"Haus Display {d.get('name') or display_id}"
+
+    @property
+    def native_value(self) -> int:
+        return PROTOCOL
+
+    @property
+    def available(self) -> bool:
+        return self.display_id in self._hub.payloads
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return dict(self._hub.payloads.get(self.display_id, {}))
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._hub.async_add_listener(self._changed))
+
+    @callback
+    def _changed(self) -> None:
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()

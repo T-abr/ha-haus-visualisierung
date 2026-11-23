@@ -1,4 +1,4 @@
-# Haus Visualisierung 1.11.0
+# Haus Visualisierung 1.12.0
 
 Eigenes Home-Assistant-Panel, das sich wie eine Dashboard-Strategy aus Etagen, Bereichen und Geräten
 selbst aufbaut – mit eigenem Design, Alarmmanager und Hausmodus. Läuft auf einem Raspberry Pi ohne Last:
@@ -25,6 +25,10 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   hervorgehoben, dazu Termine von heute und morgen; aus Kalendern in Home Assistant (z. B. Waste Collection Schedule).
 - **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
   Fälligkeit auf der Seite „Wartung“, „Erledigt“ für alle Benutzer, fällige Aufgaben als Hinweis in den Meldungen.
+- **Wanddisplays** (z. B. 4-Zoll-ESP32-S3 mit ESPHome): das Display ist ein Client der Visualisierung, Seiten und
+  Kacheln stehen in Einstellungen → Displays, die Inhalte kommen fertig gerechnet aus `sensor.haus_display_<kennung>`,
+  Tipps über den Dienst `haus_visualisierung.display_tap`. Firmware: [ha-haus-display](https://github.com/T-abr/ha-haus-display),
+  Schnittstelle: [DISPLAY_PROTOKOLL.md](DISPLAY_PROTOKOLL.md) (Protokoll 1 ab Version 1.12.0).
 - **Wandpanel-Modus** je Gerät (auch per `?wandpanel=1`): Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr,
   Wetter, Hausmodus und Meldungen, automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
 - **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Technik, Darstellung) und Sortieren per Ziehen.

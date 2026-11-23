@@ -29,5 +29,21 @@
         }
       }
     }
+  },
+  "services": {
+    "display_tap": {
+      "name": "Display: tap",
+      "description": "Reports a tap on a wall display (close a good-night item, house mode, tile). Called by the display firmware.",
+      "fields": {
+        "display": {
+          "name": "Display",
+          "description": "Display id from the settings (tab “Displays”)."
+        },
+        "ziel": {
+          "name": "Target",
+          "description": "What was tapped, e.g. gn:light.kueche, gn_alle, modus:nacht, kachel:0, geraet_ok."
+        }
+      }
+    }
   }
 }

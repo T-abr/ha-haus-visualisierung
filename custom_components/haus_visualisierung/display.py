@@ -1,0 +1,731 @@
+"""Wanddisplays (z. B. 4-Zoll-ESP32-S3 mit ESPHome): Inhalte fertig gerechnet als Entität je Display.
+
+Das Display ist ein Client der Visualisierung: Seiten, Kacheln und Helligkeit stehen in den Einstellungen
+(Reiter „Displays“, Schlüssel ``displays`` im Layout). Für jedes Display gibt es ``sensor.haus_display_<id>``;
+die Attribute sind kurze JSON-Texte, die die Firmware nur noch anzeigt (Texte, Farben, Icons schon formatiert).
+Tippen meldet das Display über den Dienst ``haus_visualisierung.display_tap``.
+
+Die Schnittstelle ist versioniert (``PROTOCOL``) und in ``DISPLAY_PROTOKOLL.md`` beschrieben; die Firmware liegt im
+Repository ha-haus-display. Neue Felder dürfen hinzukommen, ohne die Version zu erhöhen; Umbenennen oder Entfernen
+erhöht sie.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import time
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from typing import Any
+
+from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.core import Event, HomeAssistant, ServiceCall, State, callback
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
+from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
+
+from .alerts import UNAV, is_on, num
+
+_LOGGER = logging.getLogger(__name__)
+
+PROTOCOL = 1
+SERVICE_TAP = "display_tap"
+
+# Kacheln der Startseite (Schlüssel im Layout → Name in den Einstellungen)
+TILES = {
+    "pv_jetzt": "PV jetzt",
+    "energie_heute": "Energie heute",
+    "klima_mittel": "Raumklima Ø",
+    "morgen": "Müll und Termine",
+    "wetter": "Wetter",
+    "meldungen": "Meldungen",
+    "geraete": "Haushaltsgeräte",
+    "strompreis": "Strompreis",
+}
+PAGES = ("start", "energie", "klima", "haus")
+DEFAULT_TILES = ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"]
+
+# Farben wie im Panel (stile.js)
+C_WARM, C_COOL, C_OK, C_ALERT, C_HEAT, C_ACCENT, C_GRID, C_DIM = (
+    "#ffc457", "#63c7ff", "#4fd18b", "#ff6b5b", "#ff8a3d", "#5aa0ff", "#b39cff", "#9aa3b2")
+MODES = [("zuhause", "Zuhause", "home-account", C_OK), ("nacht", "Nacht", "weather-night", C_ACCENT),
+         ("abwesend", "Abwesend", "home-export-outline", C_WARM), ("urlaub", "Urlaub", "airplane", C_GRID)]
+MODE_INFO = {k: (n, i, f) for k, n, i, f in MODES}
+
+W_COND = {
+    "clear-night": ("Klar", "weather-night"), "cloudy": ("Bewölkt", "weather-cloudy"), "fog": ("Nebel", "weather-fog"),
+    "hail": ("Hagel", "weather-hail"), "lightning": ("Gewitter", "weather-lightning"),
+    "lightning-rainy": ("Gewitter", "weather-lightning-rainy"), "partlycloudy": ("Teils bewölkt", "weather-partly-cloudy"),
+    "pouring": ("Starkregen", "weather-pouring"), "rainy": ("Regen", "weather-rainy"), "snowy": ("Schnee", "weather-snowy"),
+    "snowy-rainy": ("Schneeregen", "weather-snowy-rainy"), "sunny": ("Sonnig", "weather-sunny"),
+    "windy": ("Windig", "weather-windy"), "windy-variant": ("Windig", "weather-windy-variant"), "exceptional": ("Unwetter", "alert"),
+}
+
+# Müllabfuhr: wie termine.js
+WASTE_RE = re.compile(r"abfall|m(ü|ue|u)ll|waste|tonne|abfuhr|wertstoff|entsorg|recycl|garbage|trash", re.I)
+BINS = [
+    (re.compile(r"gelb|wertstoff|verpackung|plastik|lvp|recycl", re.I), "#f2c230", "recycle"),
+    (re.compile(r"papier|pappe|karton|blau|paper", re.I), "#4b8df8", "newspaper-variant-outline"),
+    (re.compile(r"bio|braun|kompost|organic", re.I), "#a8703f", "leaf"),
+    (re.compile(r"grün|gruen|garten|baum|laub", re.I), "#4cbf6b", "tree-outline"),
+    (re.compile(r"glas|glass", re.I), "#3fae8f", "bottle-wine-outline"),
+    (re.compile(r"sperr", re.I), "#e8893a", "sofa-outline"),
+    (re.compile(r"schadstoff|problem|sonder", re.I), "#e5534b", "biohazard"),
+    (re.compile(r"rest|grau|schwarz|haus|general", re.I), C_DIM, "trash-can-outline"),
+]
+WEEKDAY = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+
+# Gute Nacht: wie gutenacht.js
+HOT_RE = re.compile(r"herd|kochfeld|backofen|\bofen\b|bügeleisen|buegeleisen|glätteisen|wasserkocher|kaffeemaschine|"
+                    r"heizlüfter|stove|oven|\biron\b|kettle", re.I)
+GN_TITLE = {"garage": "Garage & Tore", "contact": "Fenster & Türen", "lock": "Schlösser", "device": "Geräte",
+            "light": "Licht", "media": "Medien"}
+GN_MAX = 8
+BAT_RE = re.compile(r"(akku|batter|battery|hausspeicher|stromspeicher)", re.I)
+BAT_NOT = re.compile(r"(pv|solar|grid|netz|soc|wallbox|evcc|lade)", re.I)
+
+WEATHER_TTL = 30 * 60
+CAL_TTL = 15 * 60
+
+
+# ---------- Formatierung (deutsch) ----------
+def de(v: float, digits: int = 1) -> str:
+    txt = f"{v:,.{digits}f}"
+    return txt.replace(",", " ").replace(".", ",").replace(" ", ".")
+
+
+def kw(w: float | None) -> str:
+    if w is None:
+        return "–"
+    return f"{de(w / 1000, 1)} kW" if abs(w) >= 1000 else f"{de(w, 0)} W"
+
+
+def pct(v: float | None) -> str:
+    return "–" if v is None else f"{round(v * 100)} %"
+
+
+def power_w(st: State | None) -> float | None:
+    v = num(st)
+    if v is None or st is None:
+        return None
+    unit = st.attributes.get("unit_of_measurement") or "W"
+    return v * 1000 if unit == "kW" else v * 1_000_000 if unit == "MW" else v
+
+
+def bin_of(title: str) -> tuple[str, str]:
+    for rx, color, ic in BINS:
+        if rx.search(title):
+            return color, ic
+    return C_DIM, "trash-can-outline"
+
+
+def slug(value: Any) -> str:
+    s = str(value or "").lower().translate(str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}))
+    return re.sub(r"[^a-z0-9]+", "_", s).strip("_")[:20]
+
+
+def sanitize_displays(raw: Any) -> list[dict]:
+    """Einstellungen je Display prüfen (für store.sanitize)."""
+    out, ids = [], set()
+    for d in raw[:20] if isinstance(raw, list) else []:
+        if not isinstance(d, dict) or len(out) >= 6:
+            continue
+        did = slug(d.get("id") or d.get("name")) or "display"
+        base, n = did, 2
+        while did in ids:
+            did, n = f"{base}_{n}", n + 1
+        ids.add(did)
+        pages = [p for p in d.get("pages", []) if p in PAGES] if isinstance(d.get("pages"), list) else []
+        pages = list(dict.fromkeys(["start", *pages]))
+        tiles = []
+        for t in d.get("tiles", []) if isinstance(d.get("tiles"), list) else []:
+            if t in TILES or (isinstance(t, str) and re.match(r"^entity:[a-z_]+\.[a-z0-9_]+$", t)):
+                tiles.append(t)
+        tiles = (tiles or list(DEFAULT_TILES))[:4]
+
+        def _int(key: str, lo: int, hi: int, default: int) -> int:
+            v = d.get(key)
+            return int(min(max(v, lo), hi)) if isinstance(v, (int, float)) and not isinstance(v, bool) else default
+
+        out.append({
+            "id": did,
+            "name": str(d.get("name") or did)[:40],
+            "pages": pages,
+            "tiles": tiles,
+            "hint": d.get("hint", True) is not False,
+            "bright_day": _int("bright_day", 10, 100, 80),
+            "bright_night": _int("bright_night", 0, 100, 10),
+            "wake": d.get("wake", True) is not False,
+        })
+    return out
+
+
+def _dumps(v: Any) -> str:
+    return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+
+
+class DisplayHub:
+    """Rechnet die Inhalte aller Displays und führt Tipps aus."""
+
+    def __init__(self, hass: HomeAssistant, monitor) -> None:
+        self.hass = hass
+        self.monitor = monitor
+        self._listeners: set[Callable[[], None]] = set()
+        self._unsubs: list[Callable[[], None]] = []
+        self._pending: Callable[[], None] | None = None
+        self.payloads: dict[str, dict[str, Any]] = {}
+        self._weather: dict[str, Any] = {"at": 0.0, "eid": None, "days": []}
+        self._cal: dict[str, Any] = {"at": 0.0, "events": []}
+        self._fetching: set[str] = set()
+        # Energie heute: selbst integriert (Wh seit Mitternacht), überlebt Neustarts
+        self._day: dict[str, Any] = {"date": "", "pv": 0.0, "imp": 0.0, "exp": 0.0, "use": 0.0, "last": None}
+        self._store: Store[dict] = Store(hass, 1, "haus_visualisierung.display")
+
+    # ---------- Lebenszyklus ----------
+    async def async_start(self) -> None:
+        data = await self._store.async_load()
+        if isinstance(data, dict) and data.get("date") == dt_util.now().date().isoformat():
+            self._day.update({k: float(data.get(k) or 0) for k in ("pv", "imp", "exp", "use")}, date=data["date"])
+        self._unsubs.append(self.hass.bus.async_listen(EVENT_STATE_CHANGED, self._on_state))
+        self._unsubs.append(async_track_time_interval(self.hass, self._on_tick, timedelta(seconds=30)))
+        self._unsubs.append(self.monitor.store.async_add_listener(lambda _l: self.schedule(0)))
+        self._unsubs.append(self.monitor.book.async_add_listener(lambda _s: self.schedule()))
+        self._unsubs.append(self.monitor.appliances.async_add_listener(lambda: self.schedule()))
+        self.update()
+
+    @callback
+    def async_stop(self) -> None:
+        for u in self._unsubs:
+            u()
+        self._unsubs.clear()
+        if self._pending:
+            self._pending()
+            self._pending = None
+        self._store.async_delay_save(self._day_data, 0)
+
+    @callback
+    def async_add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
+        self._listeners.add(cb)
+        return lambda: self._listeners.discard(cb)
+
+    @property
+    def layout(self) -> dict:
+        return self.monitor.layout
+
+    @property
+    def displays(self) -> list[dict]:
+        return self.layout.get("displays", [])
+
+    def _day_data(self) -> dict:
+        return {k: self._day[k] for k in ("date", "pv", "imp", "exp", "use")}
+
+    # ---------- Auslöser ----------
+    @callback
+    def _on_state(self, event: Event) -> None:
+        if not self.displays:
+            return
+        eid = event.data.get("entity_id", "")
+        if eid.startswith("sensor.haus_display_"):
+            return
+        if eid in self._watch() or eid.startswith(("weather.", "calendar.")):
+            self.schedule()
+
+    def _watch(self) -> set[str]:
+        c = self.energy_cfg()
+        ents = {v for v in (c or {}).values() if isinstance(v, str) and "." in v}
+        ents |= set(self.monitor._all)
+        ents |= {e for d in self.displays for t in d["tiles"] if t.startswith("entity:") for e in [t[7:]]}
+        return ents
+
+    @callback
+    def _on_tick(self, _now: Any) -> None:
+        self._integrate()
+        self.update()
+
+    @callback
+    def schedule(self, delay: float = 1.0) -> None:
+        if self._pending:
+            return
+
+        @callback
+        def _run(_now: Any) -> None:
+            self._pending = None
+            self.update()
+
+        self._pending = async_call_later(self.hass, delay, _run)
+
+    # ---------- Energie ----------
+    def energy_cfg(self) -> dict | None:
+        """Wie energyCfg im Panel: Kopfzeilen-Sensoren, Speicher-Leistung (eingestellt oder nach Namen)."""
+        get, L = self.hass.states.get, self.layout
+        H, E = L.get("header") or {}, L.get("energy") or {}
+        if E.get("enabled") is False:
+            return None
+        S = lambda e: e if e and get(e) else ""  # noqa: E731
+        pv, grid, house, soc = S(H.get("pv")), S(H.get("grid")), S(H.get("power")), S(H.get("battery"))
+        bat = S(E.get("battery_power"))
+        if not bat:
+            for st in self.hass.states.async_all("sensor"):
+                lbl = f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"
+                if (st.attributes.get("device_class") == "power" and st.entity_id not in (pv, grid, house)
+                        and BAT_RE.search(lbl) and not BAT_NOT.search(lbl)):
+                    bat = st.entity_id
+                    break
+        if not (pv or grid or house or bat):
+            return None
+        return {"pv": pv, "grid": grid, "house": house, "soc": soc, "bat": bat,
+                "grid_inv": bool(E.get("grid_invert")), "bat_inv": bool(E.get("battery_invert"))}
+
+    def energy_now(self) -> dict | None:
+        c = self.energy_cfg()
+        if c is None:
+            return None
+        get = self.hass.states.get
+        W = lambda e: power_w(get(e)) if e else None  # noqa: E731
+        pv, grid, bat, house = W(c["pv"]), W(c["grid"]), W(c["bat"]), W(c["house"])
+        if grid is not None and c["grid_inv"]:
+            grid = -grid
+        if bat is not None and c["bat_inv"]:
+            bat = -bat
+        p = None if pv is None else max(0.0, pv)
+        total = max(0.0, (p or 0) + grid - (bat or 0)) if grid is not None else house
+        home = max(0.0, house) if house is not None else total
+        imp = None if grid is None else max(0.0, grid)
+        exp = None if grid is None else max(0.0, -grid)
+        autark = (min(1.0, max(0.0, 1 - imp / total)) if total else 1.0 if total == 0 and imp is not None else None) if imp is not None else None
+        own = min(1.0, max(0.0, 1 - exp / p)) if p is not None and p > 50 and exp is not None else None
+        soc = num(get(c["soc"])) if c["soc"] else None
+        return {"pv": p, "grid": grid, "bat": bat, "home": home, "total": total, "imp": imp, "exp": exp,
+                "autark": autark, "own": own, "soc": soc}
+
+    @callback
+    def _integrate(self) -> None:
+        """Wh seit Mitternacht aufsummieren (alle 30 s, höchstens 5 min Lücke)."""
+        now, today = time.time(), dt_util.now().date().isoformat()
+        if self._day["date"] != today:
+            self._day.update(date=today, pv=0.0, imp=0.0, exp=0.0, use=0.0)
+        F = self.energy_now()
+        last, self._day["last"] = self._day["last"], now
+        if F is None or last is None or now - last > 300:
+            return
+        h = (now - last) / 3600
+        for key, val in (("pv", F["pv"]), ("imp", F["imp"]), ("exp", F["exp"]), ("use", F["total"])):
+            if val is not None:
+                self._day[key] += val * h
+        self._store.async_delay_save(self._day_data, 300)
+
+    def energy_day(self) -> dict:
+        d = self._day
+        autark = min(1.0, max(0.0, 1 - d["imp"] / d["use"])) if d["use"] > 0 else None
+        own = min(1.0, max(0.0, 1 - d["exp"] / d["pv"])) if d["pv"] > 50 else None
+        return {"pv": d["pv"], "use": d["use"], "autark": autark, "own": own}
+
+    def price_ct(self) -> float | None:
+        P = self.layout.get("price") or {}
+        st = self.hass.states.get(P.get("sensor") or "")
+        if P.get("use_sensor", True) and st is not None and (v := num(st)) is not None:
+            unit = str(st.attributes.get("unit_of_measurement") or "").lower()
+            f = 100 if unit.startswith(("eur", "€")) and "mwh" not in unit else 0.1 if "mwh" in unit else 1
+            return v * f + float(P.get("surcharge_ct") or 0)
+        return float(P.get("fixed_ct") or 0) or None
+
+    # ---------- Wetter und Kalender (asynchron, zwischengespeichert) ----------
+    def weather_eid(self) -> str | None:
+        w = (self.layout.get("wallpanel") or {}).get("weather")
+        if w and self.hass.states.get(w):
+            return w
+        return next(iter(sorted(self.hass.states.async_entity_ids("weather"))), None)
+
+    def _fetch(self, key: str, coro_fn: Callable[[], Any]) -> None:
+        if key in self._fetching:
+            return
+        self._fetching.add(key)
+
+        async def _run() -> None:
+            try:
+                await coro_fn()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Display: %s nicht lesbar: %s", key, err)
+            finally:
+                self._fetching.discard(key)
+                self.schedule(0)
+
+        self.hass.async_create_task(_run())
+
+    async def _load_weather(self, eid: str) -> None:
+        res = await self.hass.services.async_call("weather", "get_forecasts", {"entity_id": eid, "type": "daily"},
+                                                  blocking=True, return_response=True)
+        days = ((res or {}).get(eid) or {}).get("forecast") or []
+        self._weather = {"at": time.time(), "eid": eid, "days": days}
+
+    def calendars(self) -> list[tuple[str, str]]:
+        T = self.layout.get("termine") or {}
+        if T.get("enabled") is False:
+            return []
+        out = []
+        for eid in sorted(self.hass.states.async_entity_ids("calendar")):
+            kind = (T.get("cals") or {}).get(eid)
+            if kind == "-":
+                continue
+            if kind not in ("waste", "event"):
+                st = self.hass.states.get(eid)
+                kind = "waste" if WASTE_RE.search(f"{eid} {(st.attributes.get('friendly_name') if st else '') or ''}") else ""
+            if kind:
+                out.append((eid, kind))
+        return out
+
+    async def _load_calendars(self, cals: list[tuple[str, str]]) -> None:
+        start = dt_util.start_of_local_day()
+        end = start + timedelta(days=3)
+        res = await self.hass.services.async_call(
+            "calendar", "get_events", {"entity_id": [e for e, _k in cals], "start_date_time": start.isoformat(),
+                                       "end_date_time": end.isoformat()}, blocking=True, return_response=True)
+        kinds = dict(cals)
+        events = []
+        for eid, val in (res or {}).items():
+            for ev in (val or {}).get("events", []):
+                s = str(ev.get("start") or "")
+                all_day = len(s) == 10
+                when = dt_util.parse_datetime(s) if not all_day else None
+                day = dt_util.parse_date(s[:10]) if all_day else (dt_util.as_local(when).date() if when else None)
+                if day is None:
+                    continue
+                events.append({"kind": kinds.get(eid, "event"), "title": str(ev.get("summary") or "Termin").strip(),
+                               "day": day.isoformat(), "time": "" if all_day or not when else dt_util.as_local(when).strftime("%H:%M")})
+        self._cal = {"at": time.time(), "events": events}
+
+    def _ensure_async(self) -> None:
+        eid = self.weather_eid()
+        if eid and (self._weather["eid"] != eid or time.time() - self._weather["at"] > WEATHER_TTL):
+            self._weather["at"] = time.time()  # nicht in jeder Runde neu versuchen
+            self._fetch("weather", lambda: self._load_weather(eid))
+        cals = self.calendars()
+        if cals and time.time() - self._cal["at"] > CAL_TTL:
+            self._cal["at"] = time.time()
+            self._fetch("calendar", lambda: self._load_calendars(cals))
+
+    def termine(self) -> dict | None:
+        """Nächste Abfuhr (heute bis 12 Uhr oder morgen) und Termine heute/morgen – wie termSummary im Panel."""
+        now = dt_util.now()
+        today = now.date()
+        eve = int((self.layout.get("termine") or {}).get("evening", 17))
+
+        def rel(ev: dict) -> int:
+            return (datetime.fromisoformat(ev["day"]).date() - today).days
+
+        evs = [e for e in self._cal["events"] if 0 <= rel(e) <= 1]
+        waste_day = next((rel(e) for e in sorted(evs, key=rel) if e["kind"] == "waste"
+                          and ((rel(e) == 0 and now.hour < 12) or rel(e) == 1)), None)
+        waste = [e["title"] for e in evs if e["kind"] == "waste" and rel(e) == waste_day] if waste_day is not None else []
+        events = sorted((e for e in evs if e["kind"] == "event" and not (rel(e) == 0 and e["time"] and e["time"] < now.strftime("%H:%M"))),
+                        key=lambda e: (rel(e), e["time"] or "00:00"))
+        if not waste and not events:
+            return None
+        hot = bool(waste) and (now.hour >= eve if waste_day == 1 else now.hour < 10)
+        word = {0: "Heute", 1: "Morgen"}
+        return {"waste": list(dict.fromkeys(waste)), "waste_word": word.get(waste_day, ""), "hot": hot,
+                "events": [f"{'' if rel(e) == 0 else 'morgen '}{e['time'] + ' ' if e['time'] else ''}{e['title']}" for e in events[:3]]}
+
+    # ---------- Raumklima ----------
+    def climate(self) -> dict:
+        get = self.hass.states.get
+        rooms = []
+        for r in self.monitor._rooms:
+            if not r.indoor or not r.temp_id:
+                continue
+            t, h = num(get(r.temp_id)), num(get(r.hum_id)) if r.hum_id else None
+            if t is None:
+                continue
+            mold = bool(self.monitor._mold.get(r.area_id, {}).get("on"))
+            rooms.append({"n": r.name, "t": t, "h": h, "w": mold})
+        rooms.sort(key=lambda x: x["n"].lower())
+        ts = [x["t"] for x in rooms]
+        hs = [x["h"] for x in rooms if x["h"] is not None]
+        t_out, _rh = self.monitor._outdoor_now()
+        return {"rooms": rooms, "t": sum(ts) / len(ts) if ts else None, "h": sum(hs) / len(hs) if hs else None,
+                "vent": [x["n"] for x in rooms if x["w"]], "out": t_out}
+
+    # ---------- Gute Nacht (wie checkItems im Panel) ----------
+    def _short(self, eid: str) -> tuple[str, str]:
+        st = self.hass.states.get(eid)
+        room = self.monitor._area_of.get(eid)
+        name = str((st.attributes.get("friendly_name") if st else None) or eid)
+        if room and name.lower().startswith(room.name.lower() + " ") and len(name) > len(room.name) + 1:
+            name = name[len(room.name) + 1:]
+        return name[:1].upper() + name[1:], room.name if room else ""
+
+    def check_items(self, mode: str = "nacht") -> list[dict]:
+        hm = self.layout.get("house_mode") or {}
+        if hm.get("enabled") is False or hm.get("check") is False:
+            return []
+        get, out, seen = self.hass.states.get, [], set()
+        rooms = self.monitor._rooms
+
+        def all_(k: str) -> list[str]:
+            return [e for r in rooms for e in r.groups.get(k, [])]
+
+        def add(eid: str, kind: str, ic: str, state: str, act: tuple[str, str, str] | None) -> None:
+            if eid in seen:
+                return
+            seen.add(eid)
+            name, room = self._short(eid)
+            out.append({"eid": eid, "kind": kind, "i": ic, "n": name, "r": room, "z": state, "act": act})
+
+        garages = [e for e in all_("cover") if (get(e) and get(e).attributes.get("device_class")) in ("garage", "gate")]
+        for e in garages:
+            st = get(e)
+            if is_on(st):
+                add(e, "garage", "garage-open-variant", "öffnet" if st.state == "opening" else "offen",
+                    ("cover", "close_cover", "Schließen"))
+        garage_rooms = {self._short(e)[1] for e in garages}
+        for e in all_("contact"):
+            st = get(e)
+            if not st or st.state != "on":
+                continue
+            c = st.attributes.get("device_class")
+            if c == "garage_door" and self._short(e)[1] in garage_rooms:
+                continue
+            ic = {"garage_door": "garage-open-variant", "door": "door-open"}.get(c, "window-open-variant")
+            add(e, "contact", ic, "offen", None)
+        for e in all_("lock"):
+            st = get(e)
+            if not st or st.state in UNAV or st.state in ("locked", "locking"):
+                continue
+            jam = st.state == "jammed"
+            add(e, "lock", "lock-alert" if jam else "lock-open-variant",
+                "klemmt" if jam else "offen" if st.state == "open" else "nicht verriegelt", ("lock", "lock", "Verriegeln"))
+        extra = hm.get("check_devices") or []
+        for e in [*(x for x in all_("switch") if HOT_RE.search(self._short(x)[0])), *extra]:
+            st = get(e)
+            if not st or not is_on(st):
+                continue
+            d = e.split(".", 1)[0]
+            act = (("homeassistant", "turn_off", "Ausschalten") if d in ("light", "switch", "fan", "input_boolean", "climate", "media_player", "water_heater", "humidifier")
+                   else ("cover", "close_cover", "Schließen") if d == "cover" else ("lock", "lock", "Verriegeln") if d == "lock" else None)
+            add(e, "device", "power-plug-outline", "an", act)
+        for e in all_("light"):
+            if is_on(get(e)):
+                add(e, "light", "lightbulb-on", "an", ("light", "turn_off", "Aus"))
+        if mode == "abwesend":
+            for e in all_("media"):
+                st = get(e)
+                if st and st.state == "playing":
+                    add(e, "media", "speaker-play", "spielt", ("media_player", "media_pause", "Pause"))
+        return out
+
+    # ---------- Inhalte ----------
+    def _mode(self) -> str:
+        return self.monitor.house.mode
+
+    def _alerts(self) -> list[dict]:
+        order = {"alarm": 0, "warn": 1, "info": 2}
+        al = [a for a in self.monitor.book.alarms.values() if a.get("status") != "stumm"]
+        return sorted(al, key=lambda a: (order.get(a.get("level"), 3), -float(a.get("since") or 0)))
+
+    def _done_appliances(self) -> list[str]:
+        return [r["name"] for r in self.monitor.appliances.snapshot() if r.get("state") == "fertig"]
+
+    def kopf(self) -> dict:
+        get = self.hass.states.get
+        out: dict[str, Any] = {}
+        eid = self.weather_eid()
+        if eid and (st := get(eid)) is not None:
+            txt, ic = W_COND.get(st.state, (st.state, "weather-partly-cloudy"))
+            t = st.attributes.get("temperature")
+            days = self._weather["days"] if self._weather["eid"] == eid else []
+            tomorrow = days[1] if len(days) > 1 else None
+            out["wetter"] = {"i": ic, "t": f"{de(float(t), 0)}°" if isinstance(t, (int, float)) else "–", "txt": txt,
+                             "morgen": f"morgen {de(float(tomorrow['temperature']), 0)}°" if tomorrow and isinstance(tomorrow.get("temperature"), (int, float)) else ""}
+        m = self._mode()
+        n, i, f = MODE_INFO.get(m, (m, "home", C_DIM))
+        out["modus"] = {"k": m, "n": n, "i": i, "f": f}
+        return out
+
+    def tile(self, key: str) -> dict:
+        get = self.hass.states.get
+        base = {"k": key, "i": "help-circle-outline", "f": C_DIM, "n": TILES.get(key, key), "v": "–", "vf": "", "s": "", "b": -1, "bf": "", "u": "", "hot": False}
+        if key == "pv_jetzt":
+            F = self.energy_now()
+            if F:
+                net = F["grid"]
+                base.update(i="solar-power-variant", f=C_WARM, v=kw(F["pv"]), vf=C_WARM,
+                            s=f"Haus {kw(F['home'])}" + (f" · Netz {'−' if net < 0 else ''}{kw(abs(net))}" if net is not None else ""))
+                if F["soc"] is not None:
+                    base.update(b=round(F["soc"]), bf=C_OK, u=f"Akku {round(F['soc'])} %")
+        elif key == "energie_heute":
+            D = self.energy_day()
+            base.update(n="Heute", i="chart-donut", f=C_OK, v=f"{de(D['pv'] / 1000, 1)} kWh", s="PV seit Mitternacht")
+            if D["autark"] is not None:
+                base.update(s=f"Autarkie {pct(D['autark'])}", b=round(D["autark"] * 100), bf=C_WARM)
+            fc = (self.layout.get("forecast") or {}).get("solar_tomorrow")
+            if fc and (v := num(get(fc))) is not None:
+                base["u"] = f"morgen {de(v, 1)} kWh"
+        elif key == "klima_mittel":
+            K = self.climate()
+            base.update(n="Haus Ø", i="thermometer", f=C_HEAT)
+            if K["t"] is not None:
+                base["v"] = f"{de(K['t'], 1)}°" + (f"  {round(K['h'])} %" if K["h"] is not None else "")
+            if K["vent"]:
+                base.update(s=f"{K['vent'][0]} lüften", vf="")
+            if K["out"] is not None:
+                base["u"] = f"Außen {de(K['out'], 1)}°"
+        elif key == "morgen":
+            T = self.termine()
+            base.update(n="Termine", i="calendar", f=C_COOL, v="Nichts geplant")
+            if T and T["waste"]:
+                color, ic = bin_of(T["waste"][0])
+                base.update(n=T["waste_word"], i=ic, f=color, v=", ".join(T["waste"]), hot=T["hot"])
+                if T["events"]:
+                    base["s"] = T["events"][0]
+            elif T and T["events"]:
+                base.update(n="Nächster Termin", i="calendar-clock", v=T["events"][0], s=" · ".join(T["events"][1:2]))
+        elif key == "wetter":
+            K = self.kopf().get("wetter")
+            if K:
+                base.update(i=K["i"], f=C_WARM, v=K["t"], s=K["txt"], u=K["morgen"])
+        elif key == "meldungen":
+            al = self._alerts()
+            lvl = al[0].get("level") if al else None
+            base.update(i="bell-alert" if al else "shield-check", f=C_ALERT if lvl == "alarm" else C_WARM if al else C_OK,
+                        v=str(len(al)) if al else "Alles ruhig", s=str(al[0].get("title", "")) if al else "")
+        elif key == "geraete":
+            done = self._done_appliances()
+            run = sum(1 for r in self.monitor.appliances.snapshot() if r.get("state") == "laeuft")
+            base.update(n="Geräte", i="washing-machine", f=C_OK if done else C_COOL,
+                        v=f"{len(done)} fertig" if done else f"{run} läuft" if run else "Aus", s=", ".join(done[:2]))
+        elif key == "strompreis":
+            ct = self.price_ct()
+            base.update(n="Strompreis", i="currency-eur", f=C_WARM, v=f"{de(ct, 1)} ct" if ct is not None else "–", s="pro kWh jetzt")
+        elif key.startswith("entity:"):
+            eid = key[7:]
+            st = get(eid)
+            name, room = self._short(eid)
+            base.update(n=name, s=room, i=str((st.attributes.get("icon") if st else None) or "").removeprefix("mdi:") or "circle-outline")
+            if st is not None:
+                v = num(st)
+                unit = st.attributes.get("unit_of_measurement")
+                base["v"] = (de(v, 1).removesuffix(",0") + (f" {unit}" if unit else "")) if v is not None else \
+                    {"on": "an", "off": "aus", "open": "offen", "closed": "zu", "unavailable": "nicht erreichbar"}.get(st.state, st.state)
+                base["f"] = C_WARM if is_on(st) else C_DIM
+        return base
+
+    def hinweis(self, items: list[dict]) -> dict | None:
+        al = self._alerts()
+        if al and al[0].get("level") == "alarm":
+            return {"i": "alarm-light", "f": C_ALERT, "n": str(al[0].get("title", "")), "s": str(al[0].get("detail", "")), "knopf": "", "ziel": ""}
+        hm = self.layout.get("house_mode") or {}
+        hour = dt_util.now().hour
+        end = int(str(hm.get("night_end", "06:30")).split(":")[0])
+        if items and self._mode() not in ("nacht", "abwesend", "urlaub") and (hour >= 20 or hour < end):
+            n = len(items)
+            return {"i": "weather-night", "f": C_WARM, "n": "Gute Nacht", "s": f"{n} {'Punkt' if n == 1 else 'Punkte'} offen",
+                    "knopf": "Prüfen", "ziel": "seite:gute_nacht"}
+        if al:
+            return {"i": "bell-alert", "f": C_WARM, "n": str(al[0].get("title", "")), "s": str(al[0].get("detail", "")), "knopf": "", "ziel": ""}
+        done = self._done_appliances()
+        if done:
+            return {"i": "check-circle-outline", "f": C_OK, "n": f"{done[0]} fertig", "s": "", "knopf": "OK", "ziel": "geraet_ok"}
+        return None
+
+    def energie(self) -> dict:
+        F, D = self.energy_now(), self.energy_day()
+        if F is None:
+            return {}
+        net, bat = F["grid"], F["bat"]
+        ct = self.price_ct()
+        return {
+            "pv": kw(F["pv"]), "haus": kw(F["home"]),
+            "netz": kw(abs(net)) if net is not None else "", "netz_n": "Bezug" if (net or 0) > 0 else "Einspeisung" if net else "Netz",
+            "akku": f"{round(F['soc'])} %" if F["soc"] is not None else (kw(abs(bat)) if bat is not None else ""),
+            "akku_n": ("lädt " if (bat or 0) > 0 else "entlädt " if bat else "") + (kw(abs(bat)) if bat else "Akku"),
+            "fluss": {"pv": 1 if (F["pv"] or 0) > 20 else 0, "netz": (1 if net > 20 else -1 if net < -20 else 0) if net is not None else 0,
+                      "akku": (1 if bat > 20 else -1 if bat < -20 else 0) if bat is not None else 0, "haus": 1},
+            "kpi": [["Autarkie heute", pct(D["autark"])], ["Eigenverbrauch", pct(D["own"])],
+                    ["Preis jetzt", f"{de(ct, 1)} ct" if ct is not None else "–"]],
+        }
+
+    def build(self, d: dict) -> dict[str, Any]:
+        items = self.check_items("nacht")
+        K = self.climate()
+        mode = self._mode()
+        gn_rows = [{"g": GN_TITLE[x["kind"]], "i": x["i"], "n": x["n"], "s": " · ".join(p for p in (x["r"], x["z"]) if p),
+                    "knopf": x["act"][2] if x["act"] else "", "ziel": f"gn:{x['eid']}"} for x in items[:GN_MAX]]
+        n = len(items)
+        return {
+            "protokoll": PROTOCOL,
+            "einstellungen": _dumps({"name": d["name"], "seiten": d["pages"], "hinweis": d["hint"], "hell_tag": d["bright_day"],
+                                     "hell_nacht": d["bright_night"], "wecken": d["wake"], "nacht": mode == "nacht"}),
+            "kopf": _dumps(self.kopf()),
+            "kacheln": _dumps([self.tile(t) for t in d["tiles"]]),
+            "hinweis": _dumps(self.hinweis(items) if d["hint"] else None),
+            "energie": _dumps(self.energie()),
+            "klima": _dumps([{"n": r["n"], "t": f"{de(r['t'], 1)}°", "h": f"{round(r['h'])} %" if r["h"] is not None else "", "w": r["w"]} for r in K["rooms"][:8]]),
+            "gute_nacht": _dumps({"n": n, "txt": "Alles zu." if not n else f"{n} {'Punkt ist' if n == 1 else 'Punkte sind'} noch offen.",
+                                  "p": gn_rows, "mehr": max(0, n - GN_MAX)}),
+            "haus": _dumps({"modus": mode, "modi": [[k, nm, ic] for k, nm, ic, _f in MODES],
+                            "meldungen": [{"l": a.get("level"), "t": a.get("title", "")} for a in self._alerts()[:4]],
+                            "geraete": [f"{x} fertig" for x in self._done_appliances()[:3]]}),
+        }
+
+    @callback
+    def update(self) -> None:
+        if not self.displays:
+            if self.payloads:
+                self.payloads = {}
+                self._notify()
+            return
+        self._ensure_async()
+        new = {}
+        for d in self.displays:
+            try:
+                new[d["id"]] = self.build(d)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Display %s: Inhalte nicht berechenbar", d["id"])
+        if new != self.payloads:
+            self.payloads = new
+            self._notify()
+
+    def _notify(self) -> None:
+        for cb in list(self._listeners):
+            cb()
+
+    # ---------- Tippen ----------
+    async def async_tap(self, call: ServiceCall) -> None:
+        did, ziel = str(call.data.get("display", "")), str(call.data.get("ziel", ""))
+        d = next((x for x in self.displays if x["id"] == did), None)
+        if d is None:
+            _LOGGER.warning("Display %s ist nicht eingerichtet", did)
+            return
+        if ziel.startswith("gn:") or ziel == "gn_alle":
+            items = self.check_items("nacht")
+            pick = items if ziel == "gn_alle" else [x for x in items if x["eid"] == ziel[3:]]
+            for x in pick:
+                if x["act"]:
+                    domain, service, _lbl = x["act"]
+                    try:
+                        await self.hass.services.async_call(domain, service, {"entity_id": x["eid"]}, blocking=False)
+                    except Exception as err:  # noqa: BLE001 – die übrigen Punkte trotzdem schließen
+                        _LOGGER.warning("Display %s: %s nicht ausgeführt: %s", did, x["eid"], err)
+        elif ziel.startswith("modus:") and ziel[6:] in MODE_INFO:
+            self.monitor.house.set_mode(ziel[6:], f"Display {d['name']}", "display")
+        elif ziel.startswith("kachel:"):
+            try:
+                key = d["tiles"][int(ziel[7:])]
+            except (ValueError, IndexError):
+                return
+            if key.startswith("entity:"):
+                eid = key[7:]
+                if eid.split(".", 1)[0] in ("light", "switch", "fan", "input_boolean", "cover", "lock"):
+                    st = self.hass.states.get(eid)
+                    if eid.startswith("lock."):
+                        svc = ("lock", "lock" if st and st.state != "locked" else "unlock")
+                        await self.hass.services.async_call(*svc, {"entity_id": eid}, blocking=False)
+                    else:
+                        await self.hass.services.async_call("homeassistant", "toggle", {"entity_id": eid}, blocking=False)
+        elif ziel == "geraet_ok":
+            for r in self.monitor.appliances.snapshot():
+                if r.get("state") == "fertig":
+                    self.monitor.appliances.ack(r["id"])
+        self.schedule(0.5)
