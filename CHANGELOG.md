@@ -4,6 +4,15 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Wartungsplaner fürs Haus
+- **Seite „Wartung“** (Navigation, sobald es Aufgaben gibt; Zahl = fällige): wiederkehrende Aufgaben wie Lüftungsfilter, Rauchmelder testen, Kaminkehrer, Heizungswartung, sortiert nach **Fällig**, **Demnächst** und **Später**, mit Intervall, Fälligkeit („seit 6 Tagen fällig“, „fällig in 8 Tagen · 01.12.2026“), zuletzt erledigt (mit Namen), Notiz und Fortschrittsbalken.
+- **„Erledigt“** setzt das nächste Datum und darf jeder Benutzer drücken (nicht nur Administratoren); am selben Tag lässt es sich **rückgängig** machen. Der Stand liegt getrennt vom Layout in `.storage/haus_visualisierung.wartung` und geht live an alle offenen Panels; ein offener Einstellungs-Entwurf überschreibt ihn nicht.
+- **Einstellungen → Technik → Wartungsplaner:** Aufgaben frei anlegen (Titel, alle n Tage/Wochen/Monate/Jahre, zuletzt erledigt, Symbol, Notiz), Vorlagen für Filter, Rauchmelder, Kaminkehrer, Heizung, Wasserfilter, Batterien und Auto/Wallbox, Vorlauf für „Demnächst“ (Standard 14 Tage). Monate und Jahre bleiben am selben Tag (31. → Monatsende).
+- **Meldungen:** neue feste Regel „Wartung fällig“ (Hinweis, Standard an): fällige Aufgaben erscheinen in der Warnkarte und im Alarmmanager und kommen – wie andere Hinweise – per Push, auch ohne offenes Panel. Neuer Websocket-Befehl `haus_visualisierung/maintenance_done`.
+
+### Tests
+- Neue Gruppe `wartung` (23 Prüfungen): Intervalle, Anlegen per Vorlage und eigener Aufgabe, Seite mit Fällig/Demnächst/Später, Zahl an der Navigation, Hinweis in den Meldungen, Erledigt und Rückgängig, Handybreite, Regel aus, Löschen. Backend `test_maintenance.py`: Intervalle, Prüfung der Einstellungen, Erledigt/Rückgängig/Datum, Meldung und Push, Stand gespeichert und bei gelöschten Aufgaben verworfen, Erledigt ohne Administratorrechte.
+
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
 - Neue Einstellung **Einstellungen → Wandpanel → „Bildschirmschoner wandern lassen“** (`wallpanel.wander`, Standard aus) für alle, die den Einbrenn-Schutz wollen (z. B. OLED). LCDs wie im iPad brennen praktisch nicht ein.

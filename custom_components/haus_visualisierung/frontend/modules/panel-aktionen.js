@@ -6,6 +6,7 @@ import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, UPD, withDefaults } from "./grun
 import { rangeSet } from "./verlauf.js";
 import { buildModel } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
+import { maintCall, newTask } from "./wartung.js";
 
 const AktionenMixin = (Base) => class extends Base {
   async _actionExtra(act, t) {
@@ -45,6 +46,7 @@ const AktionenMixin = (Base) => class extends Base {
       case "al-unmute": this._alCall({ key: t.dataset.key, action: "unmute" }, "Stummschaltung aufgehoben"); return;
       case "al-mute": this._alCall(t.dataset.until ? { key: t.dataset.key, action: "mute", until: t.dataset.until } : { key: t.dataset.key, action: "mute", minutes: Number(t.dataset.min) || 60 },
         t.dataset.until === "resolved" ? "Stumm bis behoben" : t.dataset.until === "morning" ? "Stumm bis morgen 7 Uhr" : "1 Stunde stumm"); return;
+      case "wt-done": case "wt-undo": maintCall(this, t.dataset.task, act === "wt-undo"); return;
       case "al-lock": this._call("lock", "lock", { entity_id: t.dataset.eid }); this._toast("Wird verriegelt"); return;
       case "hm-set": {
         const md = t.dataset.mode;
@@ -179,6 +181,8 @@ const AktionenMixin = (Base) => class extends Base {
         if (T) D.alerts.rules = [...D.alerts.rules, { ...T, enabled: true }];
         break;
       }
+      case "s-wt-add": case "s-wt-tpl": D.maintenance.tasks = [...(D.maintenance.tasks || []), newTask(t.dataset.tpl)]; break;
+      case "s-wt-del": D.maintenance.tasks = D.maintenance.tasks.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-link-add": D.links = [...(D.links || []), { title: "", icon: "mdi:link", path: "", embed: true, mode: "theme" }]; break;
       case "s-link-del": D.links = D.links.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-tab": {

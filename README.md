@@ -21,6 +21,8 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
 - **Wetter und Beschattung**: Vorhersage für fünf Tage auf der Seite Beschattung, „morgen“ im Kopf und im
   Bildschirmschoner; Hinweise wie „Morgen 30 °C: Südrollos bis 10:30 schließen“ aus Vorhersage, Sonnenstand am
   Standort und Ausrichtung der Fenster. Geschaltet wird nur auf Tippen, mit Rückfrage.
+- **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
+  Fälligkeit auf der Seite „Wartung“, „Erledigt“ für alle Benutzer, fällige Aufgaben als Hinweis in den Meldungen.
 - **Wandpanel-Modus** je Gerät (auch per `?wandpanel=1`): Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr,
   Wetter, Hausmodus und Meldungen, automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
 - **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Technik, Darstellung) und Sortieren per Ziehen.

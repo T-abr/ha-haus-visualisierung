@@ -8,6 +8,7 @@ import { ALARMS } from "./warnungen.js";
 import { techCfg } from "./technik.js";
 import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 import { solarCfg } from "./prognose.js";
+import { maintSettingsHTML } from "./wartung.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
@@ -15,7 +16,7 @@ const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
   alarme: ["house_mode", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
-  technik: ["heating", "wallbox", "shading"],
+  technik: ["heating", "wallbox", "shading", "maintenance"],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
@@ -93,7 +94,8 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setActions(D)}`;
     else if (tab === "technik") body = `${dlAll}
       ${this._setTech(D)}
-      ${this._setShade(D)}`;
+      ${this._setShade(D)}
+      ${maintSettingsHTML(D)}`;
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
       ${this._setBell(D)}`;
@@ -428,7 +430,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const bi = [["contacts", "Fenster oder Tür offen", "Warnung"], ["window_heating", "Fenster offen, während der Raum heizt", "Warnung"], ["safety", "Melder ausgelöst (Rauch, Wasser, Gas …)", "Alarm"],
       ["locks", "Schloss entriegelt", "Warnung"], ["garage", "Garagentor oder Tor offen", "Warnung"], ["battery", "Batterien kritisch", "Warnung"], ["offline", "Geräte nicht erreichbar", "Hinweis"],
       ["presence_away", "Bewegung erkannt, während niemand zu Hause ist", "Alarm"], ["alarm_panel", "Alarmanlage ausgelöst (z. B. Alarmo)", "Alarm"],
-      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"]];
+      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"], ["maintenance", "Wartung fällig (Wartungsplaner)", "Hinweis"]];
     const allM = HOUSE_MODES.map((x) => x[0]);
     const mchips = (path, cur) => `<span class="mchips" title="gilt in diesen Hausmodi">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
     const bmodes = (k) => (A.modes && A.modes[k] && A.modes[k].length ? A.modes[k] : BUILTIN_MODES[k] || allM);

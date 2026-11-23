@@ -197,6 +197,19 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       if (msg.type.endsWith("/push_info")) return { services: ["mobile_app_iphone_tobias", "mobile_app_pixel", "persistent_notification"], targets: ["mobile_app_iphone_tobias", "mobile_app_pixel"], active: [] };
       if (msg.type.endsWith("/push_test")) { api.log.push(["ws", "push_test", {}]); return { targets: (layout.push && layout.push.targets && layout.push.targets.length) ? layout.push.targets : ["mobile_app_iphone_tobias", "mobile_app_pixel"] }; }
       if (msg.type.endsWith("/save")) { layout = msg.layout; return { layout }; }
+      if (msg.type.endsWith("/maintenance_done")) {
+        // Wartungsplaner: wie websocket.py – heute erledigt bzw. letztes Erledigt zurücknehmen, Stand an das Abo
+        api.log.push(["ws", "maintenance_done", msg]);
+        const tasks = ((layout.maintenance || {}).tasks || []).map((t) => t.id);
+        if (!tasks.includes(msg.task)) { const e = new Error("Aufgabe nicht gefunden"); e.code = "not_found"; throw e; }
+        const M = api.maint, d = new Date(), day = msg.date || `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const e = M[msg.task] = M[msg.task] || { history: [] };
+        if (msg.undo) e.history = e.history.slice(0, -1); else e.history = [...e.history, { date: day, by: "Tobias" }];
+        if (e.history.length) { e.last = e.history[e.history.length - 1].date; e.by = "Tobias"; } else delete M[msg.task];
+        api.maint = { ...M };
+        if (api.layoutCb) setTimeout(() => api.layoutCb({ maintenance: api.maint }), 0);
+        return { maintenance: api.maint };
+      }
       // Recorder: 5-Minuten-Statistik nur für Sensoren mit state_class, sonst Verlauf (wie Home Assistant)
       if (msg.type === "recorder/statistics_during_period") {
         api.log.push(["ws", "statistics", { ids: msg.statistic_ids, period: msg.period, start: msg.start_time, units: msg.units }]);
@@ -260,7 +273,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         };
         throw Object.assign(new Error("No config found."), { code: "config_not_found" });
       }
-      return { version: window.__HAUS_VIS__.VERSION, options: {}, layout };
+      return { version: window.__HAUS_VIS__.VERSION, options: {}, layout, maintenance: api.maint };
     },
     connection: { subscribeMessage: async (cb, msg) => {
       if (msg && msg.type === "weather/subscribe_forecast") {
@@ -269,10 +282,10 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         return () => { api.fcCbs = api.fcCbs.filter((c) => c !== cb); };
       }
       if (msg && msg.type && msg.type.endsWith("/alarms_subscribe")) { api.alarmCb = cb; setTimeout(() => cb(api.alarmSnap), 0); return () => { api.alarmCb = null; }; }
-      setTimeout(() => cb({ version: window.__HAUS_VIS__.VERSION, options: {}, layout }), 0); return () => {}; } },
+      api.layoutCb = cb; setTimeout(() => cb({ version: window.__HAUS_VIS__.VERSION, options: {}, layout, maintenance: api.maint }), 0); return () => {}; } },
   };
   const api = {
-    hass, log: [],
+    hass, log: [], maint: {}, layoutCb: null,
     // Vorhersage (täglich): heute, morgen … – mild; Tests setzen mit fcSet([[hoch, tief, Lage], …]) andere Werte
     forecast: [], fcCbs: [],
     fcSet(rows) {

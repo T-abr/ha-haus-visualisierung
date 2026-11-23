@@ -21,11 +21,12 @@ const DEFAULT_LAYOUT = {
   wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "" },
   shading: { enabled: true, hot: 26, facing: {} },
   forecast: { enabled: true, solar: true, solar_today: "", solar_tomorrow: "" },
+  maintenance: { enabled: true, lead_days: 14, tasks: [] },
   wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
   alerts: {
-    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true, mold: true },
+    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true, mold: true, maintenance: true },
     modes: {}, contacts_min: 0, mold_hum: 65, mold_min: 30, rules: [],
   },
   escalation: { enabled: true, minutes: 5, levels: ["alarm"], push_critical: true },
@@ -54,6 +55,7 @@ const withDefaults = (l) => {
     price: { ...DEFAULT_LAYOUT.price, ...((l && l.price) || {}) },
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
     forecast: { ...DEFAULT_LAYOUT.forecast, ...((l && l.forecast) || {}) },
+    maintenance: { ...DEFAULT_LAYOUT.maintenance, ...((l && l.maintenance) || {}), tasks: Array.isArray(l && l.maintenance && l.maintenance.tasks) ? l.maintenance.tasks : [] },
     shading: { ...DEFAULT_LAYOUT.shading, ...((l && l.shading) || {}), facing: { ...((l && l.shading && l.shading.facing) || {}) } },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },
   };
@@ -348,6 +350,7 @@ const NAV = [
   ["sicherheit", "Sicherheit", "mdi:shield-home"],
   ["alarme", "Alarme", "mdi:bell-ring-outline"],
   ["batterien", "Batterien", "mdi:battery-heart-variant"],
+  ["wartung", "Wartung", "mdi:wrench-clock"],
 ];
 
 /** Aktualisierer je data-u: { watch, run }. Gefüllt in bindungen.js, damit Klima- und Energie-Seite

@@ -8,7 +8,10 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
+from homeassistant.util import dt as dt_util
+
 from .const import DOMAIN, HOUSE_MODES, VERSION
+from .maintenance import parse_date
 
 
 @callback
@@ -24,6 +27,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_set_mode)
     websocket_api.async_register_command(hass, ws_alarm_code)
     websocket_api.async_register_command(hass, ws_action_test)
+    websocket_api.async_register_command(hass, ws_maintenance_done)
 
 
 def _payload(hass: HomeAssistant) -> dict[str, Any]:
@@ -32,6 +36,7 @@ def _payload(hass: HomeAssistant) -> dict[str, Any]:
         "version": VERSION,
         "options": data.get("options", {}),
         "layout": data["store"].data,
+        "maintenance": data["maintenance"].snapshot() if "maintenance" in data else {},
     }
 
 
@@ -63,7 +68,20 @@ def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection
     def _forward(layout: dict) -> None:
         connection.send_message(websocket_api.event_message(msg_id, {"layout": layout}))
 
-    connection.subscriptions[msg_id] = hass.data[DOMAIN]["store"].async_add_listener(_forward)
+    @callback
+    def _forward_maint(state: dict) -> None:
+        connection.send_message(websocket_api.event_message(msg_id, {"maintenance": state}))
+
+    unsubs = [hass.data[DOMAIN]["store"].async_add_listener(_forward)]
+    if "maintenance" in hass.data[DOMAIN]:
+        unsubs.append(hass.data[DOMAIN]["maintenance"].async_add_listener(_forward_maint))
+
+    @callback
+    def _unsub() -> None:
+        for u in unsubs:
+            u()
+
+    connection.subscriptions[msg_id] = _unsub
     connection.send_result(msg_id)
     connection.send_message(websocket_api.event_message(msg_id, _payload(hass)))
 
@@ -208,3 +226,36 @@ async def ws_action_test(hass: HomeAssistant, connection: websocket_api.ActiveCo
         connection.send_error(msg["id"], "invalid", "Aktion unvollständig (Entität, Gruppenadresse oder TTS-Dienst fehlt)")
         return
     connection.send_result(msg["id"], {"calls": calls})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/maintenance_done",
+        vol.Required("task"): str,
+        vol.Optional("date"): str,
+        vol.Optional("undo", default=False): bool,
+    }
+)
+@callback
+def ws_maintenance_done(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Wartungsaufgabe als erledigt markieren (heute oder an einem Datum) bzw. das letzte „Erledigt“ zurücknehmen.
+    Darf jeder Benutzer, nicht nur Administratoren."""
+    data = hass.data[DOMAIN]
+    book = data.get("maintenance")
+    task = msg["task"]
+    tasks = {t["id"] for t in data["store"].data.get("maintenance", {}).get("tasks", [])}
+    if book is None or task not in tasks:
+        connection.send_error(msg["id"], "not_found", "Aufgabe nicht gefunden")
+        return
+    if msg["undo"]:
+        if not book.undo(task):
+            connection.send_error(msg["id"], "not_found", "Nichts zum Zurücknehmen")
+            return
+    else:
+        today = dt_util.now().date()
+        day = parse_date(msg["date"]) if msg.get("date") else today
+        if day is None or day > today:
+            connection.send_error(msg["id"], "invalid", "Ungültiges Datum")
+            return
+        book.done(task, day, connection.user.name if connection.user else None)
+    connection.send_result(msg["id"], {"maintenance": book.snapshot()})

@@ -9,6 +9,7 @@ import { heatHover } from "./technik.js";
 import { climHover, sparkHover } from "./klima.js";
 import { enHover } from "./energie.js";
 import { fcListen, fcUnlisten } from "./wetter.js";
+import { MAINT, maintDueCount, maintOn, maintPageHTML, setMaint } from "./wartung.js";
 import { LOGO, STYLES } from "./stile.js";
 import { HvBase } from "./basis.js";
 import { KlingelMixin } from "./panel-klingel.js";
@@ -194,6 +195,12 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     this._sub = this._hass.connection
       .subscribeMessage((msg) => {
         if (msg.version) this._serverVersion = msg.version;
+        if (msg.maintenance) {
+          // Wartungsplaner: neuer Erledigt-Stand (auch von anderen Geräten); gleicher Stand wie nach eigenem Tipp → nichts tun
+          const same = JSON.stringify(msg.maintenance) === JSON.stringify(MAINT);
+          setMaint(msg.maintenance);
+          if (!same && !msg.layout && this._view !== "einstellungen") { this._dirty = true; this._schedule(); }
+        }
         if (msg.layout) {
           this._layout = withDefaults(msg.layout);
           this._startCams();
@@ -257,9 +264,11 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     if (view === "einstellungen" && !isAdmin) view = "overview";
     const active = view === "raum" ? "overview" : view;
 
-    // Energie nur, wenn es Energiedaten gibt
-    const navList = NAV.filter(([k]) => k !== "energie" || (this._model && this._model.energy));
-    const nav = navList.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : ""}<span>${t}</span></button>`).join("");
+    // Energie nur, wenn es Energiedaten gibt; Wartung nur mit Aufgaben (Zahl = fällige)
+    const navList = NAV.filter(([k]) => (k !== "energie" || (this._model && this._model.energy)) && (k !== "wartung" || maintOn(L)));
+    const nDue = maintOn(L) ? maintDueCount(L) : 0;
+    const badge = (k) => (k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : k === "wartung" && nDue ? `<i class="nbadge on wbadge">${nDue}</i>` : "");
+    const nav = navList.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${badge(k)}<span>${t}</span></button>`).join("");
     const links = (L.links || []).filter((l) => l.path).map((l) => `<button class="nav${view === "extern" && panelPathOf(l.path) === this._arg ? " active" : ""}" data-act="link" data-path="${esc(l.path)}" title="${esc(l.title)}">${icon(l.icon || "mdi:link")}<span>${esc(l.title)}</span></button>`).join("");
 
     let body;
@@ -404,6 +413,7 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
       case "sicherheit": return d ? this._vSecurityDense() : this._vSecurity();
       case "alarme": return this._vAlarme();
       case "batterien": return d ? this._vBatteriesDense() : this._vBatteries();
+      case "wartung": return maintPageHTML(this._layout, !!(this._hass.user && this._hass.user.is_admin));
       case "einstellungen": return this._vSettings();
       case "extern": return `<div class="extwrap"><div class="extload">${icon("mdi:loading", "spin")}Lade …</div></div>`;
       default: return this._vOverview();

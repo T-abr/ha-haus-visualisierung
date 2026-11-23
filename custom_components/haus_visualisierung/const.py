@@ -81,6 +81,7 @@ DEFAULT_LAYOUT: dict = {
             "presence_away": True,     # Bewegung/Präsenz, während niemand zu Hause ist
             "alarm_panel": True,       # Alarmanlage (z. B. Alarmo) ausgelöst
             "mold": True,              # Schimmelrisiko: Raumfeuchte zu hoch – jetzt lüften
+            "maintenance": True,       # Wartungsplaner: Aufgabe fällig
         },
         "modes": {},                   # {feste Regel: [Hausmodi]} – fehlt = Standard (BUILTIN_MODES)
         "contacts_min": 0,             # Fenster erst nach … Minuten melden
@@ -133,6 +134,11 @@ DEFAULT_LAYOUT: dict = {
     "forecast": {                  # Karte „Vorhersage“ auf der Übersicht: Wetter und Solarprognose
         "enabled": True, "solar": True,
         "solar_today": "", "solar_tomorrow": "",   # leer = automatisch (Forecast.Solar, Solcast)
+    },
+    "maintenance": {               # Wartungsplaner: wiederkehrende Aufgaben (erledigt-Daten: maintenance.py)
+        "enabled": True,
+        "lead_days": 14,               # „demnächst“ ab … Tagen vor der Fälligkeit
+        "tasks": [],                   # [{id, title, icon, interval, unit (tage|wochen|monate|jahre), since, note}]
     },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",
