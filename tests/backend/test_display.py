@@ -7,11 +7,11 @@ from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_mock_service
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 from test_push import _ent, _setup, _tick
 
 from custom_components.haus_visualisierung.const import DOMAIN
-from custom_components.haus_visualisierung.display import PROTOCOL, bin_of, de, kw
+from custom_components.haus_visualisierung.display import PROTOCOL, bin_of, de, device_service, kw, sanitize_displays
 from custom_components.haus_visualisierung.store import sanitize
 
 PWR = {"device_class": "power", "unit_of_measurement": "W"}
@@ -26,7 +26,7 @@ def test_sanitize() -> None:
     ] + [{"name": f"d{i}"} for i in range(9)]})["displays"]
     a, b, c = out[:3]
     assert a == {"id": "flur_oben", "name": "Flur Oben", "pages": ["start", "klima", "haus"], "tiles": ["pv_jetzt", "entity:light.flur"],
-                 "hint": False, "bright_day": 100, "bright_night": 0, "wake": True}
+                 "hint": False, "bright_day": 100, "bright_night": 0, "wake": True, "device": ""}
     assert b["id"] == "flur_oben_2" and b["tiles"] == ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"] and b["pages"] == ["start"]
     assert c["id"] == "display"
     assert len(out) == 6
@@ -147,3 +147,99 @@ async def test_display_flow(hass: HomeAssistant, freezer: FrozenDateTimeFactory)
     await store.async_save({**store.data, "displays": []})
     await _tick(hass)
     assert hass.states.get(eid) is None
+
+
+def test_device_field() -> None:
+    out = sanitize_displays([{"name": "A", "device": "haus-display-a1b2c3"}, {"name": "B", "device": "haus-display-a1b2c3"},
+                             {"name": "C", "device": "Böse Name!"}, {"name": "D"}])
+    assert [d["device"] for d in out] == ["haus-display-a1b2c3", "", "", ""]
+    assert device_service("haus-display-a1b2c3") == "haus_display_a1b2c3_haus_daten"
+
+
+async def test_firmware_served(hass: HomeAssistant, hass_client) -> None:
+    """Mitgelieferte Firmware: Version im Assistenten, Manifest und Bin über den statischen Pfad (ESP Web Tools)."""
+    from custom_components.haus_visualisierung.display_setup import FIRMWARE_URL, firmware_version
+
+    await _setup(hass)
+    ver = hass.data[DOMAIN]["firmware"]
+    assert ver and ver == await hass.async_add_executor_job(firmware_version)
+    client = await hass_client()
+    r = await client.get(f"{FIRMWARE_URL}/manifest.json")
+    assert r.status == 200
+    man = json.loads(await r.text())
+    assert man["version"] == ver and man["builds"][0]["chipFamily"] == "ESP32-S3"
+    part = man["builds"][0]["parts"][0]["path"]
+    r = await client.get(f"{FIRMWARE_URL}/{part}")
+    assert r.status == 200 and (await r.read())[:1] == b"\xe9"  # ESP-Abbild beginnt mit 0xE9
+
+
+async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monkeypatch) -> None:
+    """Firmware 0.2: Gerät finden, übernehmen, zuordnen; Inhalte per Push, „hallo“, Tipp mit Gerätenamen."""
+    calls = async_mock_service(hass, "esphome", "haus_display_a1b2c3_haus_daten")
+    fremd = async_mock_service(hass, "esphome", "haus_display_ffffff_haus_daten")
+    monitor = await _setup(hass)
+    store = hass.data[DOMAIN]["store"]
+    entry = MockConfigEntry(domain="esphome", title="Haus Display a1b2c3", data={"device_name": "haus-display-a1b2c3", "host": "10.0.0.5"})
+    entry.add_to_hass(hass)
+    MockConfigEntry(domain="esphome", title="Steckdose", data={"device_name": "steckdose", "host": "10.0.0.6"}).add_to_hass(hass)
+    neu = MockConfigEntry(domain="esphome", title="Haus Display b2c3d4", data={"device_name": "haus-display-b2c3d4", "host": "10.0.0.7"})
+    monkeypatch.setattr(hass.config_entries.flow, "async_progress_by_handler", lambda handler, **kw: [
+        {"flow_id": "f1", "handler": "esphome", "context": {"source": "zeroconf", "title_placeholders": {"name": "Haus Display b2c3d4"}}},
+        {"flow_id": "f2", "handler": "esphome", "context": {"source": "zeroconf", "title_placeholders": {"name": "wohnzimmer-licht"}}}])
+
+    async def _configure(flow_id, user_input=None):
+        assert flow_id == "f1" and user_input == {}
+        neu.add_to_hass(hass)
+        return {"type": "create_entry", "result": neu}
+
+    monkeypatch.setattr(hass.config_entries.flow, "async_configure", _configure)
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": f"{DOMAIN}/display_devices"})
+    res = (await ws.receive_json())["result"]
+    assert res["firmware"]["manifest"].endswith("/manifest.json")
+    devs = {d["name"]: d for d in res["devices"]}
+    assert set(devs) == {"haus-display-a1b2c3", "haus-display-b2c3d4"}
+    assert devs["haus-display-a1b2c3"]["ready"] is True and devs["haus-display-a1b2c3"]["allowed"] is False
+    assert devs["haus-display-b2c3d4"]["flow_id"] == "f1" and devs["haus-display-b2c3d4"]["entry_id"] is None
+
+    # Übernehmen: vorhandenes Gerät (nur Aktionen erlauben) und gefundenes (Erkennung bestätigen)
+    await ws.send_json({"id": 2, "type": f"{DOMAIN}/display_adopt", "entry_id": entry.entry_id})
+    assert (await ws.receive_json())["result"] == {"ok": True, "entry_id": entry.entry_id, "name": "haus-display-a1b2c3"}
+    assert entry.options["allow_service_calls"] is True
+    await ws.send_json({"id": 3, "type": f"{DOMAIN}/display_adopt", "flow_id": "f1"})
+    assert (await ws.receive_json())["result"]["name"] == "haus-display-b2c3d4"
+    assert neu.options["allow_service_calls"] is True
+    await ws.send_json({"id": 4, "type": f"{DOMAIN}/display_adopt", "entry_id": "gibtsnicht"})
+    assert (await ws.receive_json())["result"]["ok"] is False
+
+    # Zuordnen → alle Bereiche gehen ans Gerät, danach nur Änderungen
+    await store.async_save({"displays": [{"name": "Flur", "device": "haus-display-a1b2c3"}]})
+    await _tick(hass)
+    await _tick(hass)
+    sent = {c.data["bereich"]: c.data["daten"] for c in calls}
+    assert sent["protokoll"] == str(PROTOCOL) and json.loads(sent["einstellungen"])["name"] == "Flur"
+    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "haus"}
+    n = len(calls)
+    await _tick(hass, 31)
+    assert len(calls) == n
+
+    await ws.send_json({"id": 5, "type": f"{DOMAIN}/display_devices"})
+    assert {d["name"]: d["display"] for d in (await ws.receive_json())["result"]["devices"]}["haus-display-a1b2c3"] == "flur"
+
+    # „hallo“ nach dem Verbinden → alles neu; Tipp mit Gerätenamen wirkt auf das zugeordnete Display
+    await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "hallo"}, blocking=True)
+    await hass.async_block_till_done()
+    assert len(calls) == n + 9
+    await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "modus:abwesend"}, blocking=True)
+    await _tick(hass)
+    assert monitor.house.mode == "abwesend"
+    assert json.loads([c.data["daten"] for c in calls if c.data["bereich"] == "kopf"][-1])["modus"]["k"] == "abwesend"
+
+    # Fremdes Gerät meldet sich → „nicht zugeordnet“; Zuordnung entfernen → Gerät zeigt das wieder
+    await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-ffffff", "ziel": "hallo"}, blocking=True)
+    await hass.async_block_till_done()
+    assert [(c.data["bereich"], c.data["daten"]) for c in fremd] == [("protokoll", "")]
+    await store.async_save({**store.data, "displays": [{"name": "Flur"}]})
+    await _tick(hass)
+    assert (calls[-1].data["bereich"], calls[-1].data["daten"]) == ("protokoll", "")

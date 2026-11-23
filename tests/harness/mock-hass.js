@@ -217,6 +217,18 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       if (msg.type.endsWith("/push_info")) return { services: ["mobile_app_iphone_tobias", "mobile_app_pixel", "persistent_notification"], targets: ["mobile_app_iphone_tobias", "mobile_app_pixel"], active: [] };
       if (msg.type.endsWith("/push_test")) { api.log.push(["ws", "push_test", {}]); return { targets: (layout.push && layout.push.targets && layout.push.targets.length) ? layout.push.targets : ["mobile_app_iphone_tobias", "mobile_app_pixel"] }; }
       if (msg.type.endsWith("/save")) { layout = msg.layout; return { layout }; }
+      if (msg.type.endsWith("/display_devices")) {
+        const own = Object.fromEntries(((layout.displays) || []).filter((d) => d.device).map((d) => [d.device, d.id]));
+        return { devices: api.dispDevices.map((x) => ({ ...x, display: own[x.name] || null })), firmware: api.dispFirmware, service: "haus_daten" };
+      }
+      if (msg.type.endsWith("/display_adopt")) {
+        api.log.push(["ws", "display_adopt", msg]);
+        if (msg.host) return { ok: false, error: "Gerät nicht erreichbar (cannot_connect)" };
+        const d = api.dispDevices.find((x) => (msg.flow_id && x.flow_id === msg.flow_id) || (msg.entry_id && x.entry_id === msg.entry_id));
+        if (!d) return { ok: false, error: "Gerät nicht gefunden" };
+        Object.assign(d, { flow_id: null, entry_id: d.entry_id || `e-${d.name}`, allowed: true, ready: true, version: "0.2.0", host: "192.168.1.50" });
+        return { ok: true, entry_id: d.entry_id, name: d.name };
+      }
       if (msg.type.endsWith("/maintenance_done")) {
         // Wartungsplaner: wie websocket.py – heute erledigt bzw. letztes Erledigt zurücknehmen, Stand an das Abo
         api.log.push(["ws", "maintenance_done", msg]);
@@ -338,6 +350,9 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       return base + amp * (ph(t) - ph(Date.now())) + (hum ? 1.5 : 0.15) * Math.sin(t / 2.7e6);
     },
     /* nachgebautes Alarm-Backend (alarms.py) */
+    // Wanddisplays: gefundene Geräte und mitgelieferte Firmware (wie display_setup.py)
+    dispDevices: [{ name: "haus-display-a1b2c3", title: "Haus Display a1b2c3", flow_id: "f1", entry_id: null, host: "", online: true, allowed: false, ready: false, version: "", display: null, hello: false, disabled: false }],
+    dispFirmware: { version: "0.2.0", manifest: "/haus_visualisierung_static/firmware/1.13.0/manifest.json", bin: "/haus_visualisierung_static/firmware/1.13.0/haus-display.factory.bin" },
     alarmSnap: (() => { try { const s = JSON.parse(sessionStorage.getItem("hv-alarms")); if (s) return s; } catch (e) { /* neu */ } return { rev: 0, alarms: {}, log: [], today: { alarm: 0, warn: 0, info: 0 }, mode: { mode: "zuhause", since: 0, by: "Automatik", panel: null, sync: false, code: false } }; })(),
     alarmPush() { api.alarmSnap = { ...api.alarmSnap, rev: api.alarmSnap.rev + 1 }; try { sessionStorage.setItem("hv-alarms", JSON.stringify(api.alarmSnap)); } catch (e) { /* egal */ } if (api.alarmCb) api.alarmCb(api.alarmSnap); },
     alarmAdd(key, level, title, extra = {}) {

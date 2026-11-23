@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from homeassistant.util import dt as dt_util
 
+from . import display_setup
 from .const import DOMAIN, HOUSE_MODES, VERSION
 from .maintenance import parse_date
 
@@ -30,6 +31,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_presence_sim)
     websocket_api.async_register_command(hass, ws_appliance_ack)
     websocket_api.async_register_command(hass, ws_maintenance_done)
+    display_setup.async_register(hass)
 
 
 def _payload(hass: HomeAssistant) -> dict[str, Any]:

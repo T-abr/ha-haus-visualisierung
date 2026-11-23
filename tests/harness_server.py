@@ -1,7 +1,7 @@
 """Gemeinsamer Webserver und Browserstart für die Bedien- und Screenshot-Prüfungen.
 
 Der Server liefert tests/harness/ aus. Unter /haus-visualisierung.js und /modules/… liefert er
-direkt das echte Frontend der Integration (Einstiegspunkt und Module), damit nie eine veraltete
+direkt das echte Frontend der Integration (Einstiegspunkt, Module und vendor/), damit nie eine veraltete
 Kopie getestet wird. Es liegt bewusst auf derselben Ebene wie das Harness, damit relative Importe
 (z. B. ./test-panels.js) wie bisher aufgelöst werden.
 """
@@ -15,6 +15,7 @@ HARNESS = Path(__file__).parent / "harness"
 FRONTEND = Path(__file__).parents[1] / "custom_components" / "haus_visualisierung" / "frontend"
 PANEL = FRONTEND / "haus-visualisierung.js"
 MODULES = FRONTEND / "modules"
+VENDOR = FRONTEND / "vendor"
 
 
 class _Handler(http.server.SimpleHTTPRequestHandler):
@@ -25,6 +26,10 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         if p.startswith("/modules/"):
             f = (MODULES / p[len("/modules/"):]).resolve()
             if f.parent == MODULES.resolve():
+                return str(f)
+        if p.startswith("/vendor/"):
+            f = (VENDOR / p[len("/vendor/"):]).resolve()
+            if VENDOR.resolve() in f.parents:
                 return str(f)
         return super().translate_path(path)
 

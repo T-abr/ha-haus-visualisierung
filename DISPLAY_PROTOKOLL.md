@@ -10,11 +10,27 @@ meldet Tipps zurück.
 
 ## Einrichten
 
-1. Visualisierung → Einstellungen → **Displays** → „Display hinzufügen“, Name vergeben, Seiten und Kacheln wählen,
-   speichern. Die Kennung (z. B. `flur`) steht unter dem Namen.
-2. Die Integration legt `sensor.haus_display_<kennung>` an.
-3. Firmware aus ha-haus-display flashen und dort `display_id: <kennung>` eintragen.
-4. In Home Assistant beim ESPHome-Gerät „Darf Home-Assistant-Aktionen ausführen“ einschalten (sonst kommen Tipps nicht an).
+Alles im Panel unter Einstellungen → **Displays** → „Neues Gerät einrichten“ (ab 1.13.0):
+
+1. Firmware aus dem Browser flashen (ESP Web Tools; die Firmware liegt der Integration unter
+   `custom_components/haus_visualisierung/firmware/` bei und wird unter
+   `/haus_visualisierung_static/firmware/<version>/` ausgeliefert). Braucht Chrome oder Edge am Computer und HTTPS;
+   sonst Firmware herunterladen und z. B. mit ESPHome Web flashen.
+2. WLAN per Improv im Flash-Dialog (oder über den Hotspot des Geräts).
+3. „Übernehmen“: bestätigt die ESPHome-Erkennung (bzw. fügt per IP hinzu) und setzt beim ESPHome-Eintrag die Option
+   „Darf Home-Assistant-Aktionen ausführen“ (`allow_service_calls`).
+4. Gerät einem Display zuordnen (Feld `device` im Layout) – die Integration schickt sofort alle Inhalte.
+
+Firmware 0.1.x (Kennung fest eingebaut, `display_id`) läuft weiter: Sie abonniert `sensor.haus_display_<kennung>`.
+
+## Übertragung
+
+- **Firmware ab 0.2.0 (Push)**: Die Firmware stellt die ESPHome-API-Aktion `haus_daten(bereich: string, daten: string)`
+  bereit, in Home Assistant `esphome.<gerätename mit _>_haus_daten`. Die Integration ruft sie je Bereich auf
+  (`bereich` = Name eines Attributs unten, `daten` = derselbe JSON-Text; `protokoll` als Zahl im Text). Nur geänderte
+  Bereiche werden geschickt; alles neu nach `hallo` (siehe Dienst) und wenn ESPHome den Dienst neu anmeldet.
+  Verliert ein Gerät seine Zuordnung, bekommt es `protokoll` = `""` und zeigt „Noch nicht zugeordnet“.
+- **Firmware 0.1.x (Abo)**: Attribute der Entität unten über `homeassistant`-Textsensoren.
 
 ## Entität `sensor.haus_display_<kennung>`
 
@@ -118,8 +134,10 @@ Höchstens 8 Punkte in `p`, `mehr` = weitere. Gruppen und Reihenfolge wie im Pan
 
 ```yaml
 action: haus_visualisierung.display_tap
-data: {display: flur, ziel: "gn:light.kueche"}
+data: {display: haus-display-a1b2c3, ziel: "gn:light.kueche"}
 ```
+
+`display` ist der Gerätename (Firmware ab 0.2.0) oder die Kennung (0.1.x).
 
 | `ziel` | Wirkung |
 |---|---|
@@ -128,6 +146,7 @@ data: {display: flur, ziel: "gn:light.kueche"}
 | `modus:<zuhause\|nacht\|abwesend\|urlaub>` | Hausmodus setzen (die Firmware zeigt vorher den Gute-Nacht-Check, wenn `gute_nacht.n > 0`) |
 | `kachel:<0–3>` | Kachel angetippt (schaltet bei `entity:`-Kacheln) |
 | `geraet_ok` | fertige Haushaltsgeräte quittieren |
+| `hallo` | Gerät ist (neu) verbunden: alle Bereiche neu schicken; nicht zugeordnetes Gerät bekommt `protokoll` = `""` |
 
 Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
@@ -138,4 +157,5 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
-| 1 | ab 1.12.0 | ab 0.1.0 |
+| 1 (Push, Einrichten im Panel) | ab 1.13.0 | ab 0.2.0 |
+| 1 (Abo der Entität) | ab 1.12.0 | 0.1.x |

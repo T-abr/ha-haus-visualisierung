@@ -2042,6 +2042,48 @@ def displays():
     pg.set_viewport_size({"width": 1440, "height": 1000})
 
 
+@gruppe("displays")
+def displays_einrichten():
+    # ---------- Wanddisplays: Assistent (Flashen, Übernehmen, Zuordnen) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=einstellungen/displays"); pg.wait_for_timeout(700)
+    wiz = pg.locator(f"{P} .dwiz")
+    check("WE: Assistent mit drei Schritten", wiz.count() == 1 and wiz.locator(".dstep").count() == 3)
+    # Testseite läuft über http://localhost (sicherer Kontext); Chromium hat Web Serial → Installationsknopf
+    serial = pg.evaluate("'serial' in navigator && window.isSecureContext")
+    check("WE: Flashen aus dem Browser bzw. Hinweis mit Download", (wiz.locator("esp-web-install-button").count() == 1) if serial
+          else (wiz.locator(".dwarn").count() == 1))
+    check("WE: Firmware zum Herunterladen", wiz.locator("a[download][href$='factory.bin']").count() == 1)
+    if serial:
+        pg.wait_for_function("!!customElements.get('esp-web-install-button')", timeout=5000)
+    check("WE: ESP Web Tools mitgeliefert und geladen", not serial or pg.evaluate("!!customElements.get('esp-web-install-button')"))
+    dev = wiz.locator(".ddev")
+    check("WE: gefundenes Gerät mit Übernehmen", dev.count() == 1 and "haus-display-a1b2c3" in dev.inner_text()
+          and "Im Netz gefunden" in dev.inner_text() and dev.locator("[data-act=s-disp-adopt]").count() == 1)
+    dev.locator("[data-act=s-disp-adopt]").click(); pg.wait_for_timeout(400)
+    log = pg.evaluate("window.__api.log.filter(l => l[1] === 'display_adopt').map(l => l[2])")
+    check("WE: Übernehmen bestätigt die Erkennung", log and log[-1].get("flow_id") == "f1")
+    check("WE: danach verbunden mit Firmware-Version", "verbunden · Firmware 0.2.0" in wiz.locator(".ddev").inner_text()
+          and wiz.locator(".ddev [data-act=s-disp-adopt]").count() == 0)
+    # Zuordnen: neues Display aus dem Gerät, sofort gespeichert
+    wiz.locator("[data-disp-assign='haus-display-a1b2c3']").select_option("neu"); pg.wait_for_timeout(400)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.displays)")
+    check("WE: neues Display mit Gerät gespeichert", len(saved) == 1 and saved[0]["device"] == "haus-display-a1b2c3")
+    check("WE: Karte zeigt das Gerät", "Gerät haus-display-a1b2c3" in pg.locator(f"{P} .dcard").inner_text())
+    pg.locator(f"{P} [data-disp-assign='haus-display-a1b2c3']").select_option(""); pg.wait_for_timeout(400)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.displays)")
+    check("WE: Zuordnung aufgehoben", len(saved) == 1 and saved[0]["device"] == "")
+    # Per IP: Fehler wird gemeldet
+    pg.locator(f"{P} [data-disp-host]").fill("192.168.9.9")
+    pg.locator(f"{P} [data-act=s-disp-ip]").click(); pg.wait_for_timeout(400)
+    toast = pg.locator(f"{P} .toast")
+    check("WE: Fehler beim Hinzufügen per IP angezeigt", toast.count() == 1 and "nicht erreichbar" in toast.inner_text())
+    pg.set_viewport_size({"width": 390, "height": 844})
+    pg.goto(dense + "?view=einstellungen/displays"); pg.wait_for_timeout(600)
+    check("WE: Handy ohne Überbreite", not pg.evaluate(WIDE))
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+
+
 def auswahl(args):
     """Abschnitte zu den Namen (Gruppe oder Abschnitt) auf der Kommandozeile; ohne Namen alle."""
     if not args:

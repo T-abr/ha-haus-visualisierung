@@ -1,9 +1,12 @@
 /* Haus Visualisierung – Wanddisplays (z. B. 4-Zoll-ESP32-S3 mit ESPHome): Reiter „Displays“ in den Einstellungen.
  * Das Display ist ein Client der Visualisierung: Seiten und Kacheln stehen hier (Layout-Schlüssel „displays“), die
- * Inhalte rechnet das Backend (display.py) und stellt sie je Display als sensor.haus_display_<id> bereit.
+ * Inhalte rechnet das Backend (display.py) und schickt sie ans zugeordnete Gerät (Feld „device“).
+ * Einrichten ohne Handarbeit: Assistent oben im Reiter – Firmware aus dem Browser flashen (ESP Web Tools, mitgeliefert
+ * unter vendor/), WLAN per Improv, Gerät übernehmen und zuordnen (display_setup.py).
  * Schnittstelle: DISPLAY_PROTOKOLL.md; Firmware: Repository ha-haus-display. */
 
 import { entName, esc, icon } from "./grundlagen.js";
+import { DOMAIN } from "./version.js";
 
 /* Muss zu display.py passen (TILES, PAGES, Protokoll) */
 const DISPLAY_PROTOCOL = 1;
@@ -22,7 +25,7 @@ function newDisplay(list) {
   let id = "flur", n = 2;
   while (ids.has(id)) id = `flur_${n++}`;
   return { id, name: n > 2 ? `Flur ${n - 1}` : "Flur", pages: ["start", "energie", "klima", "haus"], tiles: [...DEFAULT_TILES],
-    hint: true, bright_day: 80, bright_night: 10, wake: true };
+    hint: true, bright_day: 80, bright_night: 10, wake: true, device: "" };
 }
 
 /** Seite ein- bzw. ausschalten (Start bleibt immer), Reihenfolge wie DISPLAY_PAGES */
@@ -57,7 +60,8 @@ function displaySettingsHTML(ctx, D) {
   };
   const rows = list.map((d, i) => {
     const eid = `sensor.haus_display_${d.id}`, st = h.states[eid];
-    const status = !saved.has(d.id) ? "noch nicht gespeichert" : st ? `${eid} · Protokoll ${esc(st.state)}` : `${eid} fehlt`;
+    const status = (!saved.has(d.id) ? "noch nicht gespeichert" : st ? `${eid} · Protokoll ${esc(st.state)}` : `${eid} fehlt`)
+      + (d.device ? ` · Gerät <code>${esc(d.device)}</code>` : " · kein Gerät zugeordnet");
     const pages = DISPLAY_PAGES.map(([k, t]) => `<button class="pbtn sm dpage${(d.pages || []).includes(k) ? " on" : ""}" data-act="s-disp-page" data-i="${i}" data-page="${k}" ${k === "start" ? "disabled" : ""}>${t}</button>`).join("");
     return `<div class="dcard" data-disp="${esc(d.id)}">
       <div class="srow"><span class="lbl">${icon("mdi:tablet-dashboard")} <b>${esc(d.name || d.id)}</b><small>Kennung <code>${esc(d.id)}</code> · ${status}</small></span>
@@ -77,11 +81,157 @@ function displaySettingsHTML(ctx, D) {
   }).join("");
   const ents = Object.keys(h.states).filter((e) => /^(light|switch|cover|lock|fan|input_boolean|sensor|binary_sensor)\./.test(e)).sort();
   return `<style>${DISPLAY_CSS}</style><datalist id="dl-all">${ents.map((e) => `<option value="${esc(e)}">${esc(entName(h, e))}</option>`).join("")}</datalist>
+    ${wizardHTML(ctx, D)}
     <div class="set glass"><h2>${icon("mdi:tablet-dashboard")}Wanddisplays</h2>
-      <p class="hint">Kleine Displays an der Wand, z. B. ein 4-Zoll-ESP32-S3 (480 × 480) mit ESPHome. Das Display zeigt die Inhalte der Visualisierung im gleichen Stil und wird hier eingerichtet; Änderungen wirken nach dem Speichern sofort, ohne neu zu flashen. Je Display gibt es die Entität <code>sensor.haus_display_&lt;kennung&gt;</code> (Protokoll ${DISPLAY_PROTOCOL}). Die Firmware und die Anleitung stehen im Repository <a href="${FIRMWARE_URL}" target="_blank" rel="noreferrer">ha-haus-display</a>; dort die Kennung als <code>display_id</code> eintragen.</p>
+      <p class="hint">Kleine Displays an der Wand, z. B. ein 4-Zoll-ESP32-S3 (480 × 480) mit ESPHome. Das Display zeigt die Inhalte der Visualisierung im gleichen Stil; Seiten, Kacheln und Helligkeit wirken nach dem Speichern sofort, ohne neu zu flashen. Je Display gibt es die Entität <code>sensor.haus_display_&lt;kennung&gt;</code> (Protokoll ${DISPLAY_PROTOCOL}). Firmware und Hintergründe: Repository <a href="${FIRMWARE_URL}" target="_blank" rel="noreferrer">ha-haus-display</a>.</p>
       ${rows || '<p class="hint">Noch kein Display eingerichtet.</p>'}
       <div class="srow"><button class="pbtn" data-act="s-disp-add" ${list.length >= 6 ? "disabled" : ""}>${icon("mdi:plus")}Display hinzufügen</button></div>
     </div>`;
+}
+
+/* ---------- Assistent: Gerät flashen, übernehmen, zuordnen ---------- */
+const EWT_URL = new URL("../vendor/esp-web-tools/install-button.js", import.meta.url).href;
+const ESPHOME_WEB = "https://web.esphome.io";
+const POLL_MS = 5000;
+
+/** Zustand des Assistenten am Panel (überlebt Neuaufbauten) */
+const wiz = (ctx) => (ctx._dw = ctx._dw || { devices: null, firmware: undefined, busy: "", timer: 0, sig: "", ewt: null });
+
+/** Ist Flashen aus diesem Browser möglich? (Web Serial: Chrome/Edge am Computer, nur über HTTPS) */
+function serialSupport() {
+  const secure = typeof window !== "undefined" && window.isSecureContext;
+  const serial = typeof navigator !== "undefined" && "serial" in navigator;
+  return { ok: secure && serial, secure, serial };
+}
+
+function flashHTML(W) {
+  const fw = W.firmware;
+  if (fw === undefined) return '<p class="hint">Lade …</p>';
+  if (!fw) return `<p class="hint">In dieser Version der Integration ist keine Firmware enthalten. Firmware selbst bauen: Repository <a href="${FIRMWARE_URL}" target="_blank" rel="noreferrer">ha-haus-display</a>.</p>`;
+  const S = serialSupport();
+  const why = !S.secure ? "Flashen aus dem Browser braucht eine HTTPS-Verbindung zu Home Assistant (z. B. über Home Assistant Cloud oder eine eigene HTTPS-Adresse); über http:// sperrt der Browser den USB-Zugriff."
+    : !S.serial ? "Flashen aus dem Browser geht nur in Chrome oder Edge am Computer (Web Serial), nicht in Firefox, Safari oder der App." : "";
+  const dl = `<a class="pbtn sm" href="${esc(fw.bin)}" download="haus-display-${esc(fw.version)}.factory.bin">${icon("mdi:download")}Firmware herunterladen</a>`;
+  return S.ok
+    ? `<div class="dflash"><esp-web-install-button manifest="${esc(fw.manifest)}"><button slot="activate" class="pbtn">${icon("mdi:usb")}Firmware ${esc(fw.version)} installieren</button></esp-web-install-button>${dl}</div>`
+    : `<p class="dwarn">${icon("mdi:alert-outline")}<span>${why} Alternativ die Firmware herunterladen und mit <a href="${ESPHOME_WEB}" target="_blank" rel="noreferrer">ESPHome Web</a> aufspielen (läuft auch ohne Home Assistant, braucht aber ebenfalls Chrome oder Edge) oder diese Seite in Chrome/Edge über HTTPS öffnen.</span></p><div class="dflash">${dl}</div>`;
+}
+
+function devState(x) {
+  if (x.flow_id) return ["Im Netz gefunden", "warn"];
+  if (x.disabled) return ["in ESPHome deaktiviert", "dim"];
+  if (!x.allowed) return ["in ESPHome, darf noch keine Aktionen ausführen", "warn"];
+  if (!x.online) return ["offline", "dim"];
+  return [`verbunden${x.version ? ` · Firmware ${esc(x.version)}` : ""}`, "ok"];
+}
+
+function devicesHTML(ctx, D) {
+  const W = wiz(ctx), list = (D && D.displays) || [];
+  if (W.devices === null) return '<p class="hint">Suche Geräte …</p>';
+  const rows = W.devices.map((x) => {
+    const [txt, cls] = devState(x);
+    const key = x.flow_id ? `flow:${x.flow_id}` : `entry:${x.entry_id}`;
+    const adopt = x.flow_id || !x.allowed
+      ? `<button class="pbtn sm" data-act="s-disp-adopt" ${x.flow_id ? `data-flow="${esc(x.flow_id)}"` : `data-entry="${esc(x.entry_id)}"`} ${W.busy ? "disabled" : ""}>${W.busy === key ? "Übernehme …" : `${icon("mdi:check")}Übernehmen`}</button>` : "";
+    const cur = list.findIndex((d) => d.device === x.name);
+    const opts = [`<option value="">– keinem Display –</option>`, ...list.map((d, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${esc(d.name || d.id)}</option>`),
+      list.length < 6 ? `<option value="neu">+ neues Display anlegen</option>` : ""].join("");
+    return `<div class="ddev"><span class="lbl">${icon("mdi:tablet-dashboard")} <b>${esc(x.name)}</b><small class="${cls}">${txt}${x.host ? ` · ${esc(x.host)}` : ""}</small></span>
+      ${adopt}<select class="inp" data-disp-assign="${esc(x.name)}" title="Display zuordnen">${opts}</select></div>`;
+  }).join("");
+  return rows || `<p class="hint">Noch kein Gerät gefunden. Nach dem Flashen und WLAN dauert es bis zu einer Minute. Steht das Gerät in einem anderen Netz (VLAN), hier seine IP-Adresse eintragen.</p>`;
+}
+
+function wizardHTML(ctx, D) {
+  const W = wiz(ctx);
+  setTimeout(() => wizardStart(ctx), 0);
+  return `<div class="set glass dwiz"><h2>${icon("mdi:auto-fix")}Neues Gerät einrichten</h2>
+    <div class="dstep"><span class="dnum">1</span><div class="dbody"><b>Firmware aufspielen</b>
+      <small>Display per USB-C an diesen Computer anschließen, „Firmware installieren“ wählen und den Anschluss aussuchen (meist „USB Serial“ oder „CH340“). Für alle Displays gleich, nichts anzupassen.</small>
+      <div class="dw-flash">${flashHTML(W)}</div></div></div>
+    <div class="dstep"><span class="dnum">2</span><div class="dbody"><b>WLAN</b>
+      <small>Fragt der Installationsdialog direkt nach dem Flashen ab. Ohne Flashen aus dem Browser: mit dem WLAN-Hotspot <code>haus-display-…</code> des Geräts verbinden und dort das WLAN wählen.</small></div></div>
+    <div class="dstep"><span class="dnum">3</span><div class="dbody"><b>Übernehmen und zuordnen</b>
+      <small>Home Assistant findet das Gerät im Netz. „Übernehmen“ fügt es zu ESPHome hinzu und erlaubt ihm, Aktionen auszuführen (für Tipps wie Gute Nacht); danach einem Display zuordnen – die Inhalte kommen sofort.</small>
+      <div class="ddevs">${devicesHTML(ctx, D)}</div>
+      <div class="srow dhost"><input class="inp" data-disp-host="1" placeholder="IP-Adresse, z. B. 192.168.1.50"><button class="pbtn sm" data-act="s-disp-ip" ${W.busy ? "disabled" : ""}>${icon("mdi:ip-network-outline")}Per IP hinzufügen</button></div></div></div>
+  </div>`;
+}
+
+/** Nach dem Zeichnen: ESP Web Tools laden und Geräte abfragen, solange der Reiter offen ist */
+function wizardStart(ctx) {
+  const W = wiz(ctx);
+  if (!ctx.shadowRoot || !ctx.shadowRoot.querySelector(".dwiz")) return;
+  if (serialSupport().ok && !W.ewt) W.ewt = import(EWT_URL).catch((err) => { W.ewt = null; console.warn("ESP Web Tools nicht geladen", err); });
+  if (!W.timer) {
+    loadDevices(ctx);
+    W.timer = setInterval(() => {
+      if (!ctx.isConnected || !ctx.shadowRoot.querySelector(".dwiz")) { clearInterval(W.timer); W.timer = 0; return; }
+      loadDevices(ctx);
+    }, POLL_MS);
+  }
+}
+
+/** Geräte und Firmware vom Backend; nur den Assistenten neu füllen, damit Eingaben nicht verloren gehen */
+async function loadDevices(ctx) {
+  const W = wiz(ctx);
+  let res;
+  try { res = await ctx._hass.callWS({ type: `${DOMAIN}/display_devices` }); } catch (err) { return; }
+  const sig = JSON.stringify(res);
+  if (sig === W.sig) return;
+  const fwChanged = W.firmware === undefined || JSON.stringify(W.firmware) !== JSON.stringify(res.firmware);
+  W.sig = sig; W.devices = res.devices || []; W.firmware = res.firmware || null;
+  refreshWizard(ctx, fwChanged);
+}
+
+function refreshWizard(ctx, flash = false) {
+  const R = ctx.shadowRoot, W = wiz(ctx);
+  const el = R && R.querySelector(".ddevs");
+  if (el) el.innerHTML = devicesHTML(ctx, ctx._draft);
+  const f = flash && R && R.querySelector(".dw-flash");
+  if (f) f.innerHTML = flashHTML(W);
+  if (R) R.querySelectorAll(".dwiz [data-act=s-disp-ip]").forEach((b) => { b.disabled = !!W.busy; });
+}
+
+/** „Übernehmen“: gefundenes Gerät bestätigen bzw. vorhandenem Aktionen erlauben, oder per IP hinzufügen */
+async function adoptDevice(ctx, t) {
+  const W = wiz(ctx), msg = { type: `${DOMAIN}/display_adopt` };
+  if (t.dataset.flow) msg.flow_id = t.dataset.flow;
+  else if (t.dataset.entry) msg.entry_id = t.dataset.entry;
+  else {
+    const inp = ctx.shadowRoot.querySelector("[data-disp-host]");
+    msg.host = inp ? inp.value.trim() : "";
+    if (!msg.host) { ctx._toast("Bitte die IP-Adresse des Displays eintragen"); return; }
+  }
+  W.busy = msg.flow_id ? `flow:${msg.flow_id}` : msg.entry_id ? `entry:${msg.entry_id}` : "host";
+  refreshWizard(ctx);
+  try {
+    const r = await ctx._hass.callWS(msg);
+    ctx._toast(r.ok ? `${r.name} übernommen – jetzt einem Display zuordnen` : `Nicht übernommen: ${r.error}`);
+    if (r.ok && msg.host) { const inp = ctx.shadowRoot.querySelector("[data-disp-host]"); if (inp) inp.value = ""; }
+  } catch (err) {
+    ctx._toast(`Nicht übernommen: ${err && err.message ? err.message : err}`);
+  }
+  W.busy = ""; W.sig = "";
+  await loadDevices(ctx);
+  refreshWizard(ctx);
+}
+
+/** Gerät einem Display zuordnen (oder neues Display dafür anlegen); jedes Gerät gehört zu höchstens einem Display */
+function assignDevice(D, dev, val) {
+  const list = (D.displays || []).map((d) => ({ ...d, device: d.device === dev ? "" : (d.device || "") }));
+  if (val === "neu") {
+    if (list.length >= 6) return false;
+    const n = newDisplay(list);
+    n.device = dev;
+    list.push(n);
+  } else if (val !== "") {
+    const d = list[Number(val)];
+    if (!d) return false;
+    d.device = dev;
+  }
+  D.displays = list;
+  return true;
 }
 
 /** Eingaben, die nicht über data-set laufen (Kachelart, Entität, Name → Kennung). Liefert true, wenn neu zu zeichnen ist. */
@@ -120,6 +270,16 @@ function displaysForSave(list) {
 }
 
 const DISPLAY_CSS = `
+.dwiz .dstep{display:flex;gap:12px;padding:8px 0;border-top:1px solid var(--hv-line)}.dwiz .dstep:first-of-type{border-top:0}
+.dnum{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--hv-accent);color:#06142b;font-weight:600;flex:none}
+.dbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}.dbody>small{color:var(--hv-dim)}
+.dflash{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dwarn{display:flex;gap:8px;align-items:flex-start;margin:0;padding:8px 10px;border-radius:10px;background:rgba(255,196,87,.12);color:var(--hv-text);font-size:13px}
+.dwarn a,.dbody small a{color:var(--hv-accent)}.dflash a.pbtn{text-decoration:none;color:inherit}
+.ddevs{display:flex;flex-direction:column;gap:6px}
+.ddev{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 0}.ddev .lbl{flex:1 1 220px;min-width:0}.ddev select{flex:0 1 220px;min-width:0}
+.ddev .lbl small{display:block;margin-top:2px}.ddev small.ok{color:#4fd18b}.ddev small.warn{color:#ffc457}.ddev small.dim{color:var(--hv-dim)}
+.dhost .inp{flex:1 1 200px;min-width:0}
 .dcard{padding:6px 0 10px;border-top:1px solid var(--hv-line)}.dcard:first-of-type{border-top:0}
 .dpages{display:flex;flex-wrap:wrap;gap:6px}.dpage.on{background:var(--hv-accent);color:#06142b}.dpage[disabled]{opacity:.8;cursor:default}
 .dtiles{align-items:flex-start}.dslots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:6px;flex:1 1 320px}
@@ -129,4 +289,4 @@ const DISPLAY_CSS = `
 @media (max-width:600px){.dslots{grid-template-columns:1fr}}
 `;
 
-export { DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };
+export { adoptDevice, assignDevice, DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };
