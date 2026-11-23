@@ -1439,6 +1439,78 @@ def wetter():
     saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.shading)")
     check("WE: Ausrichtung gespeichert", saved and saved["facing"].get("cover.buro_rollo") == "O" and saved["hot"] == 26)
 
+@gruppe("termine")
+def termine():
+    # ---------- Müllabfuhr und Termine (Kopfzeile, Bildschirmschoner, Einstellungen) ----------
+    from datetime import datetime, timezone
+    # feste Uhrzeit: Montag, 23.11.2026, 19:00 in Berlin (Vorabend der Abfuhr)
+    ctx = b.new_context(viewport={"width": 1440, "height": 1000}, timezone_id="Europe/Berlin", locale="de-DE")
+    ctx.clock.set_fixed_time(datetime(2026, 11, 23, 18, 0, tzinfo=timezone.utc))
+    tp = ctx.new_page(); tp.on("pageerror", lambda e: errs.append(str(e)))
+    TP = "document.querySelector('haus-visualisierung-panel')"
+    tp.goto(dense); tp.wait_for_timeout(500)
+    check("TE: ohne Kalender kein Termin-Knopf", tp.locator(f"{P} .termin").count() == 0)
+    tp.evaluate(f"""(() => {{ const a = window.__api;
+      a.calEvents = {{
+        'calendar.abfallkalender': [
+          {{ summary: 'Gelbe Tonne', start: {{ date: '2026-11-24' }}, end: {{ date: '2026-11-25' }} }},
+          {{ summary: 'Papier', start: {{ date: '2026-11-24' }}, end: {{ date: '2026-11-25' }} }},
+          {{ summary: 'Restmüll', start: {{ date: '2026-11-27' }}, end: {{ date: '2026-11-28' }} }} ],
+        'calendar.familie': [
+          {{ summary: 'Elternabend', start: {{ dateTime: '2026-11-23T20:00:00+01:00' }}, end: {{ dateTime: '2026-11-23T21:30:00+01:00' }} }},
+          {{ summary: 'Zahnarzt', start: {{ dateTime: '2026-11-24T15:30:00+01:00' }}, end: {{ dateTime: '2026-11-24T16:00:00+01:00' }} }},
+          {{ summary: 'Vorbei', start: {{ dateTime: '2026-11-23T08:00:00+01:00' }}, end: {{ dateTime: '2026-11-23T09:00:00+01:00' }} }} ] }};
+      a.set('calendar.abfallkalender', 'off', {{ friendly_name: 'Abfallkalender', message: 'Gelbe Tonne', all_day: true, start_time: '2026-11-24 00:00:00', end_time: '2026-11-25 00:00:00' }});
+      a.set('calendar.familie', 'off', {{ friendly_name: 'Familie', message: 'Elternabend', all_day: false, start_time: '2026-11-23 20:00:00', end_time: '2026-11-23 21:30:00' }});
+      const p = {TP}; p._dirty = true; p._schedule(); }})()"""); tp.wait_for_timeout(500)
+    btn = tp.locator(f"{P} .termin")
+    check("TE: Müllkalender automatisch erkannt – Knopf in der Kopfzeile", btn.count() == 1 and btn.is_visible())
+    check("TE: am Vorabend „Morgen: Gelbe Tonne, Papier“ hervorgehoben", "Morgen: Gelbe Tonne, Papier" in btn.inner_text() and "hot" in (btn.get_attribute("class") or ""))
+    calls = [x[2] for x in tp.evaluate("window.__api.log") if x[0] == "api"]
+    check("TE: Kalender-API nur für gewählte Kalender (Familie noch nicht)", any(c.startswith("calendars/calendar.abfallkalender?start=") for c in calls) and not any("familie" in c for c in calls))
+    check("TE: Tooltip mit Abfuhr", "Abfuhr Morgen: Gelbe Tonne, Papier" in (btn.get_attribute("title") or ""))
+    btn.click(); tp.wait_for_timeout(200)
+    check("TE: Tipp öffnet den Kalender (mehr Infos)", tp.evaluate("window.__moreInfo || ''") == "calendar.abfallkalender")
+    # Familienkalender als „Termine“ – Termin heute geht vor, solange die Abfuhr nicht hervorgehoben ist
+    tp.evaluate(f"(() => {{ const p = {TP}; p._layout = {{ ...p._layout, termine: {{ ...p._layout.termine, cals: {{ 'calendar.familie': 'event' }}, evening: 20 }} }}; p._dirty = true; p._schedule(); }})()"); tp.wait_for_timeout(500)
+    check("TE: Termin heute vor Abfuhr morgen (vor dem Vorabend)", "Heute 20:00 Elternabend" in btn.inner_text() and "hot" not in (btn.get_attribute("class") or ""))
+    tip = btn.get_attribute("title") or ""
+    check("TE: Tooltip mit Terminen, Vergangenes fehlt", "Morgen 15:30 Zahnarzt" in tip and "Vorbei" not in tip and "Abfuhr Morgen" in tip)
+    # Bildschirmschoner
+    tp.evaluate(f"(() => {{ const p = {TP}; p._saverShow(); }})()"); tp.wait_for_timeout(200)
+    sc = tp.locator(f"{P} .saver .svcal")
+    st = sc.inner_text() if sc.count() else ""
+    check("TE: Schoner – Abfuhr und Termine", "Morgen: Gelbe Tonne, Papier" in st and "Heute 20:00 Elternabend" in st and "Morgen 15:30 Zahnarzt" in st)
+    check("TE: Schoner – Tonnenfarbe (gelb)", "#f2c230" in (sc.locator(".svwaste").get_attribute("style") or ""))
+    tp.evaluate(f"(() => {{ const p = {TP}; p._layout = {{ ...p._layout, termine: {{ ...p._layout.termine, saver: false }} }}; p._saverUpdate(5, true); }})()")
+    check("TE: Schoner abschaltbar", sc.inner_text().strip() == "")
+    tp.evaluate(f"{TP}._saverHide()")
+    # ohne Kalender-API: nächster Termin aus den Attributen
+    tp.evaluate(f"""(() => {{ const a = window.__api; a.calFail = true; a.set('calendar.abfuhr_neu', 'off', {{ friendly_name: 'Müllabfuhr', message: 'Biotonne', all_day: true, start_time: '2026-11-24 00:00:00', end_time: '2026-11-25 00:00:00' }});
+      const p = {TP}; p._layout = {{ ...p._layout, termine: {{ ...p._layout.termine, cals: {{ 'calendar.abfallkalender': '-' }}, evening: 17 }} }}; p._dirty = true; p._schedule(); }})()"""); tp.wait_for_timeout(500)
+    check("TE: API nicht lesbar – Attribute der Entität, „Nicht anzeigen“ greift", "Morgen: Biotonne" in btn.inner_text() and "Gelbe" not in btn.inner_text())
+    # Handy: nur die hervorgehobene Abfuhr, ohne Text
+    tp.set_viewport_size({"width": 390, "height": 844}); tp.wait_for_timeout(400)
+    w = tp.evaluate(f"(() => {{ const e = {TP}.shadowRoot.querySelector('.termin'); const t = e && e.querySelector('.tmt'); return e ? [getComputedStyle(e).display, t ? getComputedStyle(t).display : ''] : null; }})()")
+    check("TE: Handy – nur Symbol", w is not None and w[0] != "none" and w[1] == "none")
+    tp.set_viewport_size({"width": 1440, "height": 1000})
+    # Einstellungen
+    tp.evaluate(f"{TP}._go('einstellungen/darstellung')"); tp.wait_for_timeout(500)
+    sec = tp.locator(f"{P} .set[data-sec=termine]")
+    check("TE: Einstellungen – Abschnitt mit Kalendern", sec.count() == 1 and sec.locator("select[data-term-cal]").count() == 3)
+    check("TE: Automatisch erkannt – Müllabfuhr", "Automatisch (Müllabfuhr)" in sec.locator('select[data-term-cal="calendar.abfuhr_neu"]').inner_text())
+    sel = sec.locator('select[data-term-cal="calendar.familie"]')
+    sel.select_option("event"); sel.dispatch_event("change")
+    hd = sec.locator('input[data-set="termine.header"]')
+    hd.evaluate("e => { e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); }")
+    sec.locator('input[data-set="termine.evening"]').fill("18"); sec.locator('input[data-set="termine.evening"]').dispatch_event("change")
+    tp.locator(f"{P} [data-act=s-save]").click(); tp.wait_for_timeout(300)
+    saved = tp.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.termine)")
+    check("TE: gespeichert (Art je Kalender, Kopfzeile aus, Vorabend 18 Uhr)", saved and saved["cals"].get("calendar.familie") == "event" and saved["header"] is False and saved["evening"] == 18)
+    tp.goto(dense); tp.wait_for_timeout(500)
+    check("TE: Kopfzeile abgeschaltet – kein Knopf", tp.locator(f"{P} .termin").count() == 0)
+    ctx.close()
+
 @gruppe("prognose")
 def prognose():
     # ---------- Übersicht: Karte „Vorhersage“ mit Wetter und Solarprognose ----------

@@ -176,6 +176,16 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     user: { is_admin: true, name: "Tobias" }, language: "de", themes: { darkMode: true, themes: {} },
     formatEntityState: fmt,
     callService: async (d, svc, data) => { api.log.push([d, svc, data]); api.applyService(d, svc, data); },
+    // Kalender-API: GET calendars/<entity>?start=…&end=… → Termine aus api.calEvents (Tests setzen sie)
+    callApi: async (method, path) => {
+      api.log.push(["api", method, path]);
+      const m = String(path).match(/^calendars\/([^?]+)\?/);
+      if (method === "GET" && m) {
+        if (api.calFail) throw new Error("Kalender nicht erreichbar");
+        return api.calEvents[decodeURIComponent(m[1])] || [];
+      }
+      throw new Error(`unbekannt: ${method} ${path}`);
+    },
     callWS: async (msg) => {
       if (msg.type.endsWith("/alarm_action")) { api.log.push(["ws", "alarm_action", msg]); return api.alarmAction(msg); }
       if (msg.type.endsWith("/set_mode")) {
@@ -275,6 +285,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     hass, log: [],
     // Vorhersage (täglich): heute, morgen … – mild; Tests setzen mit fcSet([[hoch, tief, Lage], …]) andere Werte
     forecast: [], fcCbs: [],
+    calEvents: {}, calFail: false,
     fcSet(rows) {
       const d0 = new Date(); d0.setHours(12, 0, 0, 0);
       api.forecast = rows.map(([hi, lo, cond, rain], i) => ({ datetime: new Date(d0.getTime() + i * 86400000).toISOString(), temperature: hi, templow: lo, condition: cond, precipitation: rain || 0 }));

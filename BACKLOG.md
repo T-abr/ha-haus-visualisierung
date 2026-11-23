@@ -10,7 +10,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | # | Idee | Priorität | Aufwand | Status |
 |---|------|-----------|---------|--------|
 | 1 | Gute-Nacht- und Verlassen-Check | hoch | S | in Umsetzung |
-| 2 | Müll und Termine im Kopf und im Schoner | hoch | S | in Umsetzung |
+| 2 | ~~Müll und Termine im Kopf und im Schoner~~ | hoch | S | umgesetzt |
 | 3 | „Fertig“-Meldungen für Haushaltsgeräte | hoch | M | in Umsetzung |
 | 4 | Wasser und Gas mit Leck-Erkennung | hoch | M | neu |
 | 5 | Heizung je Raum: Sollwert und Wochenplan | mittel | M | neu |
@@ -36,11 +36,6 @@ Ein Knopf „Gute Nacht“ bzw. „Ich gehe“ (Übersicht, Wandpanel, Handy) ze
 ist: Fenster und Türen offen, Licht an, Tür nicht verriegelt, Garage offen, Herd/Bügeleisen an. Jede Zeile mit
 „Schließen/Ausschalten“, unten „Trotzdem Nacht/Abwesend“. Baut auf Hausmodus, Fenster- und Lichtgruppen auf, die
 es schon gibt; geschaltet wird nur auf Tippen.
-
-### 2. Müll und Termine im Kopf und im Schoner
-Abfuhrtermine aus `calendar.*` oder Abfall-Integrationen (z. B. Waste Collection Schedule) und die nächsten
-Familientermine: „Morgen: Gelbe Tonne“ in der Kopfzeile und im Bildschirmschoner, am Vorabend hervorgehoben,
-optional Erinnerung über die vorhandenen Meldungen. Einstellbar, welche Kalender zählen.
 
 ### 3. „Fertig“-Meldungen für Haushaltsgeräte
 Waschmaschine, Trockner, Spülmaschine über ihre Leistung (Steckdose mit Messung) oder ihren Programmstatus:

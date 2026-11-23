@@ -4,11 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Müllabfuhr und Termine
+- **„Morgen: Gelbe Tonne, Papier“** in der Kopfzeile (alle Varianten) und im **Bildschirmschoner**, am Vorabend der Abfuhr (Standard ab 17 Uhr) und am Morgen bis 10 Uhr farbig hervorgehoben, mit Farbe und Symbol der Tonne (gelb, Papier, Bio, Grünschnitt, Glas, Rest, Sperrmüll, Schadstoffe). Dazu Termine von heute und morgen („Heute 20:00 Elternabend“); der Tooltip zeigt die nächsten Tage, ein Tipp öffnet den Kalender. Am Handy erscheint nur die hervorgehobene Abfuhr als Symbol.
+- Quelle sind **Kalender aus Home Assistant** (Waste Collection Schedule, Abfall-Integrationen, ICS, Google/CalDAV …) über die Kalender-API; ohne sie der nächste Termin aus der Entität. Kalender mit „Abfall“, „Müll“, „Tonne“ … im Namen zählen automatisch als Müllabfuhr.
+- **Einstellungen → Darstellung → Müllabfuhr und Termine:** an/aus, Kopfzeile, Bildschirmschoner, Hervorheben ab (Uhr), Vorausschau (Tage) und je Kalender „Müllabfuhr“, „Termine“ oder „Nicht anzeigen“ (`termine`).
+
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
 - Neue Einstellung **Einstellungen → Wandpanel → „Bildschirmschoner wandern lassen“** (`wallpanel.wander`, Standard aus) für alle, die den Einbrenn-Schutz wollen (z. B. OLED). LCDs wie im iPad brennen praktisch nicht ein.
 
 ### Tests
+- Neue Gruppe `termine` (18 Prüfungen, feste Uhrzeit): automatische Erkennung, Vorabend, Vorrang Termin/Abfuhr, Tooltip, Schoner mit Tonnenfarbe, Rückfall auf Attribute, Handy, Einstellungen speichern. Backend: Einstellungen `termine` werden geprüft.
 - Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
 
 ## 1.10.0 – 2026-11-23

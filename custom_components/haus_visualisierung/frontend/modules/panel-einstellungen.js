@@ -8,6 +8,7 @@ import { ALARMS } from "./warnungen.js";
 import { techCfg } from "./technik.js";
 import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 import { solarCfg } from "./prognose.js";
+import { calKind } from "./termine.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
@@ -126,6 +127,7 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
         <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
       ${this._setForecast(D)}
+      ${this._setTermine(D)}
       ${this._setPrice(D)}
       <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
         <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
@@ -153,6 +155,30 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="srow"><span class="lbl">Solarprognose zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.solar" data-bool="1" ${F.solar !== false ? "checked" : ""}><span></span></label></div>
       ${inp("solar_today", "PV-Prognose heute", "Energie in kWh; leer = automatisch")}
       ${inp("solar_tomorrow", "PV-Prognose morgen", "Energie in kWh; leer = automatisch")}
+    </div>`;
+  }
+
+  /* Müllabfuhr und Termine: welche Kalender zählen, Kopfzeile, Bildschirmschoner */
+  _setTermine(D) {
+    const h = this._hass, T = D.termine || {}, C = T.cals || {};
+    const cals = Object.keys(h.states).filter((e) => e.startsWith("calendar.")).sort((a, b) => entName(h, a).localeCompare(entName(h, b), "de"));
+    const KIND = { waste: "Müllabfuhr", event: "Termine", "": "Nicht anzeigen" };
+    const tg = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><label class="tgl"><input type="checkbox" data-set="termine.${key}" data-bool="1" ${T[key] !== false ? "checked" : ""}><span></span></label></div>`;
+    const row = (e) => {
+      const cur = C[e] || "", auto = calKind(h, { cals: {} }, e);
+      return `<div class="srow"><span class="lbl">${esc(entName(h, e))}<small>${esc(e)}</small></span>
+        <select class="inp" data-term-cal="${esc(e)}"><option value="">Automatisch (${KIND[auto]})</option>
+        ${[["waste", "Müllabfuhr"], ["event", "Termine"], ["-", "Nicht anzeigen"]].map(([k, t]) => `<option value="${k}" ${cur === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
+    };
+    return `<div class="set glass" data-sec="termine"><h2>${icon("mdi:trash-can-outline")}Müllabfuhr und Termine</h2>
+      <p class="hint">„Morgen: Gelbe Tonne“ oder „Heute 15:30 Zahnarzt“ in der Kopfzeile und im Bildschirmschoner; am Vorabend der Abfuhr hervorgehoben. Quelle sind Kalender aus Home Assistant, z. B. von Waste Collection Schedule, einer Abfall-Integration, einem ICS-Kalender oder Google/CalDAV. Kalender mit „Abfall“, „Müll“ oder „Tonne“ im Namen zählen automatisch als Müllabfuhr; Familienkalender hier auf „Termine“ stellen.</p>
+      ${tg("enabled", "Müllabfuhr und Termine zeigen")}
+      ${tg("header", "In der Kopfzeile", "der wichtigste nächste Eintrag; am Handy nur die Abfuhr am Vorabend")}
+      ${tg("saver", "Im Bildschirmschoner", "Abfuhr und bis zu drei Termine von heute und morgen")}
+      <div class="srow"><span class="lbl">Abfuhr hervorheben ab<small>Uhr am Vorabend; am Morgen der Abfuhr bis 10 Uhr</small></span><input class="inp s" type="number" min="12" max="23" data-set="termine.evening" data-num="1" value="${esc(String(T.evening ?? 17))}"><span class="rl">Uhr</span></div>
+      <div class="srow"><span class="lbl">Vorausschau<small>Tage, für den Tooltip in der Kopfzeile</small></span><input class="inp s" type="number" min="1" max="14" data-set="termine.days" data-num="1" value="${esc(String(T.days ?? 7))}"><span class="rl">Tage</span></div>
+      <div class="fl-title">Kalender</div>
+      ${cals.length ? cals.map(row).join("") : '<p class="hint">Keine Kalender gefunden. Waste Collection Schedule oder eine andere Kalender-Integration in Home Assistant einrichten.</p>'}
     </div>`;
   }
 
@@ -609,6 +635,14 @@ const EinstellungenMixin = (Base) => class extends Base {
       const sv = t.dataset.pushTarget, P = this._draft.push;
       P.targets = t.checked ? [...new Set([...P.targets, sv])] : P.targets.filter((x) => x !== sv);
       this._rerenderSettings();
+      return;
+    }
+    if (t.dataset && t.dataset.termCal && e.type === "change" && this._draft) {
+      const T = this._draft.termine = { ...(this._draft.termine || {}) }, C = T.cals = { ...(T.cals || {}) };
+      if (t.value) C[t.dataset.termCal] = t.value; else delete C[t.dataset.termCal];
+      this._dirtySettings = true;
+      const msg = this.shadowRoot.querySelector(".savebar .msg");
+      if (msg) msg.textContent = "Ungespeicherte Änderungen";
       return;
     }
     if (t.dataset && t.dataset.shadeFace && e.type === "change" && this._draft) {
