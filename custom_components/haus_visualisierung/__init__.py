@@ -31,7 +31,7 @@ from .const import (
     VERSION,
 )
 from .display import SERVICE_TAP, DisplayHub
-from .display_setup import FIRMWARE_DIR, FIRMWARE_URL, firmware_version
+from .display_setup import FIRMWARE_DIR, FIRMWARE_URL, firmware_md5, firmware_version
 from .maintenance import MaintenanceBook
 from .store import LayoutStore
 from .websocket import async_register_websocket
@@ -40,7 +40,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 TAP_SCHEMA = vol.Schema({vol.Required("display"): vol.All(str, vol.Length(max=40)), vol.Required("ziel"): vol.All(str, vol.Length(max=200))})
-PLATFORMS = ["select", "sensor"]
+PLATFORMS = ["select", "sensor", "update"]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -66,6 +66,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Wanddisplays: mitgelieferte Firmware zum Flashen aus dem Browser (ESP Web Tools lädt Manifest und Bin von hier)
     data["firmware"] = await hass.async_add_executor_job(firmware_version)
+    data["firmware_md5"] = await hass.async_add_executor_job(firmware_md5) if data["firmware"] else None
     if data["firmware"]:
         await hass.http.async_register_static_paths([StaticPathConfig(FIRMWARE_URL, str(FIRMWARE_DIR), True)])
 

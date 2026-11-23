@@ -2110,6 +2110,18 @@ def displays_einrichten():
     pg.locator(f"{P} [data-act=s-disp-ip]").click(); pg.wait_for_timeout(400)
     toast = pg.locator(f"{P} .toast")
     check("WE: Fehler beim Hinzufügen per IP angezeigt", toast.count() == 1 and "nicht erreichbar" in toast.inner_text())
+    # Update: alte Firmware ohne Netz-Update → Hinweis auf USB; ab 0.3.0 Knopf „Update auf …“
+    pg.evaluate("() => { Object.assign(window.__api.dispDevices[0], { version: '0.2.1', update: true, ota: false }); window.__api.dispFirmware = { ...window.__api.dispFirmware, version: '0.3.0' }; }")
+    pg.wait_for_timeout(5600)
+    check("WE: alte Firmware → einmal per USB", "einmal per USB" in wiz.locator(".ddev").inner_text() and wiz.locator("[data-act=s-disp-update]").count() == 0)
+    pg.evaluate("() => { Object.assign(window.__api.dispDevices[0], { version: '0.3.0', update: true, ota: true }); window.__api.dispFirmware = { ...window.__api.dispFirmware, version: '0.3.1' }; }")
+    pg.wait_for_timeout(5600)
+    upd = wiz.locator("[data-act=s-disp-update]")
+    check("WE: Knopf Update auf neue Version", upd.count() == 1 and "Update auf 0.3.1" in upd.inner_text())
+    upd.click(); pg.wait_for_timeout(300)
+    log = pg.evaluate("window.__api.log.filter(l => l[1] === 'display_update').map(l => l[2])")
+    check("WE: Update an das Gerät geschickt", log and log[-1].get("device") == "haus-display-a1b2c3"
+          and "Update läuft" in wiz.locator(".ddev").inner_text())
     pg.set_viewport_size({"width": 390, "height": 844})
     pg.goto(dense + "?view=einstellungen/displays"); pg.wait_for_timeout(600)
     check("WE: Handy ohne Überbreite", not pg.evaluate(WIDE))

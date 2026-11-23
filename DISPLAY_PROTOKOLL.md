@@ -30,6 +30,10 @@ Firmware 0.1.x (Kennung fest eingebaut, `display_id`) läuft weiter: Sie abonnie
   (`bereich` = Name eines Attributs unten, `daten` = derselbe JSON-Text; `protokoll` als Zahl im Text). Nur geänderte
   Bereiche werden geschickt; alles neu nach `hallo` (siehe Dienst) und wenn ESPHome den Dienst neu anmeldet.
   Verliert ein Gerät seine Zuordnung, bekommt es `protokoll` = `""` und zeigt „Noch nicht zugeordnet“.
+- **Update (Firmware ab 0.3.0)**: API-Aktion `haus_update(adresse: string, pruefsumme: string)`, in Home Assistant
+  `esphome.<gerät>_haus_update`. `adresse` = interne URL von Home Assistant + `/haus_visualisierung_static/firmware/<version>/haus-display.ota.bin`,
+  `pruefsumme` = MD5 der Datei. Das Gerät lädt, prüft, schreibt und startet neu. Auslöser: Update-Entität je Gerät
+  oder Websocket `haus_visualisierung/display_update`.
 - **Firmware 0.1.x (Abo)**: Attribute der Entität unten über `homeassistant`-Textsensoren.
 
 ## Entität `sensor.haus_display_<kennung>`
@@ -157,5 +161,6 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
+| 1 (Push, Update über das Netz, API-Schlüssel je Gerät) | ab 1.14.0 | ab 0.3.0 |
 | 1 (Push, Einrichten im Panel) | ab 1.13.0 | ab 0.2.0 |
 | 1 (Abo der Entität) | ab 1.12.0 | 0.1.x |

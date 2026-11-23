@@ -4,20 +4,28 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
-## 1.13.1 – 2026-11-23
+## 1.14.0 – 2026-11-23
 
-### Behoben – Wanddisplay am echten Gerät
-- Mitgelieferte Firmware **0.2.1**: Touch funktioniert (das Bild des Guition 4848S040 ist 180° gespiegelt, der Touch war es nicht), keine Scrollbalken mehr in Kacheln und Seiten, Kachelinhalt passt in die Kachel, Wetter- und Modus-Chip wie im Entwurf, einfarbiger Hintergrund ohne Streifen, aktive Seite im Dock hervorgehoben. Update: im Assistenten erneut „Firmware installieren“ oder über ESPHome.
-- Hinweiszeile: ohne Meldungen und offene Punkte steht „Alles in Ordnung“ statt einer leeren Fläche unter den Kacheln.
-
-### Performance
-- Unverändert gegenüber 1.13.0 (nur Backend-Text und Firmware-Dateien); das Panel baut nichts zusätzlich.
 ### Neu – Als Standard-Dashboard von Home Assistant
 - **Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“**: Home Assistant öffnet statt der Übersicht die Haus Visualisierung (Browser, Companion-App, Wandpanel). Wahlweise **für mich** (am Server je Benutzer, wie Profil → Dashboard), **für alle Benutzer** (nur Administratoren, wie Einstellungen → Dashboards → „Als Standard“) oder **nur dieses Gerät** (Browser-Speicher). Wirkt sofort, ohne Speichern; derselbe Knopf nimmt es zurück, eine andere Wahl wird dabei nicht überschrieben, sondern genannt. Der Abschnitt zeigt, was dieses Gerät gerade öffnet.
 - Nötig, weil Profil und Dashboard-Liste von Home Assistant nur Lovelace-Dashboards und eingebaute Seiten anbieten, keine eigenen Panels. Gesetzt wird `default_panel` unter dem Schlüssel `core` (`frontend/set_user_data` bzw. `frontend/set_system_data`).
 - **Grenzen**: Reihenfolge in Home Assistant ist Benutzer → alle → Gerät; „Nur dieses Gerät“ greift also nur, wenn darüber nichts festgelegt ist (für ein Wandpanel mit eigenem Benutzer besser „Für mich“ unter diesem Benutzer). Ältere Home-Assistant-Versionen ohne Speicherung am Server kennen nur „Nur dieses Gerät“. Ist die Visualisierung auf Administratoren beschränkt, sehen andere Benutzer weiter die Übersicht.
 
+### Neu – Wanddisplays: Updates über das Netz
+- Mitgelieferte Firmware **0.3.0**. Je Display gibt es eine **Update-Entität** („Firmware Haus Display“, am ESPHome-Gerät) und im Reiter Displays den Knopf **„Update auf …“**: Die Integration schickt dem Gerät Adresse und MD5 der mitgelieferten Firmware (`/haus_visualisierung_static/firmware/…`, interne Adresse von Home Assistant), das Gerät lädt sie selbst, zeigt den Fortschritt und startet neu (API-Aktion `haus_update`, Websocket `haus_visualisierung/display_update`).
+- Von 0.2.x auf 0.3.0 einmalig per USB (Assistent „Firmware installieren“); die Entität und der Reiter sagen das.
+- **Absicherung**: Firmware 0.3.0 verschlüsselt die API ohne eingebauten Schlüssel – Home Assistant erzeugt beim Übernehmen einen eigenen Schlüssel je Gerät. Danach kann nur Home Assistant das Display steuern und Updates anstoßen; das ESPHome-OTA ohne Passwort entfällt.
+
+### Behoben – Wanddisplay am echten Gerät
+- **Touch**: feste Kalibrierung 480 × 480 statt der Grenzen, die der GT911 meldet (manche Geräte melden z. B. 224 × 383, dann war nur ein Teil des Bildschirms bedienbar), und Spiegelung passend zum 180° gedrehten Bild. Rohwerte der Berührungen stehen im ESPHome-Log.
+- Keine Scrollbalken mehr in Kacheln und Seiten, Kachelinhalt passt in die Kachel, Wetter- und Modus-Chip wie im Entwurf, einfarbiger Hintergrund ohne Streifen, aktive Seite im Dock hervorgehoben. Update: im Assistenten erneut „Firmware installieren“ oder über ESPHome.
+- Hinweiszeile: ohne Meldungen und offene Punkte steht „Alles in Ordnung“ statt einer leeren Fläche unter den Kacheln.
+
+### Performance
+- Wanddisplay: unverändert gegenüber 1.13.0 (nur Backend-Text und Firmware-Dateien); das Panel baut nichts zusätzlich.
+
 ### Tests
+- Wanddisplay: Hinweiszeile „Alles in Ordnung“ und Update-Entität/`display_update` in `test_display.py`; Bedienprüfung „displays_einrichten“ mit Update-Knopf und USB-Hinweis.
 - Bedienprüfung „standard“ (Für mich, Für alle mit fremder Benutzerwahl, Nur dieses Gerät, alte HA-Version).
 
 ## 1.13.0 – 2026-11-23

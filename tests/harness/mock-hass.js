@@ -227,6 +227,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         const own = Object.fromEntries(((layout.displays) || []).filter((d) => d.device).map((d) => [d.device, d.id]));
         return { devices: api.dispDevices.map((x) => ({ ...x, display: own[x.name] || null })), firmware: api.dispFirmware, service: "haus_daten" };
       }
+      if (msg.type.endsWith("/display_update")) { api.log.push(["ws", "display_update", msg]); return { ok: true, version: api.dispFirmware.version }; }
       if (msg.type.endsWith("/display_adopt")) {
         api.log.push(["ws", "display_adopt", msg]);
         if (msg.host) return { ok: false, error: "Gerät nicht erreichbar (cannot_connect)" };
@@ -357,7 +358,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     },
     /* nachgebautes Alarm-Backend (alarms.py) */
     // Wanddisplays: gefundene Geräte und mitgelieferte Firmware (wie display_setup.py)
-    dispDevices: [{ name: "haus-display-a1b2c3", title: "Haus Display a1b2c3", flow_id: "f1", entry_id: null, host: "", online: true, allowed: false, ready: false, version: "", display: null, hello: false, disabled: false }],
+    dispDevices: [{ name: "haus-display-a1b2c3", title: "Haus Display a1b2c3", flow_id: "f1", entry_id: null, host: "", online: true, allowed: false, ready: false, version: "", display: null, hello: false, disabled: false, update: false, ota: false }],
     dispFirmware: { version: "0.2.0", manifest: "/haus_visualisierung_static/firmware/1.13.0/manifest.json", bin: "/haus_visualisierung_static/firmware/1.13.0/haus-display.factory.bin" },
     alarmSnap: (() => { try { const s = JSON.parse(sessionStorage.getItem("hv-alarms")); if (s) return s; } catch (e) { /* neu */ } return { rev: 0, alarms: {}, log: [], today: { alarm: 0, warn: 0, info: 0 }, mode: { mode: "zuhause", since: 0, by: "Automatik", panel: null, sync: false, code: false } }; })(),
     alarmPush() { api.alarmSnap = { ...api.alarmSnap, rev: api.alarmSnap.rev + 1 }; try { sessionStorage.setItem("hv-alarms", JSON.stringify(api.alarmSnap)); } catch (e) { /* egal */ } if (api.alarmCb) api.alarmCb(api.alarmSnap); },
