@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.11.0 – 2026-11-23
+
 ### Neu – Gute-Nacht- und Verlassen-Check
 - Neue Knöpfe **„Gute Nacht“** und **„Ich gehe“** im Schnellzugriff der Übersicht (Cockpit-Spalte, Energieleiste in Aktiv-Fokus und Etagen-Spalten, damit auch auf Handy und Wandpanel). Sie öffnen ein Fenster mit allem, was vor „Nacht“ bzw. „Abwesend“ noch offen ist: **Garage und Tore**, **Fenster und Türen**, **nicht verriegelte Schlösser**, **Geräte** wie Herd, Bügeleisen oder Kaffeemaschine (Schalter mit passendem Namen) und **Licht**; beim Gehen zusätzlich **laufende Medien**.
 - Jede Zeile hat ihren Knopf (Schließen, Verriegeln, Ausschalten, Aus, Pause), **„Alles schließen“** erledigt alle auf einmal; Sensoren (Fenster) öffnen per Tippen die Details. Die Liste aktualisiert sich live.
@@ -56,6 +58,10 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Neue Gruppe `termine` (18 Prüfungen, feste Uhrzeit): automatische Erkennung, Vorabend, Vorrang Termin/Abfuhr, Tooltip, Schoner mit Tonnenfarbe, Rückfall auf Attribute, Handy, Einstellungen speichern. Backend: Einstellungen `termine` werden geprüft.
 - Neue Gruppe `rueckblick` (19 Prüfungen): Abfragen, Spalten und Zeilen, Vergleich und Farbe, Kosten mit Stundenpreis bzw. festem Preis, Rekorde, Blättern mit Speicher, keine Abfrage bei neuen Messwerten, ohne Recorder, Handybreite.
 - Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
+
+### Performance
+- Großes Testhaus (`tests/perf/measure.py`, alle sechs Neuerungen zusammen): Aufbau 8,2–38 ms je Seite (Übersicht 15,2–20,8 ms, Energie 23 ms), 0 Neuaufbauten, hass-Setter Ø 24–34 µs.
+- Rückblick: Kennzahlen und Rekorde werden je geladenem Zeitraum gemerkt. Vorher rechnete jeder Neuaufbau der Energie-Seite die Stundenwerte von drei Monaten neu durch (Aufbau rund 90 ms statt 23 ms).
 
 ## 1.10.0 – 2026-11-23
 

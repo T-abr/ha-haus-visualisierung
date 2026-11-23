@@ -65,6 +65,15 @@ function rbStats(h, ids, a, e, period, cb) {
   return !r || r.loading ? null : r.rows;
 }
 
+/** Ergebnis je geladenen Zeilen merken: ein Neuaufbau der Seite rechnet die Stundenwerte nicht neu durch. */
+const MEMO = new WeakMap(); // Zeilen → Map(Schlüssel → Ergebnis)
+function memo(rows, key, fn) {
+  let m = MEMO.get(rows);
+  if (!m) MEMO.set(rows, (m = new Map()));
+  if (!m.has(key)) m.set(key, fn());
+  return m.get(key);
+}
+
 /** Zeilen eines Sensors als [Zeit, Mittel], auf den Zeitraum beschränkt. */
 const rowsOf = (rows, eid, a, e) => (eid && rows[eid] ? rows[eid].map((x) => [tsMs(x.start), x.mean]).filter(([t, v]) => finite(t) && finite(v) && t >= a && t < e) : []);
 
@@ -223,7 +232,8 @@ function updateRback(el, ctx) {
   const drows = dIds.length && ye > ya ? rbStats(h, dIds, ya, ye, "day", again) : {};
   const msg = el.querySelector(".rbmsg");
   if (rows.some((r) => r === null)) { setHidden(msg, false); setHtml(msg, `${icon("mdi:loading", "spin")}Lade Rückblick …`); return; }
-  const F = W.map((w, i) => (w.e > w.a ? rbFigures(cfg, rows[i], w) : null));
+  const ck = JSON.stringify(cfg);
+  const F = W.map((w, i) => (w.e > w.a ? memo(rows[i], `${ck}|${w.a}|${w.e}`, () => rbFigures(cfg, rows[i], w)) : null));
   const any = F.some((f) => f && ROWS.some(([k, , u]) => u && f[k] !== null));
   el._rb = { W, F };
   if (!any) {
@@ -240,7 +250,7 @@ function updateRback(el, ctx) {
   if (c && c.grid && !cfg.price) notes.push(`Kosten mit festem Preis ${NF1.format(cfg.fixed * 100)} ct/kWh.`);
   setText(el, ".rbnote", notes.join(" "));
   const box = el.querySelector(".rbrecw");
-  const R = drows ? rbRecords(cfg, drows, year) : [];
+  const R = drows ? memo(drows, `${ck}|${year}`, () => rbRecords(cfg, drows, year)) : [];
   setHidden(box, !R.length);
   if (R.length) {
     setText(el, ".rbry", `Rekorde ${year}`);
