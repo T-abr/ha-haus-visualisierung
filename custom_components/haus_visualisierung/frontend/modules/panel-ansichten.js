@@ -13,6 +13,7 @@ import { shadeCardHTML, weatherIdOf } from "./wetter.js";
 import { fcastCardHTML } from "./prognose.js";
 import { terminBtnHTML } from "./termine.js";
 import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
+import { rbCard } from "./rueckblick.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
 const AnsichtenMixin = (Base) => class extends Base {
@@ -230,6 +231,7 @@ const AnsichtenMixin = (Base) => class extends Base {
       <div class="engrid">${energyFlowHTML(c)}${enDayHTML(tr)}</div>
       ${enPriceCard(c, this._model.price)}
       ${tr ? enTrendHTML(c) : ""}
+      ${tr ? rbCard(this) : ""}
       ${T.wb ? wbCardHTML(this._model.areas.get(T.wb.area) || { id: "" }) : ""}`;
   }
 

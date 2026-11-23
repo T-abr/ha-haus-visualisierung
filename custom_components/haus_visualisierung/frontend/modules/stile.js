@@ -1039,6 +1039,26 @@ details[open]>summary.shead{padding-bottom:2px}
 .wbprice{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12.5px;color:var(--hv-dim)}
 .wbp{display:inline-flex;align-items:center;gap:5px;min-width:0}.wbp ha-icon{--mdc-icon-size:16px}.wbp b{color:var(--hv-text);font-weight:500}
 .wbp.plv.billig b,.wbp.best b,.wbp.own{color:var(--hv-ok)}.wbp.plv.teuer b{color:var(--hv-alert)}
+/* Rückblick: Monat gegen Vormonat und Vorjahr, Rekorde */
+.rback{padding:12px 16px 14px;margin-bottom:16px;min-width:0}
+.dense .rback{padding:9px 12px 12px;margin-bottom:12px;border-radius:16px}
+.rbnav{display:inline-flex;align-items:center;gap:8px}.rbnav b{font-weight:500;font-size:13.5px;min-width:9em;text-align:center}
+.rbnav .pbtn.sm{padding:4px 6px}.rbnav .pbtn:disabled{opacity:.35;cursor:default}
+.rbr{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,170px));gap:4px 12px;align-items:baseline;padding:6px 0;border-top:1px solid var(--hv-line)}
+.rbhd{border-top:0;padding-top:0;align-items:end}
+.rbc{display:flex;flex-direction:column;align-items:flex-end;min-width:0;text-align:right}
+.rbc small{font-size:11px;color:var(--hv-dim)}.rbc span{font-size:12px;color:var(--hv-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.rbc b{font-size:16px;font-weight:400;font-variant-numeric:tabular-nums}
+.rbc em{font-style:normal;font-size:11px;color:var(--hv-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rbc em.good{color:var(--hv-ok)}.rbc em.bad{color:var(--hv-warm)}
+.rbc.part b{color:var(--hv-faint)}
+.rbl{display:flex;flex-direction:column;min-width:0;font-size:13px}.rbl small{font-size:11px;color:var(--hv-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rbsec{margin:10px 0 2px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--hv-dim)}
+.rbtab .rbsec:first-of-type{margin-top:4px}
+.rbmsg{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--hv-dim);padding:6px 0}
+.rbrecw{margin-top:12px}.rbrec .cts.pv b{color:#ffc457}.rbrec .cts.warm b{color:var(--hv-warm)}.rbrec .cts.cold b{color:#63c7ff}
+.rbnote:empty{display:none}.rbnote{margin-top:6px}
+.narrow .rbr{gap:2px 8px}.narrow .rbc b{font-size:14px}.narrow .rbl{font-size:12px}
 .narrow .engrid{grid-template-columns:minmax(0,1fr)}
 .narrow .efwrap{height:310px}
 .narrow .enode{width:92px;padding:6px 4px}.narrow .enode.hub{width:104px}
