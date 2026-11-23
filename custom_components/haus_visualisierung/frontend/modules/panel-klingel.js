@@ -2,6 +2,7 @@
  * Wird in panel.js mit den anderen Teilen zur Klasse des Panels zusammengesetzt. */
 
 import { dc, dom, entName, esc, icon, setText } from "./grundlagen.js";
+import { pinOk } from "./pin.js";
 
 const KlingelMixin = (Base) => class extends Base {
   /* ---------- Klingel-Overlay ---------- */
@@ -148,7 +149,7 @@ const KlingelMixin = (Base) => class extends Base {
         b.hold = true;
         if (t.dataset.armed === "1") {
           t.dataset.armed = "";
-          this._openDoor(b.lock, b.pulse, t);
+          pinOk(this, "door", "Tür öffnen").then((ok) => { if (ok) this._openDoor(b.lock, b.pulse, t); else setText(t, "span", "Tür öffnen"); });
         } else {
           t.dataset.armed = "1";
           setText(t, "span", "Nochmal tippen zum Öffnen");

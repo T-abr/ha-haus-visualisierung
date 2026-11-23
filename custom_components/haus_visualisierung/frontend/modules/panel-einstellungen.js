@@ -14,15 +14,19 @@ import { applList } from "./geraete.js";
 import { maintSettingsHTML } from "./wartung.js";
 import { assignDevice, displayInput, displaySettingsHTML } from "./wanddisplay.js";
 import { defaultSettingsHTML } from "./standard.js";
+import { pinSettingsHTML } from "./pin.js";
+import { wxSettingsHTML } from "./wetterwarnung.js";
+import { problems, systemFile, systemSettingsHTML } from "./system.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
-const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
+const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"], ["system", "Prüfen & Sichern", "mdi:clipboard-check-outline"]];
 const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
-  alarme: ["house_mode", "presence_sim", "alerts", "escalation", "alarm_actions"],
+  alarme: ["house_mode", "pin", "presence_sim", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
-  technik: ["heating", "wallbox", "shading", "appliances", "maintenance"],
+  technik: ["heating", "wallbox", "shading", "weather_alerts", "appliances", "maintenance"],
   displays: ["displays"],
+  system: [],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
@@ -84,7 +88,8 @@ const EinstellungenMixin = (Base) => class extends Base {
       <input class="inp w" list="dl-sensor" data-set="header.${key}" value="${esc(D.header[key] || "")}" placeholder="sensor.…"></div>`;
     const views = [["overview", "Übersicht"], ...NAV.slice(1).map(([k, t]) => [k, t])];
 
-    const tabs = SET_TABS.map(([k, t, i]) => `<button class="altab stab${tab === k ? " on" : ""}${this._tabDirty(k) ? " dirty" : ""}" data-act="s-tab" data-tab="${k}">${icon(i)}<span>${t}</span><i></i></button>`).join("");
+    const nProb = problems(h, this._layout);
+    const tabs = SET_TABS.map(([k, t, i]) => `<button class="altab stab${tab === k ? " on" : ""}${this._tabDirty(k) ? " dirty" : ""}" data-act="s-tab" data-tab="${k}">${icon(i)}<span>${t}</span>${k === "system" && nProb ? `<b class="tprob" title="${nProb} wichtige Punkte im Einrichtungs-Check" style="margin-left:4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--hv-warm);color:#1a1205;font-size:11px;line-height:18px">${nProb}</b>` : ""}<i></i></button>`).join("");
     let body = "";
     if (tab === "raeume") body = `${dlAll}
       <div class="set glass"><h2>${icon("mdi:floor-plan")}Etagen & Bereiche</h2>
@@ -96,6 +101,7 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><input class="inp w" list="dl-all" placeholder="Entität hinzufügen" data-fav-input="1"><button class="pbtn" data-act="s-fav-add">${icon("mdi:plus")}Hinzufügen</button></div></div>`;
     else if (tab === "alarme") body = `${dlAll}
       ${this._setMode(D)}
+      ${pinSettingsHTML(D)}
       ${this._setCheck ? this._setCheck(D) : ""}
       ${simSettingsHTML(this, D)}
       ${this._setAlerts(D)}
@@ -104,8 +110,10 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setTech(D)}
       ${this._setAppl(D)}
       ${this._setShade(D)}
+      ${wxSettingsHTML(h, D)}
       ${maintSettingsHTML(D)}`;
     else if (tab === "displays") body = displaySettingsHTML(this, D);
+    else if (tab === "system") body = systemSettingsHTML(this, D);
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
       ${this._setBell(D)}`;
@@ -434,7 +442,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const types = [["knx", "KNX-Telegramm"], ["switch", "Schalter / Licht"], ["siren", "Sirene"], ["tts", "Durchsage (z. B. Sonos)"], ["script", "Skript"]];
     const whens = [["neu", "sofort bei neuer Meldung"], ["eskalation", "bei Eskalation"]];
     const bi = [["contacts", "Fenster oder Tür offen"], ["window_heating", "Fenster beim Heizen"], ["safety", "Melder ausgelöst"], ["alarm_panel", "Alarmanlage ausgelöst"],
-      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"], ["mold", "Schimmelrisiko"], ["appliances", "Haushaltsgerät fertig"]];
+      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"], ["mold", "Schimmelrisiko"], ["appliances", "Haushaltsgerät fertig"], ["weather", "Wetterwarnung"]];
     const scopes = [["alarm", "alle Alarme"], ["warn", "Alarme und Warnungen"], ["all", "alle Meldungen"], ...bi.map(([k, t]) => [`b:${k}`, `Regel: ${t}`]),
       ...D.alerts.rules.map((r, i) => [`r:${i}`, `Eigene Regel: ${r.title || r.entity || i + 1}`])];
     const sel = (path, opts, cur, cls = "") => `<select class="inp ${cls}" data-set="${path}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${cur === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
@@ -490,7 +498,8 @@ const EinstellungenMixin = (Base) => class extends Base {
     const bi = [["contacts", "Fenster oder Tür offen", "Warnung"], ["window_heating", "Fenster offen, während der Raum heizt", "Warnung"], ["safety", "Melder ausgelöst (Rauch, Wasser, Gas …)", "Alarm"],
       ["locks", "Schloss entriegelt", "Warnung"], ["garage", "Garagentor oder Tor offen", "Warnung"], ["battery", "Batterien kritisch", "Warnung"], ["offline", "Geräte nicht erreichbar", "Hinweis"],
       ["presence_away", "Bewegung erkannt, während niemand zu Hause ist", "Alarm"], ["alarm_panel", "Alarmanlage ausgelöst (z. B. Alarmo)", "Alarm"],
-      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"], ["appliances", "Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)", "Hinweis"], ["maintenance", "Wartung fällig (Wartungsplaner)", "Hinweis"]];
+      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"], ["appliances", "Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)", "Hinweis"], ["maintenance", "Wartung fällig (Wartungsplaner)", "Hinweis"],
+      ["weather", "Wetter: Unwetter (DWD), Regen bei offenem Fenster, Sturm bei ausgefahrener Markise (Einstellungen unter Technik)", "Warnung"]];
     const allM = HOUSE_MODES.map((x) => x[0]);
     const mchips = (path, cur) => `<span class="mchips" title="gilt in diesen Hausmodi">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
     const bmodes = (k) => (A.modes && A.modes[k] && A.modes[k].length ? A.modes[k] : BUILTIN_MODES[k] || allM);
@@ -667,6 +676,7 @@ const EinstellungenMixin = (Base) => class extends Base {
   _onChange(e) {
     super._onChange(e);
     const t = e.target;
+    if (t.dataset && t.dataset.bkFile && e.type === "change") { systemFile(this, t); return; }
     if (t.dataset && t.dataset.pushTarget && e.type === "change" && this._draft) {
       const sv = t.dataset.pushTarget, P = this._draft.push;
       P.targets = t.checked ? [...new Set([...P.targets, sv])] : P.targets.filter((x) => x !== sv);

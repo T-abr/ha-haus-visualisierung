@@ -222,6 +222,39 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       if (msg.type.endsWith("/presence_sim")) { api.log.push(["ws", "presence_sim", {}]); return api.simInfo || { active: true, source: "2026-11-16", note: "", planned: 2, next: [{ ts: Date.now() / 1000 + 3600, entity: "light.flur_decke", name: "Flur Decke", action: "an" }, { ts: Date.now() / 1000 + 7200, entity: "cover.buro_rollo", name: "Büro Rollo", action: "zu" }], log: [{ ts: Date.now() / 1000 - 600, type: "start", text: "Simulation gestartet (Hausmodus Urlaub)" }, { ts: Date.now() / 1000 - 300, type: "schalten", text: "Wohnzimmer Decke an", entity: "light.wohnzimmer_decke" }] }; }
       if (msg.type.endsWith("/push_info")) return { services: ["mobile_app_iphone_tobias", "mobile_app_pixel", "persistent_notification"], targets: ["mobile_app_iphone_tobias", "mobile_app_pixel"], active: [] };
       if (msg.type.endsWith("/push_test")) { api.log.push(["ws", "push_test", {}]); return { targets: (layout.push && layout.push.targets && layout.push.targets.length) ? layout.push.targets : ["mobile_app_iphone_tobias", "mobile_app_pixel"] }; }
+      // PIN (wie websocket.py): gespeichert wird im Backend; hier im Klartext im Testzustand
+      if (msg.type.endsWith("/pin_set")) {
+        api.log.push(["ws", "pin_set", msg]);
+        if (msg.pin && !/^\d{4,8}$/.test(msg.pin)) { const e = new Error("Die PIN braucht 4 bis 8 Ziffern"); e.code = "invalid"; throw e; }
+        api.pin = msg.pin; api.alarmSnap.mode = { ...(api.alarmSnap.mode || {}), pin: !!msg.pin }; api.alarmPush();
+        return { pin: !!msg.pin };
+      }
+      if (msg.type.endsWith("/pin_check")) {
+        api.log.push(["ws", "pin_check", msg]);
+        if (!api.pin) return { ok: true, pin: false };
+        if (msg.pin === api.pin) { api.pinFails = 0; return { ok: true }; }
+        api.pinFails = (api.pinFails || 0) + 1;
+        return { ok: false, wait: api.pinFails >= 5 ? 60 : 0 };
+      }
+      // Sicherungen (wie backup.py, vereinfacht)
+      if (msg.type.endsWith("/backup_list")) { api.log.push(["ws", "backup_list", {}]); return { items: api.bkList() }; }
+      if (msg.type.endsWith("/backup_create")) { api.log.push(["ws", "backup_create", {}]); const it = api.bkAdd("manuell"); return { id: it.id, items: api.bkList() }; }
+      if (msg.type.endsWith("/backup_delete")) { api.log.push(["ws", "backup_delete", msg]); api.backups = api.backups.filter((b) => b.id !== msg.backup); return { items: api.bkList() }; }
+      if (msg.type.endsWith("/backup_get") || msg.type.endsWith("/export")) {
+        api.log.push(["ws", msg.type.split("/")[1], msg]);
+        const b = msg.backup ? api.backups.find((x) => x.id === msg.backup) : { ts: Date.now() / 1000, layout };
+        if (!b) { const e = new Error("Sicherung nicht gefunden"); e.code = "not_found"; throw e; }
+        return { format: "haus_visualisierung", schema: 1, version: "test", created: new Date(b.ts * 1000).toISOString(), layout: b.layout, maintenance: api.maint };
+      }
+      if (msg.type.endsWith("/backup_restore")) {
+        api.log.push(["ws", "backup_restore", msg]);
+        const src = msg.backup ? api.backups.find((x) => x.id === msg.backup) : msg.data && msg.data.format === "haus_visualisierung" ? msg.data : null;
+        if (!src) { const e = new Error("Keine Sicherung der Haus Visualisierung"); e.code = "invalid"; throw e; }
+        api.bkAdd(msg.backup ? "wiederherstellen" : "import");
+        layout = structuredClone(src.layout);
+        if (api.layoutCb) setTimeout(() => api.layoutCb({ layout }), 0);
+        return { layout, items: api.bkList() };
+      }
       if (msg.type.endsWith("/save")) { layout = msg.layout; return { layout }; }
       if (msg.type.endsWith("/display_devices")) {
         const own = Object.fromEntries(((layout.displays) || []).filter((d) => d.device).map((d) => [d.device, d.id]));
@@ -327,7 +360,9 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       api.layoutCb = cb; setTimeout(() => cb({ version: window.__HAUS_VIS__.VERSION, options: {}, layout, maintenance: api.maint }), 0); return () => {}; } },
   };
   const api = {
-    hass, log: [], maint: {}, layoutCb: null,
+    hass, log: [], maint: {}, layoutCb: null, pin: "", pinFails: 0, backups: [],
+    bkAdd: (reason) => { const it = { id: `s${Date.now().toString(16)}${api.backups.length}`, ts: Date.now() / 1000, reason, note: "", version: "test", layout: structuredClone(layout) }; api.backups.push(it); return it; },
+    bkList: () => api.backups.slice().reverse().map((b) => ({ id: b.id, ts: b.ts, reason: b.reason, note: b.note, version: b.version, summary: { raeume: (b.layout.area_order || []).length, regeln: ((b.layout.alerts || {}).rules || []).length } })),
     // Vorhersage (täglich): heute, morgen … – mild; Tests setzen mit fcSet([[hoch, tief, Lage], …]) andere Werte
     forecast: [], fcCbs: [],
     calEvents: {}, calFail: false,

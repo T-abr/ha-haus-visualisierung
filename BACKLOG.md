@@ -26,16 +26,16 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 15 | Intelligentes Laden der Wallbox | später | L | vorgemerkt |
 | 16 | Musik- und Medienseite | später | L | vorgemerkt |
 | 17 | Display-Firmware aus GitHub-Releases statt mitgeliefert | mittel | M | neu |
-| 18 | Unwetter und „Regen kommt, Fenster offen“ | hoch | M | in Umsetzung |
-| 19 | Einstellungen sichern und wiederherstellen | hoch | S | in Umsetzung |
-| 20 | Einrichtungs-Check | hoch | S–M | in Umsetzung |
-| 21 | PIN für heikle Aktionen (Wandpanel, Display) | hoch | M | in Umsetzung |
+| 18 | ~~Unwetter und „Regen kommt, Fenster offen“~~ | hoch | M | umgesetzt |
+| 19 | ~~Einstellungen sichern und wiederherstellen~~ | hoch | S | umgesetzt |
+| 20 | ~~Einrichtungs-Check~~ | hoch | S–M | umgesetzt |
+| 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt (Rest offen) |
 | 22 | Zeitleiste „Was war los?“ | mittel | M | neu |
 | 23 | Szenen je Raum (auch als Display-Kachel) | mittel | M | neu |
 | 24 | Display: Alarm-Vollbild mit Quittieren | mittel | M | neu |
 | 25 | Display: Relais als Lichtschalter | niedrig | M | neu |
 
-„Umgesetzt“: seit Version 1.11.0 enthalten. „Neu“: im Backlog, noch nicht
+„Umgesetzt“: seit Version 1.11.0 (1–10) bzw. 1.17.0 (18–21) enthalten. „Neu“: im Backlog, noch nicht
 ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
 
 ## Neue Ideen
@@ -105,6 +105,10 @@ geladene Firmware ohne Internet.
 
 **Offene Entscheidung:** ha-haus-display ist privat. Entweder ein GitHub-Token mit Lesezugriff in den
 Einstellungen hinterlegen oder das Firmware-Repo öffentlich machen (dann ohne Token).
+
+### 18.–21. ~~Wetterwarnungen, Sicherungen, Einrichtungs-Check, PIN~~ (umgesetzt, siehe CHANGELOG 1.17.0)
+Offen bei 21: Tastenfeld für die PIN am Wanddisplay (braucht neue Firmware); bis dahin sind geschützte Aktionen dort
+gesperrt.
 
 ### 22. Zeitleiste „Was war los?“
 Tür, Klingel mit Standbild, Bewegung, Moduswechsel und Alarme als Verlauf auf der Seite Sicherheit, nach Tag
