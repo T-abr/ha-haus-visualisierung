@@ -342,6 +342,10 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     onChange(l) { listeners.push(l); },
     /** Tagesverlauf für Testdaten: endet beim aktuellen Wert. */
     curve(eid, base, t) {
+      if (/nordpool/.test(eid)) {
+        // Strompreis: fester Stundengang wie die Attribute (nie negativ, unabhängig von der Uhrzeit des Testlaufs)
+        return [27, 25, 22, 21, 21, 23, 29, 34, 33, 30, 26, 22, 18, 16, 17, 21, 27, 35, 38, 36, 32, 30, 29, 28][new Date(t).getHours()] / 100;
+      }
       if (/(_power|_leistung|verbrauch)/.test(eid)) {
         // Leistung: Tagesgang mit großer Amplitude, PV nie negativ
         const ph = (s) => Math.sin(((new Date(s).getHours() + new Date(s).getMinutes() / 60) - 7) / 24 * 2 * Math.PI);
