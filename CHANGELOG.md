@@ -4,6 +4,14 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Als Standard-Dashboard von Home Assistant
+- **Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“**: Home Assistant öffnet statt der Übersicht die Haus Visualisierung (Browser, Companion-App, Wandpanel). Wahlweise **für mich** (am Server je Benutzer, wie Profil → Dashboard), **für alle Benutzer** (nur Administratoren, wie Einstellungen → Dashboards → „Als Standard“) oder **nur dieses Gerät** (Browser-Speicher). Wirkt sofort, ohne Speichern; derselbe Knopf nimmt es zurück, eine andere Wahl wird dabei nicht überschrieben, sondern genannt. Der Abschnitt zeigt, was dieses Gerät gerade öffnet.
+- Nötig, weil Profil und Dashboard-Liste von Home Assistant nur Lovelace-Dashboards und eingebaute Seiten anbieten, keine eigenen Panels. Gesetzt wird `default_panel` unter dem Schlüssel `core` (`frontend/set_user_data` bzw. `frontend/set_system_data`).
+- **Grenzen**: Reihenfolge in Home Assistant ist Benutzer → alle → Gerät; „Nur dieses Gerät“ greift also nur, wenn darüber nichts festgelegt ist (für ein Wandpanel mit eigenem Benutzer besser „Für mich“ unter diesem Benutzer). Ältere Home-Assistant-Versionen ohne Speicherung am Server kennen nur „Nur dieses Gerät“. Ist die Visualisierung auf Administratoren beschränkt, sehen andere Benutzer weiter die Übersicht.
+
+### Tests
+- Bedienprüfung „standard“ (Für mich, Für alle mit fremder Benutzerwahl, Nur dieses Gerät, alte HA-Version).
+
 ## 1.13.0 – 2026-11-23
 
 ### Neu – Wanddisplays einrichten ohne Handarbeit

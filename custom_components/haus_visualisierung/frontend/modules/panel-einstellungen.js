@@ -13,6 +13,7 @@ import { calKind } from "./termine.js";
 import { applList } from "./geraete.js";
 import { maintSettingsHTML } from "./wartung.js";
 import { assignDevice, displayInput, displaySettingsHTML } from "./wanddisplay.js";
+import { defaultSettingsHTML } from "./standard.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
@@ -109,6 +110,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setPush(D)}
       ${this._setBell(D)}`;
     else body = `${dlSensor}
+      ${defaultSettingsHTML(this)}
       ${this._setWall(D)}
       <div class="set glass"><h2>${icon("mdi:tune-variant")}Darstellung</h2>
         ${sw("confirm_quick", "Schnellzugriff bestätigen", "Abfrage vor „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff")}
