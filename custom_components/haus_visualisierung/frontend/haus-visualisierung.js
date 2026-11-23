@@ -9,6 +9,7 @@ import { VERSION } from "./modules/version.js";
 import { DEFAULT_LAYOUT, hideHaChrome, HV_HA_VARS, themeFrame } from "./modules/grundlagen.js";
 import { buildModel, classify } from "./modules/modell.js";
 import { evalAlertsAll, MOLD } from "./modules/warnungen.js";
+import { addInterval } from "./modules/wartung.js";
 import { curveFlow, techCfg } from "./modules/technik.js";
 import { absHum, dewPoint, ventAdvice } from "./modules/klima.js";
 import { HausVisualisierungPanel } from "./modules/panel.js";
@@ -34,4 +35,4 @@ if (!window.customCards.some((c) => c.type === "haus-raum-card")) {
 }
 
 // Für Tests
-window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll, techCfg, curveFlow, dewPoint, absHum, ventAdvice, MOLD };
+window.__HAUS_VIS__ = { VERSION, buildModel, classify, DEFAULT_LAYOUT, hideHaChrome, themeFrame, HV_HA_VARS, evalAlertsAll, techCfg, curveFlow, dewPoint, absHum, ventAdvice, MOLD, addInterval };

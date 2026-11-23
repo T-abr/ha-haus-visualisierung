@@ -3,6 +3,7 @@
 import { BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtState, HOUSE_MODES, icon, isOn, isUnav, MODE_NAME, NF0, NF1, num, relTime, setIcon, setText, UNAV } from "./grundlagen.js";
 import { dewPoint, humRooms, MOLD_HYST, outdoorClim, ventAdvice } from "./klima.js";
 import { applAlerts, GERAETE } from "./geraete.js";
+import { MAINT, maintAlerts } from "./wartung.js";
 
 const CHIPS = {
   lights: (h, m) => { const n = m.agg.lights.filter((e) => isOn(h.states[e])).length; return m.agg.lights.length ? { t: n ? `${n} ${n === 1 ? "Licht" : "Lichter"} an` : "Alle Lichter aus", c: n ? "warm" : "calm", i: n ? "mdi:lightbulb-on" : "mdi:lightbulb-outline" } : null; },
@@ -59,14 +60,14 @@ let _alertMemo = null;
 /** Alle aktiven Meldungen mit Zustand (auch stumme) – für den Alarmmanager */
 function evalAlertsAll(h, m, L) {
   const now = Date.now();
-  if (_alertMemo && _alertMemo.s === h.states && _alertMemo.m === m && _alertMemo.L === L && _alertMemo.a === ALARMS && now - _alertMemo.t < 1000) return _alertMemo.all;
+  if (_alertMemo && _alertMemo.s === h.states && _alertMemo.m === m && _alertMemo.L === L && _alertMemo.a === ALARMS && _alertMemo.w === MAINT && now - _alertMemo.t < 1000) return _alertMemo.all;
   const book = (ALARMS && ALARMS.alarms) || {};
   const all = evalAlertsRaw(h, m, L).map((x) => {
     const b = book[x.key];
     return b ? { ...x, status: b.status || "neu", since: b.since, ack_by: b.ack_by, ack_at: b.ack_at, mute_until: b.mute_until, escalated: b.escalated } : { ...x, status: "neu" };
   });
   const list = all.filter((x) => x.status !== "stumm");
-  _alertMemo = { s: h.states, m, L, a: ALARMS, t: now, all, list };
+  _alertMemo = { s: h.states, m, L, a: ALARMS, w: MAINT, t: now, all, list };
   return all;
 }
 /** Aktive Meldungen ohne stumme – für Warnkarte, Kopfzeile und Aktiv-Fokus */
@@ -135,6 +136,7 @@ function evalAlertsRaw(h, m, L) {
   if (B.mold) out.push(...moldAlerts(h, m, L, c));
   else MOLD.clear();
   if (B.appliances) out.push(...applAlerts(h, L));
+  if (B.maintenance) out.push(...maintAlerts(L));
   (c.rules || []).forEach((r, i) => {
     if (r.enabled === false || !r.entity) return;
     if (r.modes && r.modes.length && !r.modes.includes(mode)) return;

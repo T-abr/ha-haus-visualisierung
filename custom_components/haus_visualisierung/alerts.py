@@ -34,7 +34,10 @@ from homeassistant.helpers.event import async_call_later, async_track_time_inter
 from .actions import ActionRunner
 from .appliances import ApplianceTracker
 from .alarms import ACKED, MUTED, AlarmBook
-from .const import BUILTIN_MODES, HOUSE_MODES, PANEL_URL_PATH
+from homeassistant.util import dt as dt_util
+
+from .const import BUILTIN_MODES, DOMAIN, HOUSE_MODES, PANEL_URL_PATH
+from .maintenance import due_info, due_text
 from .mode import HouseMode
 from .presence import PresenceSimulator
 
@@ -242,6 +245,8 @@ class AlertMonitor:
         for evt in (er.EVENT_ENTITY_REGISTRY_UPDATED, dr.EVENT_DEVICE_REGISTRY_UPDATED, ar.EVENT_AREA_REGISTRY_UPDATED):
             self._unsubs.append(hass.bus.async_listen(evt, self._on_registry))
         self._unsubs.append(self.store.async_add_listener(lambda _l: self._on_registry(None)))
+        if self.maintenance:
+            self._unsubs.append(self.maintenance.async_add_listener(lambda _s: self._schedule()))
         self._unsubs.append(async_track_time_interval(hass, self._on_tick, timedelta(seconds=30)))
         if hass.is_running:
             self._start_baseline()
@@ -421,6 +426,22 @@ class AlertMonitor:
             del self._mold[area_id]
         return out
 
+    @property
+    def maintenance(self):
+        return self.hass.data.get(DOMAIN, {}).get("maintenance")
+
+    def _maint_alerts(self) -> list[Alert]:
+        """Wartungsplaner: fällige Aufgaben als Hinweis (Seite Wartung)."""
+        cfg = self.layout.get("maintenance", {})
+        if not cfg.get("enabled", True) or not self.maintenance:
+            return []
+        state, today, out = self.maintenance.data, dt_util.now().date(), []
+        for t in cfg.get("tasks", []):
+            _due, days = due_info(t, state, today)
+            if days is None or days <= 0:
+                out.append(Alert(f"maint:{t['id']}", "info", f"Wartung fällig · {t.get('title') or 'Aufgabe'}", due_text(days), "wartung"))
+        return out
+
     # ---------- Auswertung (wie evalAlerts im Panel) ----------
     def _name(self, eid: str) -> str:
         st = self.hass.states.get(eid)
@@ -537,6 +558,8 @@ class AlertMonitor:
             self._mold.clear()
         if b.get("appliances", True) and mode_ok("appliances"):
             out.extend(Alert(key, "info", title, detail, "") for key, title, detail, _icon in self.appliances.alerts())
+        if b.get("maintenance", True) and mode_ok("maintenance"):
+            out.extend(self._maint_alerts())
         for i, rule in enumerate(cfg.get("rules", [])):
             ent = rule.get("entity")
             if rule.get("enabled") is False or not ent:

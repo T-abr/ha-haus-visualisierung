@@ -1931,6 +1931,80 @@ def rueckblick():
     mp.close()
 
 
+@gruppe("wartung")
+def wartung():
+    # ---------- Wartungsplaner: Aufgaben anlegen, Fälligkeit, Erledigt und Rückgängig, Meldungen ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense); pg.wait_for_timeout(500)
+    check("WT: ohne Aufgaben keine Seite Wartung in der Navigation", pg.locator(f'{P} .nav[data-to="wartung"]').count() == 0)
+    iv = pg.evaluate("[['2026-01-31', 1, 'monate'], ['2024-02-29', 1, 'jahre'], ['2026-11-23', 2, 'wochen'], ['2026-12-30', 3, 'tage'], ['2026-11-23', 6, 'monate']].map(a => window.__HAUS_VIS__.addInterval(...a))")
+    check("WT: Intervalle rechnen (Monatsende, Schaltjahr, Wochen, Jahreswechsel)", iv == ["2026-02-28", "2025-02-28", "2026-12-07", "2027-01-02", "2027-05-23"])
+    # Einstellungen → Technik: zwei Vorlagen und eine eigene Aufgabe
+    pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(500)
+    check("WT: Abschnitt in Einstellungen → Technik", pg.locator(f"{P} .set h2:has-text('Wartungsplaner')").count() == 1)
+    pg.locator(f"{P} [data-act=s-wt-tpl][data-tpl=filter]").click(); pg.wait_for_timeout(150)
+    pg.locator(f"{P} [data-act=s-wt-tpl][data-tpl=rauch]").click(); pg.wait_for_timeout(150)
+    pg.locator(f"{P} [data-act=s-wt-add]").click(); pg.wait_for_timeout(150)
+    rows = pg.locator(f"{P} .wtask")
+    check("WT: drei Aufgaben im Entwurf", rows.count() == 3)
+    rows.nth(2).locator('[data-set$=".title"]').fill("Dachrinne reinigen")
+    rows.nth(2).locator('[data-set$=".interval"]').fill("6")
+    rows.nth(2).locator('[data-set$=".unit"]').select_option("wochen")
+    check("WT: Entwurf ungespeichert markiert", "dirty" in pg.locator(f"{P} .stab[data-tab=technik]").get_attribute("class"))
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.maintenance)")
+    today = pg.evaluate("(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()")
+    tk = saved["tasks"]
+    check("WT: gespeichert mit Titel, Intervall und Startdatum heute", len(tk) == 3 and tk[0]["title"] == "Lüftungsfilter wechseln" and tk[0]["interval"] == 6
+          and tk[2]["title"] == "Dachrinne reinigen" and tk[2]["unit"] == "wochen" and tk[2]["interval"] == 6 and all(t["since"] == today for t in tk))
+    # Navigation und Seite: alles frisch angelegt → nichts fällig
+    nav = pg.locator(f'{P} .nav[data-to="wartung"]')
+    check("WT: Seite Wartung in der Navigation", nav.count() == 1 and pg.locator(f'{P} .nav[data-to="wartung"] .wbadge').count() == 0)
+    nav.click(); pg.wait_for_timeout(300)
+    check("WT: Seite zeigt alle Aufgaben, nichts fällig", pg.locator(f"{P} .wrow").count() == 3 and pg.locator(f"{P} .wrow.due").count() == 0 and "nichts fällig" in pg.locator(f"{P} .ptitle .psub").inner_text())
+    check("WT: Dachrinne zuerst (früheste Fälligkeit), Intervall im Text", "Dachrinne" in pg.locator(f"{P} .wrow").first.inner_text() and "alle 6 Wochen" in pg.locator(f"{P} .wrow").first.inner_text())
+    # Filter vor 7 Monaten zuletzt gewechselt, Rauchmelder in 10 Tagen fällig → Fällig und Demnächst
+    pg.evaluate("""(() => { const p = document.querySelector('haus-visualisierung-panel'), add = window.__HAUS_VIS__.addInterval;
+      const d = new Date(), iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const back = (n, u) => { const x = new Date(); if (u === 'm') x.setMonth(x.getMonth() - n); else x.setDate(x.getDate() - n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+      const M = structuredClone(p._layout.maintenance); M.tasks[0].since = back(7, 'm'); M.tasks[1].since = back(355, 'd');
+      return window.__api.hass.callWS({ type: 'x/save', layout: { ...p._layout, maintenance: M } }).then((r) => { p._layout = { ...p._layout, maintenance: r.layout.maintenance }; p._dirty = true; p._schedule(); }); })()""")
+    pg.wait_for_timeout(300)
+    due = pg.locator(f"{P} .wsec.due .wrow")
+    check("WT: überfällige Aufgabe unter „Fällig“", due.count() == 1 and "Lüftungsfilter" in due.inner_text() and "fällig" in due.locator(".wdue").inner_text() and "seit" in due.locator(".wdue").inner_text())
+    check("WT: bald fällige unter „Demnächst“", pg.locator(f"{P} .wsec.soon .wrow").count() == 1 and "Rauchmelder" in pg.locator(f"{P} .wsec.soon").inner_text())
+    check("WT: Zahl der fälligen an der Navigation", pg.locator(f'{P} .nav[data-to="wartung"] .wbadge').inner_text() == "1")
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('maint:')).map(a => [a.level, a.title, a.to]); }})()")
+    check("WT: fällige Aufgabe als Hinweis in den Meldungen", al == [["info", "Wartung fällig · Lüftungsfilter wechseln", "wartung"]])
+    # Erledigt → nächstes Datum, Rückgängig
+    due.locator("[data-act=wt-done]").click(); pg.wait_for_timeout(300)
+    calls = [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "maintenance_done"]
+    check("WT: Erledigt schickt die Aufgabe ans Backend", len(calls) == 1 and calls[0]["task"] == tk[0]["id"] and not calls[0].get("undo"))
+    row = pg.locator(f'{P} .wrow[data-task="{tk[0]["id"]}"]')
+    check("WT: danach nicht mehr fällig, zuletzt heute von Tobias", pg.locator(f"{P} .wsec.due").count() == 0 and "ok" in row.get_attribute("class") and "Tobias" in row.inner_text())
+    nxt = pg.evaluate(f"window.__HAUS_VIS__.addInterval('{today}', 6, 'monate')")
+    check("WT: Hinweis mit nächstem Datum", "nächstes Mal" in pg.locator(f"{P} .toast").inner_text() if pg.locator(f"{P} .toast").count() else False)
+    check("WT: Fälligkeit in sechs Monaten", ".".join(reversed(nxt.split("-"))) in row.locator(".wdue").inner_text())
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('maint:')).length; }})()")
+    check("WT: Meldung verschwindet", al == 0 and pg.locator(f'{P} .nav[data-to="wartung"] .wbadge').count() == 0)
+    row.locator("[data-act=wt-undo]").click(); pg.wait_for_timeout(300)
+    check("WT: Rückgängig – wieder fällig", pg.locator(f"{P} .wsec.due .wrow").count() == 1 and pg.locator(f"{P} [data-act=wt-undo]").count() == 0)
+    # Handy: nichts ragt heraus, Knöpfe erreichbar
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    check("WT: Handy – nichts ragt aus der Seite", not pg.evaluate(WIDE))
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    # Feste Regel „Wartung fällig“ abschalten → keine Meldung, Seite bleibt
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, builtin: {{ ...p._layout.alerts.builtin, maintenance: false }} }} }}; p._dirty = true; p._schedule(); }})()"); pg.wait_for_timeout(300)
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('maint:')).length; }})()")
+    check("WT: Regel aus – keine Meldung, Seite zeigt weiter fällig", al == 0 and pg.locator(f"{P} .wsec.due .wrow").count() == 1)
+    # Aufgabe löschen; ohne Aufgaben verschwindet die Seite aus der Navigation
+    pg.locator(f'{P} .nav[data-to="einstellungen"]').click(); pg.wait_for_timeout(300); stab(pg, "technik")
+    for _ in range(3):
+        pg.locator(f"{P} [data-act=s-wt-del]").first.click(); pg.wait_for_timeout(120)
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    check("WT: alle Aufgaben gelöscht – keine Seite Wartung mehr", pg.locator(f"{P} .wtask").count() == 0 and pg.locator(f'{P} .nav[data-to="wartung"]').count() == 0)
+
+
 def auswahl(args):
     """Abschnitte zu den Namen (Gruppe oder Abschnitt) auf der Kommandozeile; ohne Namen alle."""
     if not args:

@@ -17,6 +17,8 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 6 | Garten und Bewässerung mit Regenvorhersage | mittel | M | neu |
 | 7 | Wartungsplaner fürs Haus | mittel | M | in Umsetzung |
 | 8 | ~~Rückblick und Vorjahresvergleich~~ | mittel | M | umgesetzt (Rest offen) |
+| ~~7~~ | ~~Wartungsplaner fürs Haus~~ | mittel | M | umgesetzt |
+| 8 | Rückblick und Vorjahresvergleich | mittel | M | in Umsetzung |
 | 9 | Grundriss-Ansicht je Etage | niedrig | L | neu |
 | 10 | Anwesenheits-Simulation im Urlaub | niedrig | M | in Umsetzung |
 | 11 | Nachtmodus fürs Wandpanel | später | S | vorgemerkt |
@@ -63,7 +65,9 @@ Bodenfeuchte, Ventile und Regen der letzten Tage auf einer Karte (Raum „Garten
 vorhandenen Vorhersage: „Heute nicht gießen, morgen 8 mm Regen“ bzw. „3 Tage trocken über 28 °C: abends gießen“.
 Ventil mit Laufzeit starten, nur auf Tippen. Gleiche Logik wie die Beschattungshinweise.
 
-### 7. Wartungsplaner fürs Haus
+### ~~7. Wartungsplaner fürs Haus~~ (umgesetzt, siehe CHANGELOG)
+Offen geblieben: Batteriewechsel direkt aus der Batterieseite übernehmen, Aufgaben nach Betriebsstunden.
+
 Liste wiederkehrender Aufgaben mit Fälligkeit: Lüftungsfilter, Heizungswartung, Rauchmelder testen, Kaminkehrer,
 Batteriewechsel (aus der Batterieseite übernommen), Wasserfilter, Auto/Wallbox. Fällige Punkte in den Meldungen,
 „Erledigt“ setzt das nächste Datum. Optional nach Betriebsstunden (z. B. Pumpe, Filter nach Laufzeit).

@@ -82,6 +82,7 @@ DEFAULT_LAYOUT: dict = {
             "alarm_panel": True,       # Alarmanlage (z. B. Alarmo) ausgelöst
             "mold": True,              # Schimmelrisiko: Raumfeuchte zu hoch – jetzt lüften
             "appliances": True,        # Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)
+            "maintenance": True,       # Wartungsplaner: Aufgabe fällig
         },
         "modes": {},                   # {feste Regel: [Hausmodi]} – fehlt = Standard (BUILTIN_MODES)
         "contacts_min": 0,             # Fenster erst nach … Minuten melden
@@ -155,6 +156,11 @@ DEFAULT_LAYOUT: dict = {
         "enabled": True,
         "auto": True,                  # ohne Einträge: Leistungssensoren nach Namen (Waschmaschine, Trockner, Spülmaschine)
         "items": [],                   # [{id, name, kind, power, energy, status, door, remaining, start_w, stop_w, stop_min}]
+    },
+    "maintenance": {               # Wartungsplaner: wiederkehrende Aufgaben (erledigt-Daten: maintenance.py)
+        "enabled": True,
+        "lead_days": 14,               # „demnächst“ ab … Tagen vor der Fälligkeit
+        "tasks": [],                   # [{id, title, icon, interval, unit (tage|wochen|monate|jahre), since, note}]
     },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",

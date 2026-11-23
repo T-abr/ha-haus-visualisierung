@@ -19,6 +19,7 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
+from .maintenance import UNITS as MAINT_UNITS
 
 _LIST_OF_STR = (
     "area_order",
@@ -348,6 +349,40 @@ def _price(raw: dict) -> dict:
     return out
 
 
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TASK_ID = re.compile(r"^[a-z0-9_-]{1,24}$")
+
+
+def _maintenance(raw: dict) -> dict:
+    """Wartungsplaner: Schalter, Vorlauf und Aufgaben mit Intervall und Startdatum."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["maintenance"])
+    if isinstance(raw.get("enabled"), bool):
+        out["enabled"] = raw["enabled"]
+    out["lead_days"] = _int(raw.get("lead_days"), 0, 90, out["lead_days"])
+    seen: set[str] = set()
+    for i, t in enumerate(raw.get("tasks", [])[:50] if isinstance(raw.get("tasks"), list) else []):
+        if not isinstance(t, dict):
+            continue
+        tid = str(t.get("id", "")).lower()
+        if not _TASK_ID.match(tid) or tid in seen:
+            tid = f"w{i}"
+            while tid in seen:
+                tid += "x"
+        seen.add(tid)
+        ic = str(t.get("icon", ""))[:60]
+        since = str(t.get("since", ""))[:10]
+        out["tasks"].append({
+            "id": tid,
+            "title": str(t.get("title", ""))[:60],
+            "icon": ic if ic.startswith("mdi:") else "mdi:wrench-clock",
+            "interval": _int(t.get("interval"), 1, 120, 12),
+            "unit": t.get("unit") if t.get("unit") in MAINT_UNITS else "monate",
+            "since": since if _DATE.match(since) else "",
+            "note": str(t.get("note", ""))[:200],
+        })
+    return out
+
+
 def _wallpanel(raw: dict) -> dict:
     """Wandpanel: Zeiten in Minuten (0 = nie), Schalter, Wetter und Bewegungsmelder."""
     out = copy.deepcopy(DEFAULT_LAYOUT["wallpanel"])
@@ -468,6 +503,8 @@ def sanitize(raw: Any) -> dict:
         result["termine"] = _termine(raw["termine"])
     if isinstance(raw.get("appliances"), dict):
         result["appliances"] = _appliances(raw["appliances"])
+    if isinstance(raw.get("maintenance"), dict):
+        result["maintenance"] = _maintenance(raw["maintenance"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 

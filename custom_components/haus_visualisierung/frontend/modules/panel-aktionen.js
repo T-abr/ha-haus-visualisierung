@@ -9,6 +9,7 @@ import { buildModel } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
 import { simAction } from "./anwesenheit.js";
 import { applList } from "./geraete.js";
+import { maintCall, newTask } from "./wartung.js";
 
 const AktionenMixin = (Base) => class extends Base {
   async _actionExtra(act, t) {
@@ -53,6 +54,7 @@ const AktionenMixin = (Base) => class extends Base {
         try { await this._hass.callWS({ type: `${DOMAIN}/appliance_ack`, appliance: t.dataset.id }); this._toast("Quittiert"); } catch (err) { this._toast(`Quittieren fehlgeschlagen: ${err && err.message ? err.message : err}`); }
         return;
       }
+      case "wt-done": case "wt-undo": maintCall(this, t.dataset.task, act === "wt-undo"); return;
       case "al-lock": this._call("lock", "lock", { entity_id: t.dataset.eid }); this._toast("Wird verriegelt"); return;
       case "hm-set": {
         const md = t.dataset.mode;
@@ -196,6 +198,8 @@ const AktionenMixin = (Base) => class extends Base {
         break;
       }
       case "s-appl-del": D.appliances.items = D.appliances.items.filter((_, i) => i !== Number(t.dataset.i)); break;
+      case "s-wt-add": case "s-wt-tpl": D.maintenance.tasks = [...(D.maintenance.tasks || []), newTask(t.dataset.tpl)]; break;
+      case "s-wt-del": D.maintenance.tasks = D.maintenance.tasks.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-link-add": D.links = [...(D.links || []), { title: "", icon: "mdi:link", path: "", embed: true, mode: "theme" }]; break;
       case "s-link-del": D.links = D.links.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-tab": {
