@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Behoben – Wanddisplay
+- **Kacheln lassen sich bedienen**: Ein Tipp auf eine Entitäts-Kachel schaltet jetzt (Licht, Schalter, Lüfter, Abdeckung, Schloss, Klima, Mediaplayer umschalten; Szene, Skript, Taster auslösen). Die Firmware meldete den Tipp bisher nicht; das kommt mit der nächsten Firmware. Energie-, Klima-, Meldungs- und Geräte-Kacheln öffnen dann ihre Seite.
+
+### Tests
+- `test_display.py`: Tipp auf Kacheln (`kachel:N`) und `tap_service`.
+
 ## 1.14.0 – 2026-11-23
 
 ### Neu – Als Standard-Dashboard von Home Assistant

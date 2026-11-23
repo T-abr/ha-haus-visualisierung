@@ -149,6 +149,17 @@ async def test_display_flow(hass: HomeAssistant, freezer: FrozenDateTimeFactory)
     assert hass.states.get(eid) is None
 
 
+def test_tap_service() -> None:
+    from homeassistant.core import State
+    from custom_components.haus_visualisierung.display import tap_service
+    assert tap_service("light.flur", State("light.flur", "on")) == ("homeassistant", "toggle")
+    assert tap_service("lock.tuer", State("lock.tuer", "locked")) == ("lock", "unlock")
+    assert tap_service("lock.tuer", State("lock.tuer", "unlocked")) == ("lock", "lock")
+    assert tap_service("scene.abend", None) == ("scene", "turn_on")
+    assert tap_service("button.klingel", None) == ("button", "press")
+    assert tap_service("sensor.temp", State("sensor.temp", "20")) is None
+
+
 def test_device_field() -> None:
     out = sanitize_displays([{"name": "A", "device": "haus-display-a1b2c3"}, {"name": "B", "device": "haus-display-a1b2c3"},
                              {"name": "C", "device": "Böse Name!"}, {"name": "D"}])
@@ -237,6 +248,18 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     await _tick(hass)
     assert monitor.house.mode == "abwesend"
     assert json.loads([c.data["daten"] for c in calls if c.data["bereich"] == "kopf"][-1])["modus"]["k"] == "abwesend"
+
+    # Kachel antippen: entity:-Kachel schaltet, Szene löst aus, Anzeige-Kachel und falsche Nummer tun nichts
+    toggles = async_mock_service(hass, "homeassistant", "toggle")
+    scenes = async_mock_service(hass, "scene", "turn_on")
+    hass.states.async_set("light.flur", "off")
+    await store.async_save({**store.data, "displays": [{"name": "Flur", "device": "haus-display-a1b2c3",
+                                                         "tiles": ["pv_jetzt", "entity:light.flur", "entity:scene.abend"]}]})
+    await _tick(hass)
+    for ziel in ("kachel:0", "kachel:1", "kachel:2", "kachel:7", "kachel:x"):
+        await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": ziel}, blocking=True)
+    await hass.async_block_till_done()
+    assert [c.data["entity_id"] for c in toggles] == ["light.flur"] and [c.data["entity_id"] for c in scenes] == ["scene.abend"]
 
     # Fremdes Gerät meldet sich → „nicht zugeordnet“; Zuordnung entfernen → Gerät zeigt das wieder
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-ffffff", "ziel": "hallo"}, blocking=True)

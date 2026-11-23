@@ -138,6 +138,23 @@ def device_service(device: str) -> str:
     return f"{device.replace('-', '_')}_{SERVICE_DATA}"
 
 
+TOGGLE_DOMAINS = ("light", "switch", "fan", "input_boolean", "cover", "siren", "humidifier", "media_player", "climate")
+PRESS = {"button": ("button", "press"), "input_button": ("input_button", "press"),
+         "scene": ("scene", "turn_on"), "script": ("script", "turn_on")}
+
+
+def tap_service(eid: str, st: State | None) -> tuple[str, str] | None:
+    """Dienst für einen Tipp auf eine entity:-Kachel (None = nur anzeigen)."""
+    domain = eid.split(".", 1)[0]
+    if domain == "lock":
+        return ("lock", "lock" if st and st.state != "locked" else "unlock")
+    if domain in PRESS:
+        return PRESS[domain]
+    if domain in TOGGLE_DOMAINS:
+        return ("homeassistant", "toggle")
+    return None
+
+
 def sanitize_displays(raw: Any) -> list[dict]:
     """Einstellungen je Display prüfen (für store.sanitize)."""
     out, ids, devices = [], set(), set()
@@ -792,15 +809,11 @@ class DisplayHub:
                 key = d["tiles"][int(ziel[7:])]
             except (ValueError, IndexError):
                 return
-            if key.startswith("entity:"):
-                eid = key[7:]
-                if eid.split(".", 1)[0] in ("light", "switch", "fan", "input_boolean", "cover", "lock"):
-                    st = self.hass.states.get(eid)
-                    if eid.startswith("lock."):
-                        svc = ("lock", "lock" if st and st.state != "locked" else "unlock")
-                        await self.hass.services.async_call(*svc, {"entity_id": eid}, blocking=False)
-                    else:
-                        await self.hass.services.async_call("homeassistant", "toggle", {"entity_id": eid}, blocking=False)
+            if key.startswith("entity:") and (svc := tap_service(key[7:], self.hass.states.get(key[7:]))):
+                try:
+                    await self.hass.services.async_call(*svc, {"entity_id": key[7:]}, blocking=False)
+                except Exception as err:  # noqa: BLE001 – ein falscher Tipp soll die Integration nicht stören
+                    _LOGGER.warning("Display %s: %s nicht geschaltet: %s", did, key[7:], err)
         elif ziel == "geraet_ok":
             for r in self.monitor.appliances.snapshot():
                 if r.get("state") == "fertig":
