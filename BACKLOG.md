@@ -15,10 +15,10 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 4 | Wasser und Gas mit Leck-Erkennung | hoch | M | neu |
 | 5 | Heizung je Raum: Sollwert und Wochenplan | mittel | M | neu |
 | 6 | Garten und Bewässerung mit Regenvorhersage | mittel | M | neu |
-| 7 | Wartungsplaner fürs Haus | mittel | M | neu |
-| 8 | Rückblick und Vorjahresvergleich | mittel | M | neu |
+| 7 | Wartungsplaner fürs Haus | mittel | M | in Umsetzung |
+| 8 | Rückblick und Vorjahresvergleich | mittel | M | in Umsetzung |
 | 9 | Grundriss-Ansicht je Etage | niedrig | L | neu |
-| 10 | Anwesenheits-Simulation im Urlaub | niedrig | M | neu |
+| 10 | Anwesenheits-Simulation im Urlaub | niedrig | M | in Umsetzung |
 | 11 | Nachtmodus fürs Wandpanel | später | S | vorgemerkt |
 | 12 | Geräte-Warnungen (offline, Updates) | später | S | vorgemerkt |
 | 13 | Kamera-Raster auf Sicherheit | später | M | vorgemerkt |
@@ -26,7 +26,8 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 15 | Intelligentes Laden der Wallbox | später | L | vorgemerkt |
 | 16 | Musik- und Medienseite | später | L | vorgemerkt |
 
-„Vorgemerkt“ heißt: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
+„In Umsetzung“: von Tobias am 2026-11-23 ausgewählt, wird gerade umgesetzt. „Neu“: im Backlog, noch nicht
+ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
 
 ## Neue Ideen
 
