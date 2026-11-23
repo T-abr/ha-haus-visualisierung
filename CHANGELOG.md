@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.10.0 – 2026-11-23
+
 ### Neu – Vorhersage auf der Übersicht
 - **Karte „Vorhersage“** auf der Startseite (Cockpit rechte Spalte, Aktiv-Fokus und Etagen-Spalten unter der Energieleiste, Hausschnitt): jetzt (Temperatur, Lage; Tipp öffnet das Wetter), fünf Tage mit Höchst-/Tiefstwert und Regen, dazu die **Solarprognose** („PV heute 18,5 kWh · noch 4,3 · morgen 24,5 kWh“) und der erwartete Ertrag je Tag, der ertragreichste Tag hervorgehoben. Liegt ein Beschattungshinweis vor, steht er unten in der Karte; ein Tipp öffnet die Seite Beschattung. Gleiches Vorhersage-Abo wie Kopfzeile und Beschattung.
 - Solarprognose automatisch aus **Forecast.Solar** (mehrere Dachflächen werden addiert) oder **Solcast** (bis Tag 7); Wh/kWh/MWh werden umgerechnet.
@@ -11,6 +13,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ### Tests
 - Neue Gruppe `prognose` (20 Prüfungen): Karte in allen Übersichten, Forecast.Solar mit zwei Dachflächen und Wh, eingestellter Sensor, Hinweis → Beschattung, Handybreite, Abschalten. Backend: Einstellungen `forecast` werden geprüft.
+
+### Performance
+- Großes Testhaus (`tests/perf/measure.py`): Aufbau 6,2–36 ms je Seite (Übersicht 15,7–17,9 ms), 0 Neuaufbauten, hass-Setter Ø 22–34 µs. Die Karte „Vorhersage“ nutzt das vorhandene Vorhersage-Abo; die Suche nach Solarsensoren läuft nur, wenn sich die Zustände ändern, und wird gemerkt.
 
 ## 1.9.0 – 2026-11-22
 
