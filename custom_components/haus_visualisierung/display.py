@@ -660,7 +660,8 @@ class DisplayHub:
         done = self._done_appliances()
         if done:
             return {"i": "check-circle-outline", "f": C_OK, "n": f"{done[0]} fertig", "s": "", "knopf": "OK", "ziel": "geraet_ok"}
-        return None
+        # Sonst eine ruhige Zeile, damit die Startseite wie im Entwurf aussieht (keine leere Fläche unter den Kacheln)
+        return {"i": "shield-check", "f": C_OK, "n": "Alles in Ordnung", "s": "Keine offenen Meldungen", "knopf": "", "ziel": ""}
 
     def energie(self) -> dict:
         F, D = self.energy_now(), self.energy_day()

@@ -219,6 +219,8 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     await _tick(hass)
     sent = {c.data["bereich"]: c.data["daten"] for c in calls}
     assert sent["protokoll"] == str(PROTOCOL) and json.loads(sent["einstellungen"])["name"] == "Flur"
+    # leeres Haus ohne Meldungen: ruhige Hinweiszeile statt leerer Fläche
+    assert json.loads(sent["hinweis"]) == {"i": "shield-check", "f": "#4fd18b", "n": "Alles in Ordnung", "s": "Keine offenen Meldungen", "knopf": "", "ziel": ""}
     assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "haus"}
     n = len(calls)
     await _tick(hass, 31)
