@@ -269,6 +269,23 @@ def _shading(raw: dict) -> dict:
     return out
 
 
+def _weather_alerts(raw: dict) -> dict:
+    """Wetterwarnungen: Schalter, DWD-Sensoren, Grenzen für Regen und Sturm, Regensensor, Markisen."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["weather_alerts"])
+    for key in ("enabled", "rain", "wind"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    out["dwd"] = [e for e in (_entity(x) for x in raw.get("dwd", []) if isinstance(raw.get("dwd"), list)) if e.startswith("sensor.")][:6]
+    out["dwd_min"] = _int(raw.get("dwd_min"), 1, 4, out["dwd_min"])
+    out["rain_min"] = _int(raw.get("rain_min"), 15, 240, out["rain_min"])
+    out["rain_mm"] = _num(raw.get("rain_mm"), 0.1, 10, out["rain_mm"])
+    rs = _entity(raw.get("rain_sensor"))
+    out["rain_sensor"] = rs if rs.startswith(("binary_sensor.", "sensor.")) else ""
+    out["wind_kmh"] = _int(raw.get("wind_kmh"), 20, 150, out["wind_kmh"])
+    out["awnings"] = [e for e in (_entity(x) for x in raw.get("awnings", []) if isinstance(raw.get("awnings"), list)) if e.startswith("cover.")][:20]
+    return out
+
+
 def _forecast(raw: dict) -> dict:
     """Karte „Vorhersage“: Schalter und Sensoren der Solarprognose (Energie)."""
     out = copy.deepcopy(DEFAULT_LAYOUT["forecast"])
@@ -505,6 +522,8 @@ def sanitize(raw: Any) -> dict:
         result["energy"] = _energy(raw["energy"])
     if isinstance(raw.get("forecast"), dict):
         result["forecast"] = _forecast(raw["forecast"])
+    if isinstance(raw.get("weather_alerts"), dict):
+        result["weather_alerts"] = _weather_alerts(raw["weather_alerts"])
     if isinstance(raw.get("price"), dict):
         result["price"] = _price(raw["price"])
     if isinstance(raw.get("termine"), dict):

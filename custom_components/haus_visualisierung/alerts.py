@@ -40,6 +40,7 @@ from .const import BUILTIN_MODES, DOMAIN, HOUSE_MODES, PANEL_URL_PATH
 from .maintenance import due_info, due_text
 from .mode import HouseMode
 from .presence import PresenceSimulator
+from .weather import WeatherWatch
 
 EVENT_NOTIFY_ACTION = "mobile_app_notification_action"
 ACT_ACK, ACT_MUTE, ACT_LOCK = "HV_ACK_", "HV_MUTE_", "HV_LOCK_"
@@ -230,6 +231,7 @@ class AlertMonitor:
         self.runner = ActionRunner(hass, self)
         self.sim = PresenceSimulator(hass, self)
         self.appliances = ApplianceTracker(hass, lambda: self.layout, self._schedule)
+        self.weather = WeatherWatch(hass, self)
 
     # ---------- Lebenszyklus ----------
     async def async_start(self) -> None:
@@ -271,6 +273,7 @@ class AlertMonitor:
         # Alarme aber trotzdem melden.
         self._rebuild()
         self.appliances.update()
+        self.weather.refresh(force=True)
         current = {a.key: a for a in self.evaluate()}
         self.book.sync(current, silent_new=True)
         for alert in current.values():
@@ -349,7 +352,7 @@ class AlertMonitor:
         self._panels = hass.states.async_entity_ids("alarm_control_panel")
         self.appliances.rebuild()
         self._watch = (self._all | set(batteries) | set(self._panels) | set(self._outdoor.values())
-                       | {r.get("entity") for r in rules if r.get("entity")} | self.appliances.watch)
+                       | {r.get("entity") for r in rules if r.get("entity")} | self.appliances.watch | self.weather.watch())
 
     def _room_climate(self, room: _Room, area: Any) -> tuple[str | None, str | None]:
         """Temperatur- und Feuchtefühler des Raums – wie im Panel: Vorgabe des Bereichs, sonst der erste passende."""
@@ -560,6 +563,10 @@ class AlertMonitor:
             out.extend(Alert(key, "info", title, detail, "") for key, title, detail, _icon in self.appliances.alerts())
         if b.get("maintenance", True) and mode_ok("maintenance"):
             out.extend(self._maint_alerts())
+        if mode_ok("weather"):
+            out.extend(Alert(key, level, title, detail, path) for key, level, title, detail, path, _icon in self.weather.evaluate())
+        else:
+            self.weather.evaluate_off()
         for i, rule in enumerate(cfg.get("rules", [])):
             ent = rule.get("entity")
             if rule.get("enabled") is False or not ent:
@@ -600,6 +607,7 @@ class AlertMonitor:
         self.runner.check_escalation()
         if self._baseline_done:
             self.appliances.update()
+            self.weather.refresh()
         self._schedule(0)
 
     @callback

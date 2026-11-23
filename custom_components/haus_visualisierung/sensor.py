@@ -14,7 +14,7 @@ from .display import PROTOCOL
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    async_add_entities([HausAlarmeSensor(entry), HausGeraeteSensor(entry)])
+    async_add_entities([HausAlarmeSensor(entry), HausGeraeteSensor(entry), HausWetterSensor(entry)])
     hub = hass.data[DOMAIN].get("displays")
     if hub is None:
         return
@@ -136,6 +136,49 @@ class HausGeraeteSensor(SensorEntity):
     @callback
     def _changed(self) -> None:
         self.async_write_ha_state()
+
+
+class HausWetterSensor(SensorEntity):
+    """Wetterwarnungen (weather.py): Zustand = Anzahl der Meldungen; DWD-Warnungen, Regen und Sturm als Attribute."""
+
+    _attr_has_entity_name = False
+    _attr_name = "Haus Wetterwarnungen"
+    _attr_should_poll = False
+    _attr_native_unit_of_measurement = None
+    _unrecorded_attributes = frozenset({"warnungen", "meldungen", "regen", "wind"})
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        self._attr_unique_id = f"{entry.entry_id}_wetter"
+        self.entity_id = "sensor.haus_wetter"
+
+    def _info(self) -> dict:
+        m = self.hass.data[DOMAIN].get("monitor")
+        return m.weather.info if m else {"warnungen": [], "regen": None, "wind": None, "meldungen": []}
+
+    @property
+    def native_value(self) -> int:
+        return len(self._info()["meldungen"])
+
+    @property
+    def icon(self) -> str:
+        info = self._info()
+        if info["warnungen"]:
+            return "mdi:weather-lightning"
+        return "mdi:weather-pouring" if info["regen"] else "mdi:weather-partly-cloudy"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return dict(self._info())
+
+    async def async_added_to_hass(self) -> None:
+        m = self.hass.data[DOMAIN].get("monitor")
+        if m:
+            self.async_on_remove(m.weather.async_add_listener(self._changed))
+
+    @callback
+    def _changed(self) -> None:
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
 
 
 class HausDisplaySensor(SensorEntity):
