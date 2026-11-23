@@ -227,6 +227,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         const own = Object.fromEntries(((layout.displays) || []).filter((d) => d.device).map((d) => [d.device, d.id]));
         return { devices: api.dispDevices.map((x) => ({ ...x, display: own[x.name] || null })), firmware: api.dispFirmware, service: "haus_daten" };
       }
+      if (msg.type.endsWith("/display_bell_test")) { api.log.push(["ws", "display_bell_test", msg]); return { ok: true }; }
       if (msg.type.endsWith("/display_update")) { api.log.push(["ws", "display_update", msg]); return { ok: true, version: api.dispFirmware.version }; }
       if (msg.type.endsWith("/display_adopt")) {
         api.log.push(["ws", "display_adopt", msg]);

@@ -17,7 +17,7 @@ const DEFAULT_TILES = ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"];
 const FIRMWARE_URL = "https://github.com/T-abr/ha-haus-display";
 /* Eigene Seiten: Grenzen wie display.py (CUSTOM_PAGES, CUSTOM_TILES); Symbole nur aus der Firmware (DISPLAY_ICONS) */
 const CUSTOM_PAGES = 3, CUSTOM_TILES = 6;
-const CUSTOM_ICONS = ["air-conditioner", "airplane", "battery", "battery-70", "bed", "bell", "blinds", "car", "cctv", "ceiling-light", "coffee", "desk-lamp", "door", "door-closed", "door-open", "eye", "fan", "fan-off", "fire", "flash", "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump", "home", "home-lightning-bolt", "home-thermometer", "home-variant", "lamp", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on", "lightbulb-outline", "lightning-bolt", "lock", "lock-open", "lock-open-variant", "motion-sensor", "music", "palette", "pool", "power", "power-plug", "power-plug-outline", "power-socket-eu", "radiator", "robot-vacuum", "script-text", "shield-check", "shield-home", "shield-lock", "shower", "silverware-fork-knife", "snowflake", "sofa", "sofa-outline", "solar-power-variant", "speaker", "speaker-play", "sprinkler", "star", "string-lights", "television", "thermometer", "thermostat", "toggle-switch", "toggle-switch-off-outline", "view-dashboard", "washing-machine", "water", "water-percent", "window-closed", "window-open-variant", "window-shutter", "window-shutter-open"];
+const CUSTOM_ICONS = ["air-conditioner", "airplane", "battery", "battery-70", "bed", "bell", "blinds", "car", "cctv", "ceiling-light", "coffee", "desk-lamp", "door", "door-closed", "door-open", "doorbell-video", "eye", "fan", "fan-off", "fire", "flash", "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump", "home", "home-lightning-bolt", "home-thermometer", "home-variant", "lamp", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on", "lightbulb-outline", "lightning-bolt", "lock", "lock-open", "lock-open-variant", "motion-sensor", "music", "palette", "pool", "power", "power-plug", "power-plug-outline", "power-socket-eu", "radiator", "robot-vacuum", "script-text", "shield-check", "shield-home", "shield-lock", "shower", "silverware-fork-knife", "snowflake", "sofa", "sofa-outline", "solar-power-variant", "speaker", "speaker-play", "sprinkler", "star", "string-lights", "television", "thermometer", "thermostat", "toggle-switch", "toggle-switch-off-outline", "view-dashboard", "washing-machine", "water", "water-percent", "window-closed", "window-open-variant", "window-shutter", "window-shutter-open"];
 
 const slug = (s) => String(s || "").toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
   .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 20);
@@ -28,7 +28,7 @@ function newDisplay(list) {
   let id = "flur", n = 2;
   while (ids.has(id)) id = `flur_${n++}`;
   return { id, name: n > 2 ? `Flur ${n - 1}` : "Flur", pages: ["start", "energie", "klima", "haus"], tiles: [...DEFAULT_TILES],
-    hint: true, bright_day: 80, bright_night: 10, wake: true, device: "", custom: [], saver: false, saver_min: 5, saver_bright: 20 };
+    hint: true, bright_day: 80, bright_night: 10, wake: true, device: "", custom: [], saver: false, saver_min: 5, saver_bright: 20, bell: true };
 }
 
 /** Seite ein- bzw. ausschalten (Start bleibt immer), Reihenfolge wie DISPLAY_PAGES */
@@ -106,6 +106,8 @@ function displaySettingsHTML(ctx, D) {
       ${d.saver ? `<div class="srow"><span class="lbl">Schoner nach / Helligkeit<small>Minuten ohne Berührung; Helligkeit in % (0 = aus, nachts gilt die geringere)</small></span>
         <input class="inp s" type="number" min="1" max="120" data-set="displays.${i}.saver_min" data-num="1" value="${d.saver_min ?? 5}">
         <input class="inp s" type="number" min="0" max="100" data-set="displays.${i}.saver_bright" data-num="1" value="${d.saver_bright ?? 20}"></div>` : ""}
+      <div class="srow"><span class="lbl">Klingel<small>klingelt es, zeigt das Display Kamerabild und Uhrzeit, optional „Tür öffnen“ (Einstellungen → Klingel)</small></span>
+        <label class="tgl"><input type="checkbox" data-set="displays.${i}.bell" data-bool="1" ${d.bell !== false ? "checked" : ""}><span></span></label></div>
       <div class="srow"><span class="lbl">Aufwecken bei Alarm<small>neue Alarm-Meldung schaltet das Display hell</small></span>
         <label class="tgl"><input type="checkbox" data-set="displays.${i}.wake" data-bool="1" ${d.wake !== false ? "checked" : ""}><span></span></label></div>
     </div>`;
@@ -116,7 +118,8 @@ function displaySettingsHTML(ctx, D) {
     <div class="set glass"><h2>${icon("mdi:tablet-dashboard")}Wanddisplays</h2>
       <p class="hint">Kleine Displays an der Wand, z. B. ein 4-Zoll-ESP32-S3 (480 × 480) mit ESPHome. Das Display zeigt die Inhalte der Visualisierung im gleichen Stil; Seiten, Kacheln und Helligkeit wirken nach dem Speichern sofort, ohne neu zu flashen. Je Display gibt es die Entität <code>sensor.haus_display_&lt;kennung&gt;</code> (Protokoll ${DISPLAY_PROTOCOL}). Firmware und Hintergründe: Repository <a href="${FIRMWARE_URL}" target="_blank" rel="noreferrer">ha-haus-display</a>.</p>
       ${rows || '<p class="hint">Noch kein Display eingerichtet.</p>'}
-      <div class="srow"><button class="pbtn" data-act="s-disp-add" ${list.length >= 6 ? "disabled" : ""}>${icon("mdi:plus")}Display hinzufügen</button></div>
+      <div class="srow"><button class="pbtn" data-act="s-disp-add" ${list.length >= 6 ? "disabled" : ""}>${icon("mdi:plus")}Display hinzufügen</button>
+        ${list.some((d) => d.device && d.bell !== false) ? `<button class="pbtn" data-act="s-disp-bell">${icon("mdi:bell-ring-outline")}Klingel testen</button>` : ""}</div>
     </div>`;
 }
 
@@ -267,6 +270,16 @@ async function updateDevice(ctx, t) {
   setTimeout(() => { if (W.busy === `upd:${dev}`) { W.busy = ""; W.sig = ""; loadDevices(ctx); } }, 60000);
 }
 
+/** „Klingel testen“: gespeicherte Displays zeigen das Klingel-Overlay („Tür öffnen“ löst im Test wirklich aus) */
+async function testBell(ctx) {
+  try {
+    const r = await ctx._hass.callWS({ type: `${DOMAIN}/display_bell_test` });
+    ctx._toast(r.ok ? "Klingel-Overlay an die Displays geschickt" : `Kein Test: ${r.error}`);
+  } catch (err) {
+    ctx._toast(`Kein Test: ${err && err.message ? err.message : err}`);
+  }
+}
+
 /** Gerät einem Display zuordnen (oder neues Display dafür anlegen); jedes Gerät gehört zu höchstens einem Display */
 function assignDevice(D, dev, val) {
   const list = (D.displays || []).map((d) => ({ ...d, device: d.device === dev ? "" : (d.device || "") }));
@@ -364,4 +377,4 @@ const DISPLAY_CSS = `
 @media (max-width:600px){.dslots{grid-template-columns:1fr}}
 `;
 
-export { adoptDevice, assignDevice, customAction, updateDevice, DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };
+export { adoptDevice, assignDevice, customAction, testBell, updateDevice, DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };

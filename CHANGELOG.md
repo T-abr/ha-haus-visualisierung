@@ -4,6 +4,11 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Wanddisplay: Klingel
+- Klingelt es, zeigt das Wanddisplay das **Klingel-Overlay wie das Wandpanel**: Kamerabild (Standbild, alle paar Sekunden neu), Kamera und Uhrzeit, „Es klingelt erneut“, optional **„Tür öffnen“** (zweimal tippen; Türöffner aus Einstellungen → Klingel, Schalter mit Impuls) und automatisches Schließen. Das Display wacht dabei auf, auch aus dem Bildschirmschoner.
+- Je Display unter Einstellungen → Displays → „Klingel“ abschaltbar; Knopf **„Klingel testen“** schickt das Overlay an die Displays.
+- Braucht die nächste Firmware (Bereich `klingel`, Ziel `klingel:tuer`, kein neues Protokoll); ältere Firmware ignoriert es.
+
 ## 1.15.0 – 2026-11-23
 
 Mitgelieferte Firmware **0.4.0** – Update im Reiter Displays über „Update auf 0.4.0“ (ab 0.3.0 über das Netz).
