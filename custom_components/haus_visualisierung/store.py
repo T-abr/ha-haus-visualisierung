@@ -115,6 +115,25 @@ _LEVEL_LIST = ("alarm", "warn", "info")
 _GA = re.compile(r"^\d{1,2}/\d{1,2}/\d{1,3}$|^\d{1,2}/\d{1,4}$|^\d{1,5}$")
 
 
+_SIM_DOMAINS = ("light.", "cover.", "switch.", "input_boolean.")
+
+
+def _presence_sim(raw: dict) -> dict:
+    """Anwesenheits-Simulation: Schalter, Modi, Geräte, Zeitraum und Zufallsversatz."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["presence_sim"])
+    if isinstance(raw.get("enabled"), bool):
+        out["enabled"] = raw["enabled"]
+    if isinstance(raw.get("modes"), list):
+        out["modes"] = _modes(raw["modes"]) or out["modes"]
+    sw = _entity(raw.get("switch"))
+    out["switch"] = sw if sw.startswith(("input_boolean.", "switch.")) else ""
+    ents = [_entity(e) for e in raw.get("entities", [])] if isinstance(raw.get("entities"), list) else []
+    out["entities"] = list(dict.fromkeys(e for e in ents if e.startswith(_SIM_DOMAINS)))[:60]
+    out["weeks"] = _int(raw.get("weeks"), 1, 4, out["weeks"])
+    out["jitter"] = _int(raw.get("jitter"), 0, 60, out["jitter"])
+    return out
+
+
 def _escalation(raw: dict) -> dict:
     out = copy.deepcopy(DEFAULT_LAYOUT["escalation"])
     for key in ("enabled", "push_critical"):
@@ -361,6 +380,8 @@ def sanitize(raw: Any) -> dict:
         result["alarm_actions"] = _actions(raw["alarm_actions"])
     if isinstance(raw.get("house_mode"), dict):
         result["house_mode"] = _house_mode(raw["house_mode"])
+    if isinstance(raw.get("presence_sim"), dict):
+        result["presence_sim"] = _presence_sim(raw["presence_sim"])
     if isinstance(raw.get("doorbell"), dict):
         db = raw["doorbell"]
         out = copy.deepcopy(DEFAULT_LAYOUT["doorbell"])

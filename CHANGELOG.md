@@ -4,11 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Anwesenheits-Simulation im Urlaub
+- **Einstellungen → Alarme → Anwesenheits-Simulation** (`presence_sim`, Standard aus): ausgewählte Lichter und Rollos (auch Schalter) schalten im Hausmodus **Urlaub** (wählbar, z. B. auch Abwesend) oder solange ein eigener Schalter (`input_boolean`/`switch`) an ist.
+- Vorlage ist ein echter Tag aus dem **Verlauf der letzten 1–4 Wochen** (Recorder), bevorzugt derselbe Wochentag; jede Schaltzeit wird zufällig um bis zu ± 15 Minuten (einstellbar) verschoben. Helligkeit und Rollo-Position werden übernommen; beim Start wird der Zustand wie zur selben Uhrzeit am Vorlagetag hergestellt. Um Mitternacht wird der nächste Tag geplant.
+- Läuft im Backend, auch ohne offenes Panel, und **endet sofort**, wenn der Modus wechselt (z. B. Rückkehr → Zuhause). Status, nächste Schaltvorgänge und Protokoll in den Einstellungen (Websocket `haus_visualisierung/presence_sim`).
+
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
 - Neue Einstellung **Einstellungen → Wandpanel → „Bildschirmschoner wandern lassen“** (`wallpanel.wander`, Standard aus) für alle, die den Einbrenn-Schutz wollen (z. B. OLED). LCDs wie im iPad brennen praktisch nicht ein.
 
 ### Tests
+- Anwesenheits-Simulation: Backend (Verlauf auswerten, Plan mit Versatz, Start/Ende nach Modus und Schalter, Rollo-Position, echter Recorder) und neue Gruppe `anwesenheit` der Bedienprüfungen.
 - Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
 
 ## 1.10.0 – 2026-11-23

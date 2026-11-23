@@ -8,12 +8,13 @@ import { ALARMS } from "./warnungen.js";
 import { techCfg } from "./technik.js";
 import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 import { solarCfg } from "./prognose.js";
+import { simSettingsHTML } from "./anwesenheit.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
 const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
-  alarme: ["house_mode", "alerts", "escalation", "alarm_actions"],
+  alarme: ["house_mode", "presence_sim", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
   technik: ["heating", "wallbox", "shading"],
 };
@@ -89,6 +90,7 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><input class="inp w" list="dl-all" placeholder="Entität hinzufügen" data-fav-input="1"><button class="pbtn" data-act="s-fav-add">${icon("mdi:plus")}Hinzufügen</button></div></div>`;
     else if (tab === "alarme") body = `${dlAll}
       ${this._setMode(D)}
+      ${simSettingsHTML(this, D)}
       ${this._setAlerts(D)}
       ${this._setActions(D)}`;
     else if (tab === "technik") body = `${dlAll}

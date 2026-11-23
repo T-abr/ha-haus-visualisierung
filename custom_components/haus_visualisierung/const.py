@@ -108,6 +108,14 @@ DEFAULT_LAYOUT: dict = {
         "alarmo_sync": False,          # Hausmodus und Alarmanlage koppeln
         "arm": {"zuhause": "disarm", "nacht": "arm_night", "abwesend": "arm_away", "urlaub": "arm_vacation"},
     },
+    "presence_sim": {              # Anwesenheits-Simulation (presence.py)
+        "enabled": False,
+        "modes": ["urlaub"],           # läuft in diesen Hausmodi …
+        "switch": "",                  # … oder solange dieser Schalter an ist (input_boolean/switch)
+        "entities": [],                # Lichter und Rollos
+        "weeks": 2,                    # Vorlage aus den letzten … Wochen (Verlauf)
+        "jitter": 15,                  # Schaltzeiten zufällig um bis zu ± … Minuten verschieben
+    },
     "escalation": {                # Eskalation: Meldung nach … Minuten nicht quittiert
         "enabled": True,
         "minutes": 5,

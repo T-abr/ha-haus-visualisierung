@@ -35,6 +35,7 @@ from .actions import ActionRunner
 from .alarms import ACKED, MUTED, AlarmBook
 from .const import BUILTIN_MODES, HOUSE_MODES, PANEL_URL_PATH
 from .mode import HouseMode
+from .presence import PresenceSimulator
 
 EVENT_NOTIFY_ACTION = "mobile_app_notification_action"
 ACT_ACK, ACT_MUTE, ACT_LOCK = "HV_ACK_", "HV_MUTE_", "HV_LOCK_"
@@ -223,6 +224,7 @@ class AlertMonitor:
         self.book = AlarmBook(hass)
         self.house = HouseMode(hass, self)
         self.runner = ActionRunner(hass, self)
+        self.sim = PresenceSimulator(hass, self)
 
     # ---------- Lebenszyklus ----------
     async def async_start(self) -> None:
@@ -230,6 +232,7 @@ class AlertMonitor:
         await self.book.async_load()
         self.book.mode_info = self.house.status
         self.house.async_start()
+        self.sim.async_start()
         self._rebuild()
         self._unsubs.append(hass.bus.async_listen(EVENT_STATE_CHANGED, self._on_state))
         self._unsubs.append(hass.bus.async_listen(EVENT_NOTIFY_ACTION, self._on_notify_action))
@@ -245,6 +248,7 @@ class AlertMonitor:
     @callback
     def async_stop(self) -> None:
         self.house.async_stop()
+        self.sim.async_stop()
         for unsub in self._unsubs:
             with contextlib.suppress(Exception):
                 unsub()

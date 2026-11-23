@@ -230,6 +230,7 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex;align-items:center;justify-cont
 .sbtn:hover{background:rgba(255,255,255,.18)}.sbtn:disabled{opacity:.28;cursor:default;background:var(--hv-surface)}.sbtn.on{color:var(--hv-accent)}.sbtn.danger:hover{background:rgba(255,107,91,.3)}
 .sbtn ha-icon{--mdc-icon-size:18px}
 .pins{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:34px}
+.simlist{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:2px;font-size:12px;color:var(--hv-dim)}.simlist b{font-variant-numeric:tabular-nums;margin-right:6px;color:inherit;font-weight:600}.simlist .err{color:#ff8a7a}
 .pin{display:inline-flex;align-items:center;gap:4px;padding:4px 4px 4px 10px;border-radius:999px;background:var(--hv-surface-2);font-size:12px}
 .pin button{width:22px;height:22px;border-radius:50%;display:grid;place-items:center}.pin button:hover{background:rgba(255,107,91,.35)}
 .pin ha-icon{--mdc-icon-size:14px}
