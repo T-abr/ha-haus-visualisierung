@@ -10,20 +10,24 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Umgeschaltet wird **erst nach Bestätigung**: „Nacht einschalten“ bzw. „Trotzdem Nacht/abwesend“, solange noch etwas offen ist. Wird die Alarmanlage dabei scharf geschaltet, steht das im Fenster.
 - Auf der **Hausmodus-Karte** im Alarmmanager erscheint der Check ebenfalls, wenn vor Nacht/Abwesend noch etwas offen ist; ist alles zu, schaltet die Karte wie bisher.
 - **Einstellungen → Alarme → Gute-Nacht- und Verlassen-Check:** an/aus (`house_mode.check`, Standard an) und **weitere Geräte** (`house_mode.check_devices`, z. B. die Steckdose des Bügeleisens).
+
 ### Neu – Anwesenheits-Simulation im Urlaub
 - **Einstellungen → Alarme → Anwesenheits-Simulation** (`presence_sim`, Standard aus): ausgewählte Lichter und Rollos (auch Schalter) schalten im Hausmodus **Urlaub** (wählbar, z. B. auch Abwesend) oder solange ein eigener Schalter (`input_boolean`/`switch`) an ist.
 - Vorlage ist ein echter Tag aus dem **Verlauf der letzten 1–4 Wochen** (Recorder), bevorzugt derselbe Wochentag; jede Schaltzeit wird zufällig um bis zu ± 15 Minuten (einstellbar) verschoben. Helligkeit und Rollo-Position werden übernommen; beim Start wird der Zustand wie zur selben Uhrzeit am Vorlagetag hergestellt. Um Mitternacht wird der nächste Tag geplant.
 - Läuft im Backend, auch ohne offenes Panel, und **endet sofort**, wenn der Modus wechselt (z. B. Rückkehr → Zuhause). Status, nächste Schaltvorgänge und Protokoll in den Einstellungen (Websocket `haus_visualisierung/presence_sim`).
+
 ### Neu – Müllabfuhr und Termine
 - **„Morgen: Gelbe Tonne, Papier“** in der Kopfzeile (alle Varianten) und im **Bildschirmschoner**, am Vorabend der Abfuhr (Standard ab 17 Uhr) und am Morgen bis 10 Uhr farbig hervorgehoben, mit Farbe und Symbol der Tonne (gelb, Papier, Bio, Grünschnitt, Glas, Rest, Sperrmüll, Schadstoffe). Dazu Termine von heute und morgen („Heute 20:00 Elternabend“); der Tooltip zeigt die nächsten Tage, ein Tipp öffnet den Kalender. Am Handy erscheint nur die hervorgehobene Abfuhr als Symbol.
 - Quelle sind **Kalender aus Home Assistant** (Waste Collection Schedule, Abfall-Integrationen, ICS, Google/CalDAV …) über die Kalender-API; ohne sie der nächste Termin aus der Entität. Kalender mit „Abfall“, „Müll“, „Tonne“ … im Namen zählen automatisch als Müllabfuhr.
 - **Einstellungen → Darstellung → Müllabfuhr und Termine:** an/aus, Kopfzeile, Bildschirmschoner, Hervorheben ab (Uhr), Vorausschau (Tage) und je Kalender „Müllabfuhr“, „Termine“ oder „Nicht anzeigen“ (`termine`).
+
 ### Neu – Rückblick mit Vormonat und Vorjahr
 - **Karte „Rückblick“** auf der Energie-Seite (unter dem Verlauf): dieser Monat gegen Vormonat und Vorjahresmonat für **PV erzeugt, Verbrauch, Netzbezug, Einspeisung, Autarkie, Stromkosten und Bilanz** sowie **Ø Außen- und Innentemperatur und Heizgradtage** (20/15). Unter den Vergleichswerten steht die Veränderung (Prozent, Prozentpunkte, € bzw. K), grün wenn besser, orange wenn schlechter.
 - Im laufenden Monat werden **gleich lange Abschnitte** verglichen (1. bis heute, letzte volle Stunde); mit den Pfeilen lassen sich frühere Monate ganz vergleichen (bis drei Jahre zurück).
 - **Kosten** je Stunde: Netzbezug × Stundenmittel des Preissensors (mit Aufschlag), ohne Preissensor mit dem festen Preis; Bilanz = Kosten minus Einspeisevergütung.
 - **Rekorde des Jahres:** bester PV-Tag und -Monat, höchster Tagesverbrauch, wärmster und kältester Tag.
 - Daten aus der Langzeitstatistik des Recorders (drei Abfragen der Stundenmittel, eine der Tagesmittel), nur beim Öffnen und Blättern; Zeiträume mit Lücken werden grau markiert.
+
 ### Neu – „Fertig“-Meldungen für Haushaltsgeräte
 - **Karte „Geräte“** auf der Übersicht (Cockpit rechte Spalte, Aktiv-Fokus, Etagen-Spalten, Hausschnitt): je Gerät „läuft seit 42 min · noch ca. 58 min · 1,9 kW“, „fertig seit 12 min · Dauer 2:28 h · 1,05 kWh · 0,21 € (35 % eigener Strom)“ bzw. der letzte Durchgang mit Schnitt. „Erledigt“ quittiert.
 - **Erkennung im Backend** (`appliances.py`), auch ohne offenes Panel: über die Leistung (Steckdose mit Messung; läuft ab 10 W für 1 min, fertig unter 5 W für 5 min, je Gerät einstellbar) oder einen Programmstatus (z. B. Home Connect, Miele). Durchgänge unter 5 min zählen nicht. Restzeit aus einer Entität oder geschätzt aus den letzten zehn Durchgängen.
@@ -34,22 +38,19 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - **Einstellungen → Technik → Haushaltsgeräte:** ohne Einträge automatisch erkannt (Leistungssensoren mit Waschmaschine, Trockner, Spülmaschine im Namen); eigene Geräte mit Leistung, Status, Energiezähler, Tür, Restzeit und Grenzen.
 - Neuer Sensor **`sensor.haus_geraete`** (Anzahl fertiger Geräte, Einzelheiten im Attribut `geraete`, nicht im Recorder) für eigene Automationen; Websocket-Befehl `haus_visualisierung/appliance_ack`.
 
-### Tests
-- Neue Gruppe `geraete` (Bedienprüfungen): Karte, Texte, PV-Tipp, Meldung, Quittieren, Handybreite, Einstellungen, Schoner. Backend `test_appliances.py`: Erkennung über Leistung mit Pausen und Netzanteil, Status und Tür, Quittieren über Alarmmanager und Websocket, Einstellungen.
 ### Neu – Wartungsplaner fürs Haus
 - **Seite „Wartung“** (Navigation, sobald es Aufgaben gibt; Zahl = fällige): wiederkehrende Aufgaben wie Lüftungsfilter, Rauchmelder testen, Kaminkehrer, Heizungswartung, sortiert nach **Fällig**, **Demnächst** und **Später**, mit Intervall, Fälligkeit („seit 6 Tagen fällig“, „fällig in 8 Tagen · 01.12.2026“), zuletzt erledigt (mit Namen), Notiz und Fortschrittsbalken.
 - **„Erledigt“** setzt das nächste Datum und darf jeder Benutzer drücken (nicht nur Administratoren); am selben Tag lässt es sich **rückgängig** machen. Der Stand liegt getrennt vom Layout in `.storage/haus_visualisierung.wartung` und geht live an alle offenen Panels; ein offener Einstellungs-Entwurf überschreibt ihn nicht.
 - **Einstellungen → Technik → Wartungsplaner:** Aufgaben frei anlegen (Titel, alle n Tage/Wochen/Monate/Jahre, zuletzt erledigt, Symbol, Notiz), Vorlagen für Filter, Rauchmelder, Kaminkehrer, Heizung, Wasserfilter, Batterien und Auto/Wallbox, Vorlauf für „Demnächst“ (Standard 14 Tage). Monate und Jahre bleiben am selben Tag (31. → Monatsende).
 - **Meldungen:** neue feste Regel „Wartung fällig“ (Hinweis, Standard an): fällige Aufgaben erscheinen in der Warnkarte und im Alarmmanager und kommen – wie andere Hinweise – per Push, auch ohne offenes Panel. Neuer Websocket-Befehl `haus_visualisierung/maintenance_done`.
 
-### Tests
-- Neue Gruppe `wartung` (23 Prüfungen): Intervalle, Anlegen per Vorlage und eigener Aufgabe, Seite mit Fällig/Demnächst/Später, Zahl an der Navigation, Hinweis in den Meldungen, Erledigt und Rückgängig, Handybreite, Regel aus, Löschen. Backend `test_maintenance.py`: Intervalle, Prüfung der Einstellungen, Erledigt/Rückgängig/Datum, Meldung und Push, Stand gespeichert und bei gelöschten Aufgaben verworfen, Erledigt ohne Administratorrechte.
-
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
 - Neue Einstellung **Einstellungen → Wandpanel → „Bildschirmschoner wandern lassen“** (`wallpanel.wander`, Standard aus) für alle, die den Einbrenn-Schutz wollen (z. B. OLED). LCDs wie im iPad brennen praktisch nicht ein.
 
 ### Tests
+- Neue Gruppe `geraete` (Bedienprüfungen): Karte, Texte, PV-Tipp, Meldung, Quittieren, Handybreite, Einstellungen, Schoner. Backend `test_appliances.py`: Erkennung über Leistung mit Pausen und Netzanteil, Status und Tür, Quittieren über Alarmmanager und Websocket, Einstellungen.
+- Neue Gruppe `wartung` (23 Prüfungen): Intervalle, Anlegen per Vorlage und eigener Aufgabe, Seite mit Fällig/Demnächst/Später, Zahl an der Navigation, Hinweis in den Meldungen, Erledigt und Rückgängig, Handybreite, Regel aus, Löschen. Backend `test_maintenance.py`: Intervalle, Prüfung der Einstellungen, Erledigt/Rückgängig/Datum, Meldung und Push, Stand gespeichert und bei gelöschten Aufgaben verworfen, Erledigt ohne Administratorrechte.
 - Neue Gruppe `gutenacht` (Bedienprüfungen): Knöpfe, offene Punkte je Modus, einzeln und alles schließen, Bestätigen/Abbrechen/Esc, Hausmodus-Karte mit und ohne offene Punkte, eigene Geräte, Abschalten, Handybreite. Die Prüfung „Hausmodus“ geht jetzt durch den Check. Backend: `check` und `check_devices` werden geprüft.
 - Anwesenheits-Simulation: Backend (Verlauf auswerten, Plan mit Versatz, Start/Ende nach Modus und Schalter, Rollo-Position, echter Recorder) und neue Gruppe `anwesenheit` der Bedienprüfungen.
 - Neue Gruppe `termine` (18 Prüfungen, feste Uhrzeit): automatische Erkennung, Vorabend, Vorrang Termin/Abfuhr, Tooltip, Schoner mit Tonnenfarbe, Rückfall auf Attribute, Handy, Einstellungen speichern. Backend: Einstellungen `termine` werden geprüft.

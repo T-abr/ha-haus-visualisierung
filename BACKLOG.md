@@ -10,17 +10,15 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | # | Idee | Priorität | Aufwand | Status |
 |---|------|-----------|---------|--------|
 | 1 | ~~Gute-Nacht- und Verlassen-Check~~ | hoch | S | umgesetzt |
-| 2 | Müll und Termine im Kopf und im Schoner | hoch | S | in Umsetzung |
+| 2 | ~~Müll und Termine im Kopf und im Schoner~~ | hoch | S | umgesetzt |
 | 3 | ~~„Fertig“-Meldungen für Haushaltsgeräte~~ | hoch | M | umgesetzt |
 | 4 | Wasser und Gas mit Leck-Erkennung | hoch | M | neu |
 | 5 | Heizung je Raum: Sollwert und Wochenplan | mittel | M | neu |
 | 6 | Garten und Bewässerung mit Regenvorhersage | mittel | M | neu |
-| 7 | Wartungsplaner fürs Haus | mittel | M | in Umsetzung |
+| 7 | ~~Wartungsplaner fürs Haus~~ | mittel | M | umgesetzt |
 | 8 | ~~Rückblick und Vorjahresvergleich~~ | mittel | M | umgesetzt (Rest offen) |
-| ~~7~~ | ~~Wartungsplaner fürs Haus~~ | mittel | M | umgesetzt |
-| 8 | Rückblick und Vorjahresvergleich | mittel | M | in Umsetzung |
 | 9 | Grundriss-Ansicht je Etage | niedrig | L | neu |
-| 10 | Anwesenheits-Simulation im Urlaub | niedrig | M | in Umsetzung |
+| 10 | ~~Anwesenheits-Simulation im Urlaub~~ | niedrig | M | umgesetzt |
 | 11 | Nachtmodus fürs Wandpanel | später | S | vorgemerkt |
 | 12 | Geräte-Warnungen (offline, Updates) | später | S | vorgemerkt |
 | 13 | Kamera-Raster auf Sicherheit | später | M | vorgemerkt |
@@ -28,7 +26,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 15 | Intelligentes Laden der Wallbox | später | L | vorgemerkt |
 | 16 | Musik- und Medienseite | später | L | vorgemerkt |
 
-„In Umsetzung“: von Tobias am 2026-11-23 ausgewählt, wird gerade umgesetzt. „Neu“: im Backlog, noch nicht
+„Umgesetzt“: seit Version 1.11.0 enthalten. „Neu“: im Backlog, noch nicht
 ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
 
 ## Neue Ideen
@@ -39,7 +37,7 @@ ist: Fenster und Türen offen, Licht an, Tür nicht verriegelt, Garage offen, He
 „Schließen/Ausschalten“, unten „Trotzdem Nacht/Abwesend“. Baut auf Hausmodus, Fenster- und Lichtgruppen auf, die
 es schon gibt; geschaltet wird nur auf Tippen.
 
-### 2. Müll und Termine im Kopf und im Schoner
+### 2. ~~Müll und Termine im Kopf und im Schoner~~ (umgesetzt, siehe CHANGELOG)
 Abfuhrtermine aus `calendar.*` oder Abfall-Integrationen (z. B. Waste Collection Schedule) und die nächsten
 Familientermine: „Morgen: Gelbe Tonne“ in der Kopfzeile und im Bildschirmschoner, am Vorabend hervorgehoben,
 optional Erinnerung über die vorhandenen Meldungen. Einstellbar, welche Kalender zählen.
@@ -65,7 +63,7 @@ Bodenfeuchte, Ventile und Regen der letzten Tage auf einer Karte (Raum „Garten
 vorhandenen Vorhersage: „Heute nicht gießen, morgen 8 mm Regen“ bzw. „3 Tage trocken über 28 °C: abends gießen“.
 Ventil mit Laufzeit starten, nur auf Tippen. Gleiche Logik wie die Beschattungshinweise.
 
-### ~~7. Wartungsplaner fürs Haus~~ (umgesetzt, siehe CHANGELOG)
+### 7. ~~Wartungsplaner fürs Haus~~ (umgesetzt, siehe CHANGELOG)
 Offen geblieben: Batteriewechsel direkt aus der Batterieseite übernehmen, Aufgaben nach Betriebsstunden.
 
 Liste wiederkehrender Aufgaben mit Fälligkeit: Lüftungsfilter, Heizungswartung, Rauchmelder testen, Kaminkehrer,
@@ -82,7 +80,7 @@ Eigenes Bild oder SVG des Grundrisses je Etage hochladen, Räume als Flächen ma
 Farbe, offene Fenster, Licht an, Bewegung; Tipp auf einen Raum öffnet die Raumseite. Als fünfte Variante der
 Übersicht oder eigene Seite. Größter Aufwand ist der Editor zum Markieren der Räume.
 
-### 10. Anwesenheits-Simulation im Urlaub
+### 10. ~~Anwesenheits-Simulation im Urlaub~~ (umgesetzt, siehe CHANGELOG)
 Im Hausmodus „Urlaub“ schalten ausgewählte Lichter und Rollos nach dem Muster der letzten Wochen aus dem Verlauf,
 leicht zufällig verschoben. Läuft im Backend, Protokoll im Panel, endet automatisch bei Rückkehr.
 
