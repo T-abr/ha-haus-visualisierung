@@ -14,6 +14,10 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - **Einstellungen → Alarme → Anwesenheits-Simulation** (`presence_sim`, Standard aus): ausgewählte Lichter und Rollos (auch Schalter) schalten im Hausmodus **Urlaub** (wählbar, z. B. auch Abwesend) oder solange ein eigener Schalter (`input_boolean`/`switch`) an ist.
 - Vorlage ist ein echter Tag aus dem **Verlauf der letzten 1–4 Wochen** (Recorder), bevorzugt derselbe Wochentag; jede Schaltzeit wird zufällig um bis zu ± 15 Minuten (einstellbar) verschoben. Helligkeit und Rollo-Position werden übernommen; beim Start wird der Zustand wie zur selben Uhrzeit am Vorlagetag hergestellt. Um Mitternacht wird der nächste Tag geplant.
 - Läuft im Backend, auch ohne offenes Panel, und **endet sofort**, wenn der Modus wechselt (z. B. Rückkehr → Zuhause). Status, nächste Schaltvorgänge und Protokoll in den Einstellungen (Websocket `haus_visualisierung/presence_sim`).
+### Neu – Müllabfuhr und Termine
+- **„Morgen: Gelbe Tonne, Papier“** in der Kopfzeile (alle Varianten) und im **Bildschirmschoner**, am Vorabend der Abfuhr (Standard ab 17 Uhr) und am Morgen bis 10 Uhr farbig hervorgehoben, mit Farbe und Symbol der Tonne (gelb, Papier, Bio, Grünschnitt, Glas, Rest, Sperrmüll, Schadstoffe). Dazu Termine von heute und morgen („Heute 20:00 Elternabend“); der Tooltip zeigt die nächsten Tage, ein Tipp öffnet den Kalender. Am Handy erscheint nur die hervorgehobene Abfuhr als Symbol.
+- Quelle sind **Kalender aus Home Assistant** (Waste Collection Schedule, Abfall-Integrationen, ICS, Google/CalDAV …) über die Kalender-API; ohne sie der nächste Termin aus der Entität. Kalender mit „Abfall“, „Müll“, „Tonne“ … im Namen zählen automatisch als Müllabfuhr.
+- **Einstellungen → Darstellung → Müllabfuhr und Termine:** an/aus, Kopfzeile, Bildschirmschoner, Hervorheben ab (Uhr), Vorausschau (Tage) und je Kalender „Müllabfuhr“, „Termine“ oder „Nicht anzeigen“ (`termine`).
 
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
@@ -22,6 +26,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ### Tests
 - Neue Gruppe `gutenacht` (Bedienprüfungen): Knöpfe, offene Punkte je Modus, einzeln und alles schließen, Bestätigen/Abbrechen/Esc, Hausmodus-Karte mit und ohne offene Punkte, eigene Geräte, Abschalten, Handybreite. Die Prüfung „Hausmodus“ geht jetzt durch den Check. Backend: `check` und `check_devices` werden geprüft.
 - Anwesenheits-Simulation: Backend (Verlauf auswerten, Plan mit Versatz, Start/Ende nach Modus und Schalter, Rollo-Position, echter Recorder) und neue Gruppe `anwesenheit` der Bedienprüfungen.
+- Neue Gruppe `termine` (18 Prüfungen, feste Uhrzeit): automatische Erkennung, Vorabend, Vorrang Termin/Abfuhr, Tooltip, Schoner mit Tonnenfarbe, Rückfall auf Attribute, Handy, Einstellungen speichern. Backend: Einstellungen `termine` werden geprüft.
 - Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
 
 ## 1.10.0 – 2026-11-23

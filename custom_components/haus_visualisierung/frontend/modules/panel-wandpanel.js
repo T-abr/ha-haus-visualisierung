@@ -6,6 +6,7 @@ import { WEATHER_ICON } from "./aktualisierer.js";
 import { curMode, evalAlerts, LEVEL_ICON, LEVELS } from "./warnungen.js";
 import { finite } from "./verlauf.js";
 import { dayOf, fcDays, shadeHeadline, shadeHints } from "./wetter.js";
+import { saverTermHTML } from "./termine.js";
 
 const WandpanelMixin = (Base) => class extends Base {
   /* ---------- Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite ---------- */
@@ -129,7 +130,7 @@ const WandpanelMixin = (Base) => class extends Base {
     d.className = "saver";
     d.setAttribute("role", "button");
     d.setAttribute("aria-label", "Bildschirmschoner – tippen zum Aufwecken");
-    d.innerHTML = `<div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svhint"></div><div class="svstat"></div></div>`;
+    d.innerHTML = `<div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svhint"></div><div class="svcal"></div><div class="svstat"></div></div>`;
     this.shadowRoot.appendChild(d);
     this._saverMin = null;
     this._saverUpdate((Date.now() - (this._wallActive || Date.now())) / 60000, true);
@@ -164,6 +165,7 @@ const WandpanelMixin = (Base) => class extends Base {
     parts.push(`<span>${icon(MODE_ICON[md])}${MODE_NAME[md]}</span>`);
     setHtml(el.querySelector(".svrow"), parts.join(""));
     const hl = this._model ? shadeHeadline(shadeHints(h, this._model, this._layout)) : "";
+    setHtml(el.querySelector(".svcal"), saverTermHTML(h, this._layout));
     setHtml(el.querySelector(".svhint"), hl ? `<span>${icon("mdi:window-shutter-alert")}${esc(hl)}</span>` : "");
     const al = this._model ? evalAlerts(h, this._model, this._layout) : [];
     const top = al.length ? al.reduce((a, b) => (LEVELS[b.level] > LEVELS[a.level] ? b : a)) : null;

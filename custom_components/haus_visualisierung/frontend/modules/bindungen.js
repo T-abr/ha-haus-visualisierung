@@ -10,6 +10,7 @@ import { shadeWatch, updateShade } from "./wetter.js";
 import { fcastWatch, updateFcast } from "./prognose.js";
 import { energyIds, energyWatch, updateEnDay, updateEnergy, updateEnPriceCard, updateEnTrend } from "./energie.js";
 import { priceWatch, updateWbPrice } from "./strompreis.js";
+import { termWatch, updateTermin } from "./termine.js";
 
 Object.assign(UPD, {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
@@ -28,6 +29,7 @@ Object.assign(UPD, {
   chip: { watch: chipWatch, run: updateChip },
   roof: { watch: (el, c) => Object.values(c._layout.header).filter(Boolean), run: updateRoof },
   weather: { watch: (el) => [el.dataset.eid], run: updateWeather },
+  termin: { watch: (el, c) => termWatch(c._hass, c._layout), run: updateTermin },
   shade: { watch: shadeWatch, run: updateShade },
   fcast: { watch: fcastWatch, run: updateFcast },
   person: { watch: (el) => [el.dataset.eid], run: updatePerson },

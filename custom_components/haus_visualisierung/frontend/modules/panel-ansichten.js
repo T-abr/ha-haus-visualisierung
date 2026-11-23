@@ -11,6 +11,7 @@ import { heatCardHTML, wbCardHTML } from "./technik.js";
 import { climRooms, climTrendHTML, humRooms } from "./klima.js";
 import { shadeCardHTML, weatherIdOf } from "./wetter.js";
 import { fcastCardHTML } from "./prognose.js";
+import { terminBtnHTML } from "./termine.js";
 import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
@@ -29,6 +30,7 @@ const AnsichtenMixin = (Base) => class extends Base {
       <button class="menu" data-act="menu">${icon("mdi:menu")}</button>
       <div><div class="greet"></div><div class="clock"></div><div class="date"></div></div>
       <span class="sp"></span>
+      ${terminBtnHTML(h, this._layout)}
       ${weather ? `<button class="weather glass" data-u="weather" data-eid="${esc(weather)}" data-act="more">${icon("mdi:weather-partly-cloudy")}<div><div class="wt"></div><div class="wc"></div></div></button>` : ""}
       ${pers ? `<div class="persons">${pers}</div>` : ""}
     </div>`;
@@ -46,7 +48,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     }).join("");
     const hm = this._layout.house_mode && this._layout.house_mode.enabled !== false
       ? `<button class="hmode" data-u="hmode" data-act="go" data-to="alarme" title="Hausmodus">${icon("mdi:home-account")}<span class="hml"></span></button>` : "";
-    const right = `<div class="hright">${hm}
+    const right = `<div class="hright">${hm}${terminBtnHTML(h, this._layout)}
       ${weather ? `<button class="weather glass" data-u="weather" data-eid="${esc(weather)}" data-act="more">${icon("mdi:weather-partly-cloudy")}<span class="wt"></span><span class="wf"></span></button>` : ""}
       ${pers ? `<div class="persons stack">${pers}</div>` : ""}</div>`;
     const menu = `<button class="menu" data-act="menu">${icon("mdi:menu")}</button>`;

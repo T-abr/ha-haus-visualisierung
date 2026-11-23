@@ -9,6 +9,7 @@ import { heatHover } from "./technik.js";
 import { climHover, sparkHover } from "./klima.js";
 import { enHover } from "./energie.js";
 import { fcListen, fcUnlisten } from "./wetter.js";
+import { termListen, termUnlisten } from "./termine.js";
 import { LOGO, STYLES } from "./stile.js";
 import { HvBase } from "./basis.js";
 import { KlingelMixin } from "./panel-klingel.js";
@@ -74,7 +75,7 @@ class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(Einstellungen
     this._clockT = setInterval(() => { if (!document.hidden) this._tickClock(); }, 15000);
     this._alertT = setInterval(() => {
       if (document.hidden || !this._model) return;
-      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"], [data-u="shade"], [data-u="fcast"]').forEach((el) => UPD[el.dataset.u].run(el, this));
+      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"], [data-u="shade"], [data-u="fcast"], [data-u="termin"]').forEach((el) => UPD[el.dataset.u].run(el, this));
     }, 30000);
     // Wettervorhersage: neue Daten frischen Kopfzeile, Karten „Sonne & Wetter“ und „Vorhersage“ sowie Bildschirmschoner auf
     this._onForecast = this._onForecast || (() => {
@@ -83,6 +84,13 @@ class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(Einstellungen
       this._saverDirty = true;
     });
     fcListen(this._onForecast);
+    // Termine aus den Kalendern: Kopfzeile und Bildschirmschoner auffrischen, sobald sie da sind
+    this._onTermine = this._onTermine || (() => {
+      if (!this._model) return;
+      this.shadowRoot.querySelectorAll('[data-u="termin"]').forEach((el) => UPD.termin.run(el, this));
+      this._saverDirty = true;
+    });
+    termListen(this._onTermine);
     if (!this._alWired) {
       this._alWired = true;
       const r = this.shadowRoot;
@@ -153,6 +161,7 @@ class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(Einstellungen
     clearInterval(this._clockT);
     clearInterval(this._alertT);
     fcUnlisten(this._onForecast);
+    termUnlisten(this._onTermine);
     clearInterval(this._wallT); this._wallT = 0;
     if (this._wallWired) {
       window.removeEventListener("pointerdown", this._onWallAct, true);

@@ -34,7 +34,7 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-bell-test": this._closeBell(); this._showBell(true, this._draft ? this._draft.doorbell : null); return;
       case "saver": this._saverShow(); return;
       case "s-wall-device": this._wallSet(!this._wallIsOn()); this._toast(this._wallIsOn() ? "Dieses Gerät ist jetzt ein Wandpanel" : "Wandpanel-Modus aus"); return;
-      case "s-saver-test": { const prev = this._layout; this._layout = { ...prev, wallpanel: { ...this._wallCfg(), ...((this._draft && this._draft.wallpanel) || {}) } }; this._saverShow(); this._layout = prev; this._wallActive = Date.now(); return; }
+      case "s-saver-test": { const prev = this._layout; this._layout = { ...prev, wallpanel: { ...this._wallCfg(), ...((this._draft && this._draft.wallpanel) || {}) }, ...(this._draft && this._draft.termine ? { termine: this._draft.termine } : {}) }; this._saverShow(); this._layout = prev; this._wallActive = Date.now(); return; }
       case "ftab": this._floorTab = t.dataset.floor; this._dirty = true; this._flush(); return;
       case "al-open-page": if (t.dataset.key) this._alSel = t.dataset.key; this._alTab = "leitstelle"; if (this._view === "alarme") this._alRefresh(); else this._go("alarme"); return;
       case "al-sel": this._alSel = t.dataset.key || null; this._alRefresh(); if (this._isNarrow && this._alSel) { const d = this.shadowRoot.querySelector(".aldetail"); if (d && d.scrollIntoView) d.scrollIntoView({ behavior: "smooth", block: "nearest" }); } return;

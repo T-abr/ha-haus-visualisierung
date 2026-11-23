@@ -279,6 +279,22 @@ def _forecast(raw: dict) -> dict:
     return out
 
 
+def _termine(raw: dict) -> dict:
+    """Müllabfuhr und Termine: Schalter, Vorlauf, Vorabend-Stunde und Art je Kalender."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["termine"])
+    for key in ("enabled", "header", "saver"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    out["days"] = _int(raw.get("days"), 1, 14, out["days"])
+    out["evening"] = _int(raw.get("evening"), 12, 23, out["evening"])
+    cals = raw.get("cals") if isinstance(raw.get("cals"), dict) else {}
+    for eid, kind in list(cals.items())[:100]:
+        e = _entity(eid)
+        if e.startswith("calendar.") and kind in ("waste", "event", "-"):
+            out["cals"][e] = kind
+    return out
+
+
 def _price(raw: dict) -> dict:
     """Strompreis: Sensor, Schalter und Preise in ct/kWh."""
     out = copy.deepcopy(DEFAULT_LAYOUT["price"])
@@ -409,6 +425,8 @@ def sanitize(raw: Any) -> dict:
         result["forecast"] = _forecast(raw["forecast"])
     if isinstance(raw.get("price"), dict):
         result["price"] = _price(raw["price"])
+    if isinstance(raw.get("termine"), dict):
+        result["termine"] = _termine(raw["termine"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 

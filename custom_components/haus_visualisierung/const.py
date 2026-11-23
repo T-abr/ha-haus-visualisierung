@@ -144,6 +144,12 @@ DEFAULT_LAYOUT: dict = {
         "enabled": True, "solar": True,
         "solar_today": "", "solar_tomorrow": "",   # leer = automatisch (Forecast.Solar, Solcast)
     },
+    "termine": {                   # Müllabfuhr und Termine in Kopfzeile und Bildschirmschoner (Kalender-Entitäten)
+        "enabled": True, "header": True, "saver": True,
+        "days": 7,                     # so viele Tage im Voraus lesen
+        "evening": 17,                 # Abfuhr morgen ab dieser Stunde hervorheben
+        "cals": {},                    # {calendar_id: "waste"|"event"|"-"}, fehlt = Müllabfuhr, wenn der Name passt
+    },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",
         "energy": "", "connected": "", "charging": "", "range": "",

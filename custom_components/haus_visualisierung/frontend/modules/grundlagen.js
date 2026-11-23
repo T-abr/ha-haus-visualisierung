@@ -21,6 +21,7 @@ const DEFAULT_LAYOUT = {
   wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "" },
   shading: { enabled: true, hot: 26, facing: {} },
   forecast: { enabled: true, solar: true, solar_today: "", solar_tomorrow: "" },
+  termine: { enabled: true, header: true, saver: true, days: 7, evening: 17, cals: {} },
   wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
@@ -56,6 +57,7 @@ const withDefaults = (l) => {
     price: { ...DEFAULT_LAYOUT.price, ...((l && l.price) || {}) },
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
     forecast: { ...DEFAULT_LAYOUT.forecast, ...((l && l.forecast) || {}) },
+    termine: { ...DEFAULT_LAYOUT.termine, ...((l && l.termine) || {}), cals: { ...((l && l.termine && l.termine.cals) || {}) } },
     shading: { ...DEFAULT_LAYOUT.shading, ...((l && l.shading) || {}), facing: { ...((l && l.shading && l.shading.facing) || {}) } },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },
   };
