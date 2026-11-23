@@ -436,3 +436,36 @@ async def test_display_doorbell(hass: HomeAssistant, hass_ws_client, freezer: Fr
     await _tick(hass)
     await ws.send_json({"id": 2, "type": f"{DOMAIN}/display_bell_test"})
     assert (await ws.receive_json())["result"]["ok"] is False
+
+
+async def test_display_stellen_und_rueckmeldung(hass: HomeAssistant) -> None:
+    """Kacheln melden, ob ein Tipp schaltet (a) und ob sie per langem Tippen stellbar sind (w/wa); wert:-Tipps stellen."""
+    calls = async_mock_service(hass, "esphome", "haus_display_a1b2c3_haus_daten")
+    on = async_mock_service(hass, "light", "turn_on")
+    off = async_mock_service(hass, "light", "turn_off")
+    pos = async_mock_service(hass, "cover", "set_cover_position")
+    hass.states.async_set("light.decke", "on", {"supported_color_modes": ["brightness"], "brightness": 128})
+    hass.states.async_set("light.flur", "off", {"supported_color_modes": ["onoff"]})
+    hass.states.async_set("cover.rollo", "open", {"supported_features": 15, "current_position": 40})
+    hass.states.async_set("sensor.temp", "21.5", {"unit_of_measurement": "°C"})
+    await _setup(hass)
+    store = hass.data[DOMAIN]["store"]
+    await store.async_save({"displays": [{"name": "Flur", "device": "haus-display-a1b2c3",
+                                          "tiles": ["entity:light.decke", "entity:light.flur", "entity:cover.rollo", "entity:sensor.temp"],
+                                          "custom": [{"name": "WZ", "tiles": [{"entity": "cover.rollo"}]}]}]})
+    await _tick(hass)
+    sent = {c.data["bereich"]: c.data["daten"] for c in calls}
+    k = json.loads(sent["kacheln"])
+    assert (k[0]["a"], k[0]["w"], k[0]["wa"]) == (True, 50, "hell")
+    assert k[1]["a"] is True and "w" not in k[1]
+    assert (k[2]["w"], k[2]["wa"]) == (40, "pos")
+    assert "a" not in k[3] and "w" not in k[3]
+    e = json.loads(sent["eigene"])[0]["k"][0]
+    assert (e["a"], e["w"], e["wa"]) == (True, 40, "pos")
+
+    for ziel in ("wert:kachel:0:70", "wert:kachel:0:0", "wert:eigen:0:0:120", "wert:kachel:1:50", "wert:kachel:3:10", "wert:kachel:9:5", "wert:x"):
+        await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": ziel}, blocking=True)
+    await hass.async_block_till_done()
+    assert [c.data for c in on] == [{"entity_id": "light.decke", "brightness_pct": 70}]
+    assert [c.data for c in off] == [{"entity_id": "light.decke"}]
+    assert [c.data for c in pos] == [{"entity_id": "cover.rollo", "position": 100}]

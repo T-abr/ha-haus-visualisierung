@@ -1,6 +1,6 @@
 /* Haus Visualisierung – Versionsnummer und Domäne. Die Version setzt scripts/bump_version.py. */
 
-const VERSION = "1.17.0";
+const VERSION = "1.18.0";
 const DOMAIN = "haus_visualisierung";
 
 export { DOMAIN, VERSION };
