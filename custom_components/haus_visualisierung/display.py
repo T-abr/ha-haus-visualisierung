@@ -279,15 +279,22 @@ def sanitize_displays(raw: Any) -> list[dict]:
 
 
 def is_ring(old: State | None, new: State | None) -> bool:
-    """Klingelt es? Wie im Panel (aktualisierer.js isRing): neues Ereignis bzw. Binärsensor wird „an“."""
-    if old is None or new is None or old.state in UNAV or new.state in UNAV:
+    """Klingelt es? Wie im Panel (aktualisierer.js isRing): neues Ereignis bzw. Binärsensor wird „an“.
+
+    Nach einem Neustart steht eine Ereignis-Entität auf „unknown“, bis zum ersten Klingeln – das muss zählen.
+    Damit eine wieder erreichbare Entität nicht als Klingeln gilt, zählt ein Ereignis nur, wenn es frisch ist.
+    """
+    if old is None or new is None or new.state in UNAV:
         return False
     if new.domain == "event":
         if new.state == old.state:
             return False
+        when = dt_util.parse_datetime(new.state)
+        if when is not None and abs((dt_util.utcnow() - when).total_seconds()) > 60:
+            return False
         et = new.attributes.get("event_type")
         return not et or bool(BELL_EVENT_RE.search(str(et)))
-    return new.state == "on" and old.state != "on"
+    return new.state == "on" and old.state not in ("on", "unavailable")
 
 
 def _dumps(v: Any) -> str:
