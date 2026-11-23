@@ -4,6 +4,35 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.17.0 – 2026-11-23
+
+### Neu – Wetterwarnungen
+- **Unwetter vom Deutschen Wetterdienst**: Warnungen der Integration „DWD Weather Warnings“ (automatisch erkannt) als Meldung im Alarmmanager, in der Kopfzeile, im Bildschirmschoner, am Wanddisplay und per Push – ab einstellbarer Warnstufe (Standard: markant), Vorabinformationen und spätere Warnungen als Hinweis. Auf der Seite Beschattung stehen sie über der Vorhersage, aufklappbar mit Text und Empfehlung des DWD.
+- **„Regen kommt“ bzw. „Es regnet“ bei offenen Fenstern und Türen** (Innenräume, ohne Garagentore): aus Regensensor, Wetterlage, DWD-Gewitter/Starkregen oder der stündlichen Vorhersage (Niederschlag, Regenwahrscheinlichkeit) der nächsten Stunde.
+- **„Sturm · Markise ausgefahren“**: bei DWD-Warnung vor Wind oder Gewitter bzw. Böen über der Grenze (Standard 50 km/h), jetzt oder laut Vorhersage. Markisen automatisch (device_class `awning` oder Name).
+- Neue feste Regel „Wetter“ (Hausmodi wählbar), Einstellungen unter Technik → Wetterwarnungen, neuer Sensor `sensor.haus_wetter` (Anzahl, Warnungen, Regen, Wind als Attribute). Geschaltet wird nichts.
+
+### Neu – Einstellungen sichern und wiederherstellen
+- Neuer Reiter **„Prüfen & Sichern“** in den Einstellungen. Sicherungen entstehen **automatisch beim ersten Start einer neuen Version**, vor dem ersten Speichern eines Tages und vor jedem Wiederherstellen, dazu „Jetzt sichern“; behalten werden die letzten 12.
+- Jede Sicherung lässt sich wiederherstellen (mit Rückfrage; der jetzige Stand wird vorher gesichert) und als JSON-Datei herunterladen; „Datei einspielen …“ übernimmt eine Sicherung, z. B. von einer anderen Installation. Enthalten: alle Einstellungen und der Stand des Wartungsplaners, nicht der Code der Alarmanlage, nicht die PIN, keine Protokolle.
+
+### Neu – Einrichtungs-Check
+- Im selben Reiter: was fehlt oder nicht mehr passt, mit Knopf zum passenden Reiter – gelöschte oder nicht erreichbare Entitäten in den Einstellungen (mit Fundstelle), Räume ohne Temperaturfühler, Bereiche ohne Etage, Rollos ohne Ausrichtung, fehlender Standort, keine Wetter-Entität bzw. keine stündliche Vorhersage, keine DWD-Warnungen, kein Kalender gewählt, kein Handy für Push oder verschwundene Empfänger, Kopplung ohne Alarmanlage, Abwesend-Automatik ohne Personen, Displays ohne Gerät, keine PIN trotz Wanddisplays. Wichtige Punkte zählt eine Zahl am Reiter.
+
+### Neu – PIN für heikle Aktionen
+- Unter Alarme → „PIN für heikle Aktionen“: 4–8 Ziffern, gespeichert nur als Prüfsumme in Home Assistant. Abfragen lassen sich für **Tür öffnen** (Klingelfenster, Schlösser entriegeln), **Alarm aus** (aus Nacht/Abwesend/Urlaub zurück auf Zuhause) und **Abwesend/Urlaub einschalten** wählen; Nacht fragt nie nach.
+- Gilt für Wandpanels und Wanddisplays oder für alle Geräte. Am Wandpanel erscheint ein Tastenfeld (auch per Tastatur), danach bleibt es 30 s entsperrt; nach fünf Fehlversuchen ist die Eingabe eine Minute gesperrt. **Wanddisplays** haben kein Tastenfeld: geschützte Aktionen sind dort gesperrt, das Display zeigt kurz „mit PIN geschützt“ (keine neue Firmware nötig).
+
+### Performance
+- Großes Testhaus (`tests/perf/measure.py`): Aufbau 6–21,7 ms je Seite (Übersicht 12,4–14 ms), 0 Neuaufbauten, hass-Setter Ø 23–29 µs – im Rahmen von 1.16.0. Die Wettermeldungen liest das Panel fertig aus `sensor.haus_wetter`; der Einrichtungs-Check läuft nur in den Einstellungen. Im Backend holt die Wetterauswertung die stündliche Vorhersage höchstens alle 15 Minuten.
+
+### Backlog
+- Neue Ideen 22–25: Zeitleiste „Was war los?“, Szenen je Raum, Alarm-Vollbild am Display, Relais als Lichtschalter.
+
+### Tests
+- Neu: `test_backup.py`, `test_pin.py`, `test_weather.py` (DWD, Regen, Sturm, Regensensor, Vorabinformation).
+- Neue Bedienprüfungen „system“ (Check, Sicherungen, Export/Import), „pin“ (Tastenfeld, Abbrechen, Türöffner) und „wetterwarnung“ (Wetterkarte, Meldungen, Einstellungen).
+
 ## 1.16.1 – 2026-11-23
 
 ### Behoben – Wanddisplay: Klingel

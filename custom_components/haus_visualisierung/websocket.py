@@ -11,6 +11,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from . import display_setup
+from .backup import export_doc, parse_doc
+from .pin import PIN_RE, Throttle, make_hash, verify
 from .const import DOMAIN, HOUSE_MODES, VERSION
 from .maintenance import parse_date
 
@@ -31,6 +33,14 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_presence_sim)
     websocket_api.async_register_command(hass, ws_appliance_ack)
     websocket_api.async_register_command(hass, ws_maintenance_done)
+    websocket_api.async_register_command(hass, ws_pin_set)
+    websocket_api.async_register_command(hass, ws_pin_check)
+    websocket_api.async_register_command(hass, ws_backup_list)
+    websocket_api.async_register_command(hass, ws_backup_create)
+    websocket_api.async_register_command(hass, ws_backup_get)
+    websocket_api.async_register_command(hass, ws_backup_delete)
+    websocket_api.async_register_command(hass, ws_backup_restore)
+    websocket_api.async_register_command(hass, ws_export)
     display_setup.async_register(hass)
 
 
@@ -57,7 +67,9 @@ def ws_info(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg
 )
 @websocket_api.async_response
 async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
-    """Layout speichern (nur Administratoren)."""
+    """Layout speichern (nur Administratoren). Vor dem ersten Speichern eines Tages wird der alte Stand gesichert."""
+    if backups := hass.data[DOMAIN].get("backups"):
+        backups.before_save()
     layout = await hass.data[DOMAIN]["store"].async_save(msg["layout"])
     connection.send_result(msg["id"], {"layout": layout})
 
@@ -291,3 +303,145 @@ def ws_maintenance_done(hass: HomeAssistant, connection: websocket_api.ActiveCon
             return
         book.done(task, day, connection.user.name if connection.user else None)
     connection.send_result(msg["id"], {"maintenance": book.snapshot()})
+
+
+# ---------- Sicherungen (backup.py) ----------
+def _backups(hass: HomeAssistant):
+    return hass.data.get(DOMAIN, {}).get("backups")
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/backup_list"})
+@callback
+def ws_backup_list(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Gespeicherte Sicherungen (jüngste zuerst) ohne Inhalt."""
+    b = _backups(hass)
+    connection.send_result(msg["id"], {"items": b.listing() if b else []})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/backup_create"})
+@callback
+def ws_backup_create(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Jetzt sichern."""
+    b = _backups(hass)
+    if b is None:
+        connection.send_error(msg["id"], "not_ready", "Sicherungen nicht geladen")
+        return
+    item = b.create("manuell", connection.user.name if connection.user else "")
+    connection.send_result(msg["id"], {"id": item["id"], "items": b.listing()})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/backup_get", vol.Required("backup"): str})
+@callback
+def ws_backup_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Inhalt einer Sicherung als Datei (zum Herunterladen)."""
+    b = _backups(hass)
+    item = b.get(msg["backup"]) if b else None
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Sicherung nicht gefunden")
+        return
+    connection.send_result(msg["id"], b.doc(item))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/backup_delete", vol.Required("backup"): str})
+@callback
+def ws_backup_delete(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    b = _backups(hass)
+    if b is None or not b.delete(msg["backup"]):
+        connection.send_error(msg["id"], "not_found", "Sicherung nicht gefunden")
+        return
+    connection.send_result(msg["id"], {"items": b.listing()})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/export"})
+@callback
+def ws_export(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Aktueller Stand als Datei: Layout und Wartungsstand, ohne Alarmcode und PIN."""
+    data = hass.data[DOMAIN]
+    connection.send_result(msg["id"], export_doc(data["store"].data, data["maintenance"].snapshot() if "maintenance" in data else {}))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/backup_restore",
+        vol.Exclusive("backup", "quelle"): str,
+        vol.Exclusive("data", "quelle"): dict,
+        vol.Optional("maintenance", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_backup_restore(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Sicherung oder hochgeladene Datei übernehmen; der bisherige Stand wird vorher gesichert."""
+    b = _backups(hass)
+    if b is None:
+        connection.send_error(msg["id"], "not_ready", "Sicherungen nicht geladen")
+        return
+    if "backup" in msg:
+        item = b.get(msg["backup"])
+        if item is None:
+            connection.send_error(msg["id"], "not_found", "Sicherung nicht gefunden")
+            return
+        layout, maint, reason = item["layout"], item.get("maintenance"), "wiederherstellen"
+    elif "data" in msg:
+        parsed = parse_doc(msg["data"])
+        if parsed is None:
+            connection.send_error(msg["id"], "invalid", "Keine Sicherung der Haus Visualisierung")
+            return
+        (layout, maint), reason = parsed, "import"
+    else:
+        connection.send_error(msg["id"], "invalid", "Sicherung oder Datei fehlt")
+        return
+    saved = await b.async_restore(layout, maint if msg["maintenance"] else None, reason)
+    connection.send_result(msg["id"], {"layout": saved, "items": b.listing()})
+
+
+# ---------- PIN für heikle Aktionen (pin.py) ----------
+_THROTTLE = Throttle()
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/pin_set", vol.Required("pin"): vol.All(str, vol.Length(max=8))}
+)
+@callback
+def ws_pin_set(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """PIN setzen (4–8 Ziffern) oder mit leerem Wert löschen; gespeichert wird nur ein Hash."""
+    monitor = _monitor(hass)
+    if monitor is None:
+        connection.send_error(msg["id"], "not_ready", "Alarmmanager nicht geladen")
+        return
+    pin = msg["pin"].strip()
+    if pin and not PIN_RE.match(pin):
+        connection.send_error(msg["id"], "invalid", "Die PIN braucht 4 bis 8 Ziffern")
+        return
+    monitor.book.pin = make_hash(pin) if pin else {}
+    monitor.book._changed()
+    connection.send_result(msg["id"], {"pin": bool(pin)})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/pin_check", vol.Required("pin"): vol.All(str, vol.Length(max=16))}
+)
+@callback
+def ws_pin_check(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """PIN prüfen (jeder Benutzer). Nach 5 Fehlversuchen eine Minute gesperrt."""
+    monitor = _monitor(hass)
+    if monitor is None or not monitor.book.pin.get("hash"):
+        connection.send_result(msg["id"], {"ok": True, "pin": False})
+        return
+    src = f"user:{connection.user.id}" if connection.user else "anon"
+    wait = _THROTTLE.locked_for(src)
+    if wait:
+        connection.send_result(msg["id"], {"ok": False, "wait": wait})
+        return
+    if verify(monitor.book.pin, msg["pin"]):
+        _THROTTLE.ok(src)
+        connection.send_result(msg["id"], {"ok": True})
+        return
+    _THROTTLE.fail(src)
+    connection.send_result(msg["id"], {"ok": False, "wait": _THROTTLE.locked_for(src)})

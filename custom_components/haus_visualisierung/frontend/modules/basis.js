@@ -4,6 +4,7 @@ import { dom, entName, esc, icon, isOn, MODE_ICON, MODE_NAME, num, setText, setW
 import { buildModel } from "./modell.js";
 import { updateTile } from "./aktualisierer.js";
 import "./bindungen.js"; // füllt UPD
+import { pinOk } from "./pin.js";
 
 /* ------------------------------------------------------------------------ */
 /*  Basisklasse: Bindungen, sparsame Aktualisierung, Aktionen                */
@@ -321,7 +322,7 @@ class HvBase extends HTMLElement {
         if (isOn(st)) { this._call("lock", "lock", { entity_id: eid }); break; }
         if (tile.dataset.confirm === "1") {
           tile.dataset.confirm = "";
-          this._call("lock", "unlock", { entity_id: eid });
+          pinOk(this, "door", `${entName(h, eid)} entriegeln`).then((ok) => { if (ok) this._call("lock", "unlock", { entity_id: eid }); });
         } else {
           tile.dataset.confirm = "1";
           updateTile(tile, this);

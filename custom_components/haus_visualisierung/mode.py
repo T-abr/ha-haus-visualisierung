@@ -228,6 +228,6 @@ class HouseMode:
         return {
             "mode": self.mode, "since": self.book.mode.get("since", 0), "by": self.book.mode.get("by"),
             "enabled": cfg.get("enabled", True), "panel": eid, "panel_state": st.state if st else None,
-            "sync": bool(cfg.get("alarmo_sync")), "code": bool(self.book.code),
+            "sync": bool(cfg.get("alarmo_sync")), "code": bool(self.book.code), "pin": bool(self.book.pin.get("hash")),
             "away_pending": self._away_timer is not None,
         }

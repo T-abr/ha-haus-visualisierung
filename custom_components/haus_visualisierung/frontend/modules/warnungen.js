@@ -5,6 +5,13 @@ import { dewPoint, humRooms, MOLD_HYST, outdoorClim, ventAdvice } from "./klima.
 import { applAlerts, GERAETE } from "./geraete.js";
 import { MAINT, maintAlerts } from "./wartung.js";
 
+/* Wetterwarnungen (Unwetter, Regen bei offenem Fenster, Sturm bei Markise) rechnet das Backend (weather.py) */
+const WETTER = "sensor.haus_wetter";
+function wxAlerts(h) {
+  const st = h.states[WETTER], l = st && st.attributes.meldungen;
+  return Array.isArray(l) ? l.map((a) => ({ key: a.key, level: a.level, icon: a.icon || "mdi:weather-lightning", title: a.title, detail: a.detail || "", to: a.path || "" })) : [];
+}
+
 const CHIPS = {
   lights: (h, m) => { const n = m.agg.lights.filter((e) => isOn(h.states[e])).length; return m.agg.lights.length ? { t: n ? `${n} ${n === 1 ? "Licht" : "Lichter"} an` : "Alle Lichter aus", c: n ? "warm" : "calm", i: n ? "mdi:lightbulb-on" : "mdi:lightbulb-outline" } : null; },
   contacts: (h, m) => { const n = m.agg.contacts.filter((e) => isOn(h.states[e])).length; return m.agg.contacts.length ? { t: n ? `${n} offen` : "Fenster & Türen zu", c: n ? "alert" : "ok", i: n ? "mdi:window-open-variant" : "mdi:window-closed-variant" } : null; },
@@ -51,7 +58,7 @@ function alertWatch(m, L) {
   const pres = m.visibleAreas.flatMap((a) => a.presence);
   // Schimmelrisiko: nur die Raumfeuchte. Temperatur und außen ändern bloß den Text; den frischt der 30-s-Takt auf.
   const hum = (L.alerts && L.alerts.builtin && L.alerts.builtin.mold === false) ? [] : m.visibleAreas.map((a) => a.humId);
-  return [...m.agg.contacts, ...m.agg.safety, ...m.agg.climates, ...m.agg.batteries, ...m.agg.unavailable, ...garages, ...locks, ...pres, ...hum, ...(m._panelIds || []), ...r.map((x) => x.entity).filter(Boolean), GERAETE].filter(Boolean);
+  return [...m.agg.contacts, ...m.agg.safety, ...m.agg.climates, ...m.agg.batteries, ...m.agg.unavailable, ...garages, ...locks, ...pres, ...hum, ...(m._panelIds || []), ...r.map((x) => x.entity).filter(Boolean), GERAETE, WETTER].filter(Boolean);
 }
 /* Alarmmanager: Zustände aus dem Backend (neu, quittiert, stumm) und jüngstes Protokoll */
 let ALARMS = null;
@@ -137,6 +144,7 @@ function evalAlertsRaw(h, m, L) {
   else MOLD.clear();
   if (B.appliances) out.push(...applAlerts(h, L));
   if (B.maintenance) out.push(...maintAlerts(L));
+  if (B.weather) out.push(...wxAlerts(h));
   (c.rules || []).forEach((r, i) => {
     if (r.enabled === false || !r.entity) return;
     if (r.modes && r.modes.length && !r.modes.includes(mode)) return;
@@ -264,4 +272,4 @@ function moldAlerts(h, m, L, c) {
   return out;
 }
 
-export { ALARMO_TXT, ALARMS, alertsByArea, alertsCardHTML, alertWatch, CHIP_WATCH, CHIPS, clockOf, curMode, dayOf, durTxt, evalAlerts, evalAlertsAll, LEVEL_ICON, LEVEL_TXT, LEVELS, logRow, MOLD, navBadge, setAlarms, sinceTs, statusTxt, updateAlerts };
+export { WETTER, wxAlerts, ALARMO_TXT, ALARMS, alertsByArea, alertsCardHTML, alertWatch, CHIP_WATCH, CHIPS, clockOf, curMode, dayOf, durTxt, evalAlerts, evalAlertsAll, LEVEL_ICON, LEVEL_TXT, LEVELS, logRow, MOLD, navBadge, setAlarms, sinceTs, statusTxt, updateAlerts };

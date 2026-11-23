@@ -223,7 +223,7 @@ const WD = (d, i) => (i === 0 ? "Heute" : i === 1 ? "Morgen" : d.toLocaleDateStr
 /** Karte „Sonne & Wetter“ auf der Seite Beschattung (data-u="shade"). */
 function shadeCardHTML(wid) {
   return `<div class="glass shade" data-u="shade" data-eid="${esc(wid || "")}"><div class="shd"><h3>${icon("mdi:weather-sunny")}Sonne & Wetter</h3><span class="sp"></span><small class="shsun"></small></div>
-    <div class="fcs"></div><div class="shints"></div></div>`;
+    <div class="swarns"></div><div class="fcs"></div><div class="shints"></div></div>`;
 }
 function updateShade(el, ctx) {
   const h = ctx._hass, res = shadeHints(h, ctx._model, ctx._layout);
@@ -232,6 +232,10 @@ function updateShade(el, ctx) {
   if (az === null && loc) { const p = sunPos(new Date(), loc.lat, loc.lon); az = p.az; elv = p.el; }
   const dir = az === null ? "" : FACES[Math.round(az / 45) % 8][2];
   setHtml(el.querySelector(".shsun"), az === null ? "" : elv > 0 ? `${icon("mdi:white-balance-sunny")}Sonne im ${esc(dir)}en, ${NF0.format(elv)}° hoch` : `${icon("mdi:weather-night")}Sonne untergegangen`);
+  // Wetterwarnungen (DWD) aus dem Backend (sensor.haus_wetter): Überschrift, Zeitraum, Text und Empfehlung
+  const ws = (h.states["sensor.haus_wetter"] && h.states["sensor.haus_wetter"].attributes.warnungen) || [];
+  setHtml(el.querySelector(".swarns"), ws.map((w) => `<details class="swarn ${w.l === "warn" ? "warn" : "info"}${w.stufe >= 3 ? " severe" : ""}"><summary>${icon(w.i || "mdi:alert")}<div><b>${esc(w.t)}</b><small>${esc(w.d || "")}</small></div></summary>
+      ${w.text ? `<p>${esc(w.text)}</p>` : ""}${w.tipp ? `<p class="tip">${esc(w.tipp)}</p>` : ""}</details>`).join(""));
   const days = res.days.slice(0, 5);
   setHtml(el.querySelector(".fcs"), days.length
     ? days.map((d, i) => `<div class="fc${hotDay(d, res.lim) ? " hot" : ""}" title="${esc(condName(d.cond))}"><small>${WD(d.date, i)}</small>${icon(condIcon(d.cond))}<b>${fin(d.hi) ? `${NF0.format(d.hi)}°` : "–"}</b><small>${fin(d.lo) ? `${NF0.format(d.lo)}°` : ""}${d.rain >= 0.5 ? ` · ${NF0.format(d.rain)} mm` : ""}</small></div>`).join("")
@@ -243,6 +247,6 @@ function updateShade(el, ctx) {
     : ctx._layout.shading && ctx._layout.shading.enabled === false ? "" : days.length ? `<div class="shint calm">${icon("mdi:check-circle-outline")}<div><b>Keine Beschattung nötig</b><small>Heute und morgen unter ${tC(res.lim)} oder ohne viel Sonne.</small></div></div>` : "");
 }
 /** Watch-Liste der Karte: Rollos, Wetter und Sonne. */
-const shadeWatch = (el, c) => [...(c._model.agg.covers || []), el.dataset.eid, "sun.sun"].filter(Boolean);
+const shadeWatch = (el, c) => [...(c._model.agg.covers || []), el.dataset.eid, "sun.sun", "sensor.haus_wetter"].filter(Boolean);
 
 export { condIcon, condName, coverFace, dayOf, FACES, fcDays, fcEnsure, fcListen, fcUnlisten, guessFace, homeLoc, shadeCardHTML, shadeHeadline, shadeHints, shadeWatch, sunPos, sunWindows, updateShade, W_COND, weatherIdOf };

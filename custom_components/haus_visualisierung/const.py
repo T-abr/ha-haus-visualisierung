@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.16.1"
+VERSION = "1.17.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -83,6 +83,7 @@ DEFAULT_LAYOUT: dict = {
             "mold": True,              # Schimmelrisiko: Raumfeuchte zu hoch – jetzt lüften
             "appliances": True,        # Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)
             "maintenance": True,       # Wartungsplaner: Aufgabe fällig
+            "weather": True,           # Unwetter (DWD), Regen bei offenem Fenster, Sturm bei ausgefahrener Markise
         },
         "modes": {},                   # {feste Regel: [Hausmodi]} – fehlt = Standard (BUILTIN_MODES)
         "contacts_min": 0,             # Fenster erst nach … Minuten melden
@@ -113,6 +114,12 @@ DEFAULT_LAYOUT: dict = {
         "check_devices": [],           # weitere Geräte, die der Check prüft (z. B. Bügeleisen-Steckdose)
         "arm": {"zuhause": "disarm", "nacht": "arm_night", "abwesend": "arm_away", "urlaub": "arm_vacation"},
     },
+    "pin": {                       # PIN für heikle Aktionen (pin.py); die PIN selbst liegt nur im Backend
+        "door": True,                  # Tür öffnen (Klingel-Türöffner, Schloss entriegeln)
+        "disarm": True,                # Alarm aus: aus Nacht/Abwesend/Urlaub zurück auf Zuhause
+        "arm": False,                  # Abwesend bzw. Urlaub einschalten
+        "scope": "wall",               # wall = nur Wandpanels und Wanddisplays | all = alle Geräte
+    },
     "presence_sim": {              # Anwesenheits-Simulation (presence.py)
         "enabled": False,
         "modes": ["urlaub"],           # läuft in diesen Hausmodi …
@@ -142,6 +149,18 @@ DEFAULT_LAYOUT: dict = {
     "shading": {                   # Beschattung: Hinweise nach Vorhersage, Sonnenstand und Ausrichtung
         "enabled": True, "hot": 26,    # heißer Tag ab °C (Vorhersage)
         "facing": {},                  # {cover_id: "N"|"NO"|"O"|"SO"|"S"|"SW"|"W"|"NW"|"-"}, fehlt = aus dem Namen
+    },
+    "weather_alerts": {            # Wetterwarnungen (weather.py): DWD, Regen + offene Fenster, Sturm + Markise
+        "enabled": True,
+        "dwd": [],                     # DWD-Warnsensoren; leer = automatisch
+        "dwd_min": 2,                  # ab Warnstufe (1 Wetterwarnung, 2 markant, 3 Unwetter, 4 extrem)
+        "rain": True,                  # Regen kommt bzw. regnet und Fenster/Türen sind offen
+        "rain_min": 60,                # so weit vorausschauen (Minuten)
+        "rain_mm": 0.3,                # ab … mm Niederschlag je Stunde
+        "rain_sensor": "",             # Regensensor (binary_sensor); leer = automatisch nach Namen
+        "wind": True,                  # Sturm und Markise ausgefahren
+        "wind_kmh": 50,                # ab … km/h (Böen)
+        "awnings": [],                 # Markisen; leer = automatisch (device_class awning oder Name)
     },
     "forecast": {                  # Karte „Vorhersage“ auf der Übersicht: Wetter und Solarprognose
         "enabled": True, "solar": True,

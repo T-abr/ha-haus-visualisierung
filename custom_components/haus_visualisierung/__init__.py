@@ -32,6 +32,7 @@ from .const import (
 )
 from .display import SERVICE_TAP, DisplayHub
 from .display_setup import FIRMWARE_DIR, FIRMWARE_URL, firmware_md5, firmware_version
+from .backup import BackupBook
 from .maintenance import MaintenanceBook
 from .store import LayoutStore
 from .websocket import async_register_websocket
@@ -56,6 +57,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await book.async_load()
     data["maintenance"] = book
     store.async_add_listener(lambda layout: book.prune({t["id"] for t in layout["maintenance"]["tasks"]}))
+    # Sicherungen der Einstellungen (vor Updates, täglich vor dem Speichern, von Hand)
+    backups = BackupBook(hass, store, book)
+    await backups.async_load()
+    data["backups"] = backups
 
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.http.async_register_static_paths(

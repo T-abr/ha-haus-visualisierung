@@ -1,4 +1,4 @@
-# Haus Visualisierung 1.16.1
+# Haus Visualisierung 1.17.0
 
 Eigenes Home-Assistant-Panel, das sich wie eine Dashboard-Strategy aus Etagen, Bereichen und Geräten
 selbst aufbaut – mit eigenem Design, Alarmmanager und Hausmodus. Läuft auf einem Raspberry Pi ohne Last:
@@ -21,6 +21,9 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
 - **Wetter und Beschattung**: Vorhersage für fünf Tage auf der Seite Beschattung, „morgen“ im Kopf und im
   Bildschirmschoner; Hinweise wie „Morgen 30 °C: Südrollos bis 10:30 schließen“ aus Vorhersage, Sonnenstand am
   Standort und Ausrichtung der Fenster. Geschaltet wird nur auf Tippen, mit Rückfrage.
+- **Wetterwarnungen**: Unwetter vom Deutschen Wetterdienst (Integration „DWD Weather Warnings“), „Regen kommt“ bei
+  offenen Fenstern und Türen (Regensensor, Wetterlage oder stündliche Vorhersage) und „Sturm“ bei ausgefahrener Markise –
+  im Alarmmanager, in Kopfzeile, Schoner, am Wanddisplay und per Push; `sensor.haus_wetter`.
 - **Müllabfuhr und Termine**: „Morgen: Gelbe Tonne“ in der Kopfzeile und im Bildschirmschoner, am Vorabend
   hervorgehoben, dazu Termine von heute und morgen; aus Kalendern in Home Assistant (z. B. Waste Collection Schedule).
 - **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
@@ -35,7 +38,12 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Wetter, Hausmodus und Meldungen, automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
 - **Als Standard-Dashboard** (Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“): Home Assistant öffnet
   statt der Übersicht die Visualisierung, für den eigenen Benutzer, für alle oder nur auf diesem Gerät.
-- **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Technik, Displays, Darstellung) und Sortieren per Ziehen.
+- **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Technik, Displays, Darstellung, Prüfen & Sichern) und Sortieren per Ziehen.
+- **Prüfen & Sichern**: Einrichtungs-Check (gelöschte Entitäten, Räume ohne Fühler, Rollos ohne Ausrichtung …) und
+  Sicherungen der Einstellungen – automatisch vor Updates und täglich vor dem Speichern, wiederherstellen, als Datei
+  herunterladen und einspielen.
+- **PIN für heikle Aktionen**: Tür öffnen, Alarm aus, Abwesend/Urlaub nur mit PIN – an Wandpanels und Wanddisplays oder
+  überall; die PIN bleibt in Home Assistant.
 - **Eingebettete Panels** (Solar, Protect, Dashboards) mit fester Navigation und Haus-Farben.
 - **Klingel-Overlay** mit Kamera, Live-Bild und Türöffner (Schalter, Taste, Schloss).
 - **Alarmmanager**: Warnregeln (fest und eigene), Leitstelle, Quittieren, Stummschalten, Protokoll,

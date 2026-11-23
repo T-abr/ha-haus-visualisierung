@@ -21,6 +21,7 @@ const DEFAULT_LAYOUT = {
   wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "" },
   shading: { enabled: true, hot: 26, facing: {} },
   forecast: { enabled: true, solar: true, solar_today: "", solar_tomorrow: "" },
+  weather_alerts: { enabled: true, dwd: [], dwd_min: 2, rain: true, rain_min: 60, rain_mm: 0.3, rain_sensor: "", wind: true, wind_kmh: 50, awnings: [] },
   termine: { enabled: true, header: true, saver: true, days: 7, evening: 17, cals: {} },
   appliances: { enabled: true, auto: true, items: [] },
   maintenance: { enabled: true, lead_days: 14, tasks: [] },
@@ -29,7 +30,7 @@ const DEFAULT_LAYOUT = {
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
   alerts: {
-    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true, mold: true, appliances: true, maintenance: true },
+    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true, mold: true, appliances: true, maintenance: true, weather: true },
     modes: {}, contacts_min: 0, mold_hum: 65, mold_min: 30, rules: [],
   },
   escalation: { enabled: true, minutes: 5, levels: ["alarm"], push_critical: true },
@@ -37,6 +38,7 @@ const DEFAULT_LAYOUT = {
   house_mode: { enabled: true, auto_away: true, away_delay: 10, auto_night: false, night_start: "23:00", night_end: "06:30", alarmo: "", alarmo_sync: false, check: true, check_devices: [],
     arm: { zuhause: "disarm", nacht: "arm_night", abwesend: "arm_away", urlaub: "arm_vacation" } },
   presence_sim: { enabled: false, modes: ["urlaub"], switch: "", entities: [], weeks: 2, jitter: 15 },
+  pin: { door: true, disarm: true, arm: false, scope: "wall" },
 };
 /* Hausmodus */
 const HOUSE_MODES = [["zuhause", "Zuhause", "mdi:home-account"], ["nacht", "Nacht", "mdi:weather-night"], ["abwesend", "Abwesend", "mdi:home-export-outline"], ["urlaub", "Urlaub", "mdi:airplane"]];
@@ -60,6 +62,8 @@ const withDefaults = (l) => {
     price: { ...DEFAULT_LAYOUT.price, ...((l && l.price) || {}) },
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
     forecast: { ...DEFAULT_LAYOUT.forecast, ...((l && l.forecast) || {}) },
+    weather_alerts: { ...structuredClone(DEFAULT_LAYOUT.weather_alerts), ...((l && l.weather_alerts) || {}) },
+    pin: { ...DEFAULT_LAYOUT.pin, ...((l && l.pin) || {}) },
     termine: { ...DEFAULT_LAYOUT.termine, ...((l && l.termine) || {}), cals: { ...((l && l.termine && l.termine.cals) || {}) } },
     appliances: { ...DEFAULT_LAYOUT.appliances, ...((l && l.appliances) || {}), items: Array.isArray(l && l.appliances && l.appliances.items) ? l.appliances.items : [] },
     displays: Array.isArray(l && l.displays) ? l.displays : [],

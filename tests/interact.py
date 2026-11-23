@@ -851,7 +851,7 @@ def verlauf_raumseiten():
 def einstellungen_reiter():
     # ---------- Einstellungen mit Reitern und Sortieren per Ziehen (1.1.0) ----------
     pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
-    check("ST: sechs Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 6 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
+    check("ST: sieben Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 7 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
           and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 0)
     stab(pg, "raeume")
     check("ST: Reiter „Räume“ zeigt Etagen und Favoriten", pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Favoriten')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 0)
@@ -999,7 +999,7 @@ def technik_einstellungen():
     # ---------- Einstellungen → Technik (1.2.0) ----------
     pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(600)
     fd = pg.locator(f"{P} .techfound")
-    check("TE: Reiter Technik zeigt Erkanntes", pg.locator(f"{P} .stab").count() == 6 and "3 Speicherfühler" in fd.first.inner_text() and "Heizkurve sensor.heizkurve_soll_vorlauftemperatur" in fd.first.inner_text() and "Lademodus" in fd.nth(1).inner_text())
+    check("TE: Reiter Technik zeigt Erkanntes", pg.locator(f"{P} .stab").count() == 7 and "3 Speicherfühler" in fd.first.inner_text() and "Heizkurve sensor.heizkurve_soll_vorlauftemperatur" in fd.first.inner_text() and "Lademodus" in fd.nth(1).inner_text())
     check("TE: Platzhalter nennt automatische Zuordnung", "sensor.kamin_temperatur" in (pg.locator(f'{P} input[data-set="heating.stove"]').get_attribute("placeholder") or ""))
     D = lambda k: pg.evaluate(f"document.querySelector('{P}')._draft.{k}")
     drag(pg.locator(f'{P} [data-sort=tank] .pin[data-sort-id="sensor.speicher_unten"]'), pg.locator(f'{P} [data-sort=tank] .pin[data-sort-id="sensor.speicher_oben"]'))
@@ -2160,6 +2160,154 @@ def displays_einrichten():
     pg.goto(dense + "?view=einstellungen/displays"); pg.wait_for_timeout(600)
     check("WE: Handy ohne Überbreite", not pg.evaluate(WIDE))
     pg.set_viewport_size({"width": 1440, "height": 1000})
+
+
+@gruppe("system")
+def pruefen_und_sichern():
+    # ---------- Reiter „Prüfen & Sichern“: Einrichtungs-Check und Sicherungen ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=einstellungen/system"); pg.wait_for_timeout(600)
+    check("SY: Reiter „Prüfen & Sichern“ mit Check und Sicherungen", pg.locator(f"{P} .stab[data-tab=system].on").count() == 1
+          and pg.locator(f"{P} .set[data-sec=check]").count() == 1 and pg.locator(f"{P} .set[data-sec=backup]").count() == 1)
+    # gelöschte Entität in den Einstellungen → wichtiger Punkt mit Knopf zum Reiter, Zahl am Reiter
+    pg.evaluate(f"""(() => {{ const p = {PP}; return window.__api.hass.callWS({{ type: 'x/save', layout: {{ ...p._layout, favorites: ['light.gibtsnicht'] }} }})
+      .then((r) => {{ p._layout = window.__HAUS_VIS__.withDefaults ? window.__HAUS_VIS__.withDefaults(r.layout) : {{ ...p._layout, ...r.layout }}; p._draft = null; p._dirty = true; p._schedule(); }}); }})()""")
+    pg.wait_for_timeout(300)
+    row = pg.locator(f"{P} .chk.warn:has-text('gibt es nicht mehr')")
+    check("SY: gelöschte Entität gemeldet (Fundstelle und ID)", row.count() == 1 and "Favorit: light.gibtsnicht" in row.inner_text())
+    check("SY: Zahl wichtiger Punkte am Reiter", pg.locator(f"{P} .stab[data-tab=system] .tprob").count() == 1)
+    checks = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.setupChecks(p._hass, p._layout).map(x => x.title); }})()")
+    check("SY: Check liefert eine Liste mit Titeln", isinstance(checks, list) and any("nicht mehr" in t for t in checks))
+    row.locator("[data-act=s-tab]").click(); pg.wait_for_timeout(300)
+    check("SY: Knopf führt zum Reiter Räume", pg.locator(f"{P} .stab[data-tab=raeume].on").count() == 1)
+    stab(pg, "system")
+    # Sicherungen: leer → Jetzt sichern → Liste; Wiederherstellen mit Rückfrage
+    check("SY: noch keine Sicherung", "Noch keine Sicherung" in pg.locator(f"{P} .set[data-sec=backup]").inner_text())
+    pg.locator(f"{P} [data-act=s-bk-create]").click(); pg.wait_for_timeout(300)
+    check("SY: Jetzt sichern → eine Zeile „von Hand“", pg.locator(f"{P} .srow.bk").count() == 1 and "von Hand" in pg.locator(f"{P} .srow.bk").inner_text())
+    with pg.expect_download() as dl:
+        pg.locator(f"{P} [data-act=s-bk-export]").click()
+    check("SY: aktueller Stand als JSON-Datei", dl.value.suggested_filename.startswith("haus-visualisierung-") and dl.value.suggested_filename.endswith(".json"))
+    # Stand ändern, dann Sicherung zurückholen
+    pg.evaluate(f"""(() => {{ const p = {PP}; return window.__api.hass.callWS({{ type: 'x/save', layout: {{ ...p._layout, favorites: [] }} }}); }})()""")
+    pg.locator(f"{P} [data-act=s-bk-restore]").first.click(); pg.wait_for_timeout(200)
+    check("SY: Rückfrage vor dem Wiederherstellen", pg.locator(f"{P} .bkask").count() == 1 and "wiederherstellen?" in pg.locator(f"{P} .bkask").inner_text())
+    pg.locator(f"{P} [data-act=s-bk-yes]").click(); pg.wait_for_timeout(600)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.favorites)")
+    check("SY: wiederhergestellt (Favorit wieder da), vorher gesichert", saved == ["light.gibtsnicht"] and "Wiederhergestellt" in pg.locator(f"{P} .toast").inner_text()
+          and pg.locator(f"{P} .srow.bk").count() == 2)
+    # Datei einspielen
+    doc = '{"format":"haus_visualisierung","schema":1,"version":"1.17.0","created":"2026-11-20T10:00:00+01:00","layout":{"favorites":["light.wohnzimmer_decke"]},"maintenance":{}}'
+    pg.locator(f"{P} #hv-bk-file").set_input_files(files=[{"name": "sicherung.json", "mimeType": "application/json", "buffer": doc.encode()}]); pg.wait_for_timeout(300)
+    check("SY: Datei → Rückfrage mit Namen und Version", "sicherung.json" in pg.locator(f"{P} .bkask").inner_text() and "1.17.0" in pg.locator(f"{P} .bkask").inner_text())
+    pg.locator(f"{P} [data-act=s-bk-yes]").click(); pg.wait_for_timeout(400)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.favorites)")
+    check("SY: Datei eingespielt", saved == ["light.wohnzimmer_decke"])
+    pg.locator(f"{P} #hv-bk-file").set_input_files(files=[{"name": "kaputt.json", "mimeType": "application/json", "buffer": b"{nix"}]); pg.wait_for_timeout(300)
+    check("SY: falsche Datei abgelehnt", "Keine Sicherung" in pg.locator(f"{P} .toast").inner_text() and pg.locator(f"{P} .bkask").count() == 0)
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    check("SY: am Handy nichts breiter als der Bildschirm", not pg.evaluate(WIDE))
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+
+
+@gruppe("pin")
+def pin_abfrage():
+    # ---------- PIN für heikle Aktionen: setzen, Tastenfeld am Wandpanel, Tür öffnen ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?wandpanel=0&view=einstellungen/alarme"); pg.wait_for_timeout(600)
+    sec = pg.locator(f"{P} .set[data-sec=pin]")
+    check("PIN: Abschnitt unter Alarme, Tür und Alarm aus vorbelegt", sec.count() == 1 and sec.locator("[data-set='pin.door']").is_checked()
+          and sec.locator("[data-set='pin.disarm']").is_checked() and not sec.locator("[data-set='pin.arm']").is_checked())
+    pg.locator(f"{P} #hv-pin").fill("12a4"); pg.locator(f"{P} [data-act=s-pin-save]").click(); pg.wait_for_timeout(200)
+    check("PIN: ungültige PIN abgelehnt", "4 bis 8 Ziffern" in pg.locator(f"{P} .toast").inner_text())
+    pg.locator(f"{P} #hv-pin").fill("2468"); pg.locator(f"{P} [data-act=s-pin-save]").click(); pg.wait_for_timeout(300)
+    check("PIN: gespeichert, Feld wieder leer", "PIN gespeichert" in pg.locator(f"{P} .toast").inner_text() and pg.locator(f"{P} #hv-pin").input_value() == ""
+          and pg.evaluate("window.__api.alarmSnap.mode.pin") is True)
+    # Kein Wandpanel, Geltung „Wandpanels“ → keine Abfrage
+    pg.evaluate("window.__api.hass.callWS({type:'x/set_mode', mode:'abwesend'})"); pg.wait_for_timeout(200)
+    pg.goto(dense + "?view=alarme"); pg.wait_for_timeout(500)
+    need = pg.evaluate(f"(() => {{ const p = {PP}; return [window.__HAUS_VIS__.pinNeeded(p, 'disarm'), window.__HAUS_VIS__.pinNeeded(p, 'arm'), window.__HAUS_VIS__.modeKind('abwesend', 'zuhause'), window.__HAUS_VIS__.modeKind('zuhause', 'nacht')]; }})()")
+    check("PIN: ohne Wandpanel nicht nötig; Moduswechsel richtig eingeordnet", need == [False, False, "disarm", None])
+    # Wandpanel: Zuhause aus Abwesend → Tastenfeld
+    pg.goto(dense + "?wandpanel=1&view=alarme"); pg.wait_for_timeout(600)
+    pg.evaluate("window.__api.hass.callWS({type:'x/pin_set', pin:'2468'})"); pg.wait_for_timeout(100)  # Testzustand gilt je Seite
+    pg.locator(f"{P} .hmb[data-mode=zuhause]").click(); pg.wait_for_timeout(200)
+    if pg.locator(f"{P} [data-act=confirm-ok]").count(): pg.locator(f"{P} [data-act=confirm-ok]").click(); pg.wait_for_timeout(200)
+    pad = pg.locator(f"{P} .pinpad")
+    check("PIN: Tastenfeld beim Wechsel auf Zuhause", pad.count() == 1 and "Zuhause" in pad.inner_text())
+    for k in "1111": pg.locator(f"{P} .pinkey[data-pin='{k}']").click()
+    pg.locator(f"{P} .pinkey[data-pin=ok]").click(); pg.wait_for_timeout(300)
+    check("PIN: falsche PIN → Meldung, Modus bleibt", "Falsche PIN" in pg.locator(f"{P} .pinmsg").inner_text() and pg.evaluate("window.__api.alarmSnap.mode.mode") == "abwesend")
+    pg.keyboard.type("2468"); pg.keyboard.press("Enter"); pg.wait_for_timeout(400)
+    check("PIN: richtige PIN (Tastatur) → umgeschaltet, Feld zu", pg.locator(f"{P} .pinpad").count() == 0 and pg.evaluate("window.__api.alarmSnap.mode.mode") == "zuhause")
+    # Abbrechen → nichts passiert (Nacht → Zuhause nach Ablauf der Entsperrung)
+    pg.evaluate(f"(() => {{ window.__api.hass.callWS({{type:'x/set_mode', mode:'nacht'}}); }})()"); pg.wait_for_timeout(200)
+    pg.goto(dense + "?wandpanel=1&view=alarme"); pg.wait_for_timeout(600)
+    pg.evaluate("window.__api.hass.callWS({type:'x/pin_set', pin:'2468'})"); pg.wait_for_timeout(100)  # Testzustand gilt je Seite
+    pg.locator(f"{P} .hmb[data-mode=zuhause]").click(); pg.wait_for_timeout(200)
+    if pg.locator(f"{P} [data-act=confirm-ok]").count(): pg.locator(f"{P} [data-act=confirm-ok]").click(); pg.wait_for_timeout(200)
+    pg.locator(f"{P} .pincancel").click(); pg.wait_for_timeout(200)
+    check("PIN: Abbrechen → kein Wechsel", pg.locator(f"{P} .pinpad").count() == 0 and pg.evaluate("window.__api.alarmSnap.mode.mode") == "nacht")
+    # Nacht braucht nie eine PIN
+    check("PIN: Nacht ohne PIN", pg.evaluate(f"window.__HAUS_VIS__.modeKind('zuhause', 'nacht')") is None)
+    # Tür öffnen im Klingelfenster
+    pg.goto(dense + "?wandpanel=1&ov=cockpit"); pg.wait_for_timeout(500)
+    pg.evaluate("window.__api.hass.callWS({type:'x/pin_set', pin:'2468'})"); pg.wait_for_timeout(100)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, doorbell: {{ ...p._layout.doorbell, lock: 'switch.tueroeffner' }} }}; }})()")
+    pg.evaluate(ring); pg.wait_for_timeout(500)
+    if pg.locator(f"{P} [data-act=bell-unlock]").count():
+        before = len([x for x in pg.evaluate("window.__api.log") if x[0] in ("switch", "lock", "homeassistant")])
+        pg.locator(f"{P} [data-act=bell-unlock]").click(); pg.wait_for_timeout(100)
+        pg.locator(f"{P} [data-act=bell-unlock]").click(); pg.wait_for_timeout(300)
+        check("PIN: Tür öffnen fragt am Wandpanel nach", pg.locator(f"{P} .pinpad").count() == 1 and "Tür öffnen" in pg.locator(f"{P} .pinpad").inner_text())
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+        check("PIN: Escape bricht ab, Tür bleibt zu", pg.locator(f"{P} .pinpad").count() == 0 and "Tür öffnen" in pg.locator(f"{P} [data-act=bell-unlock]").inner_text()
+              and len([x for x in pg.evaluate("window.__api.log") if x[0] in ("switch", "lock", "homeassistant")]) == before)
+        pg.evaluate(f"{PP}._closeBell()")
+    else:
+        check("PIN: Klingelfenster mit Türöffner im Harness", False)
+    # aufräumen: PIN löschen, Wandpanel aus
+    pg.evaluate("window.__api.hass.callWS({type:'x/pin_set', pin:''}); window.__api.hass.callWS({type:'x/set_mode', mode:'zuhause'}); localStorage.setItem('hv-wallpanel', '0')")
+
+
+@gruppe("wetterwarnung")
+def wetterwarnungen():
+    # ---------- Wetterwarnungen aus dem Backend (sensor.haus_wetter): Meldungen, Wetterkarte, Einstellungen ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=beschattung"); pg.wait_for_timeout(600)
+    check("WW: ohne Sensor keine Warnung auf der Wetterkarte", pg.locator(f"{P} .swarn").count() == 0)
+    pg.evaluate("""window.__api.set('sensor.haus_wetter', '2', {
+      warnungen: [{ t: 'Unwetter: Amtliche Unwetterwarnung vor schwerem Gewitter', d: 'bis 18:00 · Es treten schwere Gewitter auf.', l: 'warn', stufe: 3, i: 'mdi:weather-lightning',
+                    text: 'Es treten schwere Gewitter mit Starkregen auf.', tipp: 'Fenster und Türen schließen.', vorab: false }],
+      regen: { ab: null, jetzt: true, mm: null, quelle: 'Wetter' }, wind: null,
+      meldungen: [{ key: 'wx:dwd:gewitter', level: 'warn', title: 'Unwetter: Amtliche Unwetterwarnung vor schwerem Gewitter', detail: 'bis 18:00', path: 'beschattung', icon: 'mdi:weather-lightning' },
+                  { key: 'wx:rain', level: 'warn', title: 'Es regnet · Bad · Fenster offen', detail: '', path: 'sicherheit', icon: 'mdi:weather-pouring' }] })""")
+    pg.wait_for_timeout(400)
+    w = pg.locator(f"{P} .swarn")
+    check("WW: Warnung auf der Wetterkarte (Unwetter rot)", w.count() == 1 and "severe" in w.get_attribute("class") and "schwerem Gewitter" in w.inner_text())
+    w.locator("summary").click(); pg.wait_for_timeout(150)
+    check("WW: aufklappen zeigt Text und Empfehlung", "Fenster und Türen schließen" in w.inner_text())
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).map(a => [a.key, a.level, a.to]); }})()")
+    check("WW: Meldungen im Alarmmanager", al == [["wx:dwd:gewitter", "warn", "beschattung"], ["wx:rain", "warn", "sicherheit"]])
+    # feste Regel aus → keine Meldungen
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, builtin: {{ ...p._layout.alerts.builtin, weather: false }} }} }}; }})()")
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).length; }})()")
+    check("WW: Regel „Wetter“ aus → keine Meldungen", al == 0)
+    # Einstellungen
+    pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(500)
+    sec = pg.locator(f"{P} .set[data-sec=wetterwarnung]")
+    check("WW: Abschnitt in Technik mit Grenzen", sec.count() == 1 and sec.locator("[data-set='weather_alerts.wind_kmh']").input_value() == "50"
+          and sec.locator("[data-set='weather_alerts.dwd_min']").input_value() == "2")
+    sec.locator("[data-set='weather_alerts.wind_kmh']").fill("65")
+    sec.locator("[data-set='weather_alerts.awnings']").fill("cover.markise_terrasse, cover.markise_balkon")
+    sec.locator("[data-set='weather_alerts.awnings']").dispatch_event("change")
+    sec.locator("[data-set='weather_alerts.dwd_min']").select_option("3"); pg.wait_for_timeout(100)
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.weather_alerts)")
+    check("WW: gespeichert (Zahlen, Liste, Stufe)", saved["wind_kmh"] == 65 and saved["awnings"] == ["cover.markise_terrasse", "cover.markise_balkon"] and saved["dwd_min"] == 3)
+    stab(pg, "alarme")
+    check("WW: feste Regel „Wetter“ unter Warnungen", pg.locator(f"{P} [data-set='alerts.builtin.weather']").count() == 1)
+    pg.evaluate("window.__api.set('sensor.haus_wetter', '0', { warnungen: [], regen: null, wind: null, meldungen: [] })")
 
 
 def auswahl(args):

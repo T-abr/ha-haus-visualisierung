@@ -6,9 +6,11 @@ import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, UPD, withDefaults } from "./grun
 import { rangeSet } from "./verlauf.js";
 import { rbShift } from "./rueckblick.js";
 import { buildModel } from "./modell.js";
-import { ALARMS } from "./warnungen.js";
+import { ALARMS, curMode } from "./warnungen.js";
 import { simAction } from "./anwesenheit.js";
 import { defaultAction } from "./standard.js";
+import { modeKind, pinOk, pinSave } from "./pin.js";
+import { systemAction } from "./system.js";
 import { applList } from "./geraete.js";
 import { maintCall, newTask } from "./wartung.js";
 import { adoptDevice, customAction, displaysForSave, newDisplay, togglePage, testBell, updateDevice } from "./wanddisplay.js";
@@ -60,6 +62,7 @@ const AktionenMixin = (Base) => class extends Base {
       case "al-lock": this._call("lock", "lock", { entity_id: t.dataset.eid }); this._toast("Wird verriegelt"); return;
       case "hm-set": {
         const md = t.dataset.mode;
+        if (!(await pinOk(this, modeKind(curMode(), md), `Hausmodus „${MODE_NAME[md]}“`))) return;
         try {
           const st = await this._hass.callWS({ type: `${DOMAIN}/set_mode`, mode: md });
           if (ALARMS && st) this._onAlarms({ ...ALARMS, mode: st });
@@ -75,6 +78,8 @@ const AktionenMixin = (Base) => class extends Base {
         return;
       }
     }
+    if (act === "s-pin-save") { await pinSave(this); return; }
+    if (act.startsWith("s-bk-") && await systemAction(this, act, t)) return;
     if (act === "s-code-save") {
       const inp = this.shadowRoot.getElementById("hv-code");
       try { await this._hass.callWS({ type: `${DOMAIN}/alarm_code`, code: inp ? inp.value : "" }); this._toast(inp && inp.value ? "Code gespeichert" : "Code gelöscht"); if (inp) inp.value = ""; }

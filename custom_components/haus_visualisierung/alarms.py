@@ -50,6 +50,7 @@ class AlarmBook:
         self.rev = 0
         self.mode: dict[str, Any] = {}       # Hausmodus {mode, since, by}
         self.code: str = ""                  # Code der Alarmanlage (nur im Backend, nie im Panel)
+        self.pin: dict = {}                  # PIN für heikle Aktionen als {salt, hash} (pin.py), nie im Panel
         self.mode_info: Callable[[], dict] | None = None
 
     # ---------- Speichern ----------
@@ -59,10 +60,11 @@ class AlarmBook:
         self.log = [e for e in (data.get("log") or []) if isinstance(e, dict)]
         self.mode = data.get("mode") if isinstance(data.get("mode"), dict) else {}
         self.code = str(data.get("code") or "")
+        self.pin = data.get("pin") if isinstance(data.get("pin"), dict) else {}
         self._trim()
 
     def _data(self) -> dict:
-        return {"alarms": self.alarms, "log": self.log, "mode": self.mode, "code": self.code}
+        return {"alarms": self.alarms, "log": self.log, "mode": self.mode, "code": self.code, "pin": self.pin}
 
     @callback
     def _changed(self) -> None:

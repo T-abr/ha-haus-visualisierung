@@ -26,8 +26,16 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 15 | Intelligentes Laden der Wallbox | später | L | vorgemerkt |
 | 16 | Musik- und Medienseite | später | L | vorgemerkt |
 | 17 | Display-Firmware aus GitHub-Releases statt mitgeliefert | mittel | M | neu |
+| 18 | ~~Unwetter und „Regen kommt, Fenster offen“~~ | hoch | M | umgesetzt |
+| 19 | ~~Einstellungen sichern und wiederherstellen~~ | hoch | S | umgesetzt |
+| 20 | ~~Einrichtungs-Check~~ | hoch | S–M | umgesetzt |
+| 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt (Rest offen) |
+| 22 | Zeitleiste „Was war los?“ | mittel | M | neu |
+| 23 | Szenen je Raum (auch als Display-Kachel) | mittel | M | neu |
+| 24 | Display: Alarm-Vollbild mit Quittieren | mittel | M | neu |
+| 25 | Display: Relais als Lichtschalter | niedrig | M | neu |
 
-„Umgesetzt“: seit Version 1.11.0 enthalten. „Neu“: im Backlog, noch nicht
+„Umgesetzt“: seit Version 1.11.0 (1–10) bzw. 1.17.0 (18–21) enthalten. „Neu“: im Backlog, noch nicht
 ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
 
 ## Neue Ideen
@@ -97,6 +105,28 @@ geladene Firmware ohne Internet.
 
 **Offene Entscheidung:** ha-haus-display ist privat. Entweder ein GitHub-Token mit Lesezugriff in den
 Einstellungen hinterlegen oder das Firmware-Repo öffentlich machen (dann ohne Token).
+
+### 18.–21. ~~Wetterwarnungen, Sicherungen, Einrichtungs-Check, PIN~~ (umgesetzt, siehe CHANGELOG 1.17.0)
+Offen bei 21: Tastenfeld für die PIN am Wanddisplay (braucht neue Firmware); bis dahin sind geschützte Aktionen dort
+gesperrt.
+
+### 22. Zeitleiste „Was war los?“
+Tür, Klingel mit Standbild, Bewegung, Moduswechsel und Alarme als Verlauf auf der Seite Sicherheit, nach Tag
+gruppiert und filterbar. Praktisch nach dem Urlaub oder wenn man unterwegs war. Quelle: Recorder bzw. Logbuch und
+das Protokoll des Alarmmanagers; Standbilder der Klingel bei jedem Klingeln merken.
+
+### 23. Szenen je Raum
+Stimmungen wie Kino, Essen oder Putzen im Panel anlegen (Lichter mit Helligkeit/Farbe, Rollos mit Position) und mit
+einem Tipp schalten: auf der Raumseite, im Schnellzugriff und als Kachel am Wanddisplay. Vorhandene `scene.*`
+weiter nutzbar.
+
+### 24. Display: Alarm-Vollbild mit Quittieren
+Wie das Klingel-Overlay: bei einem Alarm füllt die Meldung den Bildschirm des Wanddisplays (rot, mit Raum und
+Zeit), dazu „Quittieren“ und „1 h stumm“ direkt am Gerät. Braucht neue Firmware.
+
+### 25. Display: Relais als Lichtschalter
+Die Guition-Variante mit Relais macht das Display zum echten Wandschalter: Relais je Kanal einer Kachel zuordnen,
+schaltet auch ohne WLAN bzw. ohne Home Assistant. Braucht neue Firmware und die Relais-Hardware.
 
 ## Vorgemerkt (früher vorgeschlagen)
 
