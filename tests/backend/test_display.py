@@ -41,6 +41,7 @@ def test_sanitize() -> None:
 
 
 def test_format() -> None:
+    assert de(-0.2, 0) == "0" and de(-0.04, 1) == "0,0" and de(-1.4, 0) == "-1" and de(-1234.5, 1) == "-1.234,5"
     assert de(1234.56, 1) == "1.234,6" and kw(612) == "612 W" and kw(3240) == "3,2 kW" and kw(None) == "–"
     assert bin_of("Gelbe Tonne")[1] == "recycle" and bin_of("Restmüll")[1] == "trash-can-outline"
 

@@ -10,6 +10,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Braucht die nächste Firmware (Bereich `eigene`, Ziel `eigen:<seite>:<kachel>`, kein neues Protokoll); ältere Firmware ignoriert die Seiten.
 
 ### Behoben – Wanddisplay
+- Wetter zeigt bei leichtem Frost „0°“ statt „-0°“.
+- Nächste Firmware: Hintergrund mit dem Verlauf der Visualisierung (vorher einfarbig), gerastert gegen Streifen.
 - **Kacheln lassen sich bedienen**: Ein Tipp auf eine Entitäts-Kachel schaltet jetzt (Licht, Schalter, Lüfter, Abdeckung, Schloss, Klima, Mediaplayer umschalten; Szene, Skript, Taster auslösen). Die Firmware meldete den Tipp bisher nicht; das kommt mit der nächsten Firmware. Energie-, Klima-, Meldungs- und Geräte-Kacheln öffnen dann ihre Seite.
 
 ### Tests

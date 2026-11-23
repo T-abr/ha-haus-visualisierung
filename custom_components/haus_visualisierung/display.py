@@ -100,6 +100,8 @@ CAL_TTL = 15 * 60
 # ---------- Formatierung (deutsch) ----------
 def de(v: float, digits: int = 1) -> str:
     txt = f"{v:,.{digits}f}"
+    if txt.startswith("-") and not txt.strip("-0.,"):  # -0,2 auf 0 Stellen ist „0“, nicht „-0“
+        txt = txt[1:]
     return txt.replace(",", " ").replace(".", ",").replace(" ", ".")
 
 
