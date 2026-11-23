@@ -31,7 +31,7 @@ Enthält auch alle Änderungen aus 1.14.0 (Standard-Dashboard, Firmware-Updates 
 - `test_display.py`: Tipp auf Kacheln (`kachel:N`), `tap_service`, eigene Seiten (Prüfen, Push, Tipp).
 - Bedienprüfung „displays“: eigene Seite anlegen, Entitäten, Symbol, Reihenfolge, Bildschirmschoner, Speichern.
 - `test_display.py`: Bildschirmschoner (Einstellungen, Inhalt), farbige Werte (`sr`/`vr`).
-- Testumgebung: Preis-Statistik im Harness schwankt relativ zum Preis und wird nie negativ; die Prüfung „Kosten mit dem Stundenpreis“ im Rückblick hing sonst von der Uhrzeit des Testlaufs ab (schlug mittags fehl).
+- Testumgebung: Preis-Statistik im Harness folgt dem festen Stundengang (nie negativ); die Prüfung „Kosten mit dem Stundenpreis“ im Rückblick hing sonst von der Uhrzeit des Testlaufs ab (PR #37).
 
 ## 1.14.0 – 2026-11-23
 
