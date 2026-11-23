@@ -6,6 +6,7 @@ import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, UPD, withDefaults } from "./grun
 import { rangeSet } from "./verlauf.js";
 import { buildModel } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
+import { simAction } from "./anwesenheit.js";
 
 const AktionenMixin = (Base) => class extends Base {
   async _actionExtra(act, t) {
@@ -69,6 +70,7 @@ const AktionenMixin = (Base) => class extends Base {
       catch (err) { this._toast(`Speichern fehlgeschlagen: ${err && err.message ? err.message : err}`); }
       return;
     }
+    if (act.startsWith("s-sim-") && simAction(this, act, t)) return;
     if (!D) return;
     const h = this._hass;
     switch (act) {

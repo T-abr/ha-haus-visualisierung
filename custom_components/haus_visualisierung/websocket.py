@@ -24,6 +24,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_set_mode)
     websocket_api.async_register_command(hass, ws_alarm_code)
     websocket_api.async_register_command(hass, ws_action_test)
+    websocket_api.async_register_command(hass, ws_presence_sim)
 
 
 def _payload(hass: HomeAssistant) -> dict[str, Any]:
@@ -208,3 +209,14 @@ async def ws_action_test(hass: HomeAssistant, connection: websocket_api.ActiveCo
         connection.send_error(msg["id"], "invalid", "Aktion unvollständig (Entität, Gruppenadresse oder TTS-Dienst fehlt)")
         return
     connection.send_result(msg["id"], {"calls": calls})
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/presence_sim"})
+@callback
+def ws_presence_sim(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Anwesenheits-Simulation: läuft sie, Vorlagetag, nächste Schaltvorgänge und Protokoll."""
+    monitor = _monitor(hass)
+    if monitor is None:
+        connection.send_result(msg["id"], {"active": False, "source": None, "note": "", "next": [], "planned": 0, "log": []})
+        return
+    connection.send_result(msg["id"], monitor.sim.status())

@@ -30,6 +30,8 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Fehlalarm-Auswertung, Push-Meldungen mit Aktionsknöpfen.
 - **Hausmodus** Zuhause, Nacht, Abwesend, Urlaub – Automatik nach Personen und Uhrzeit, Kopplung mit Alarmo,
   Regeln je Modus.
+- **Anwesenheits-Simulation** im Urlaub: Lichter und Rollos nach dem Muster eines echten Tages der letzten Wochen,
+  leicht zufällig verschoben; endet automatisch bei der Rückkehr.
 - **Eskalation und Aktionen**: KNX-Telegramm, Schalter, Sirene, Durchsage (Sonos), Skript – mit Zurücksetzen.
 - **Entitäten** `select.hausmodus`, `sensor.haus_alarme_aktiv`; Ereignisse `haus_visualisierung_alarm`,
   `haus_visualisierung_modus`.

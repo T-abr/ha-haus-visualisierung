@@ -3,7 +3,8 @@
   "name": "Haus Visualisierung",
   "after_dependencies": [
     "mobile_app",
-    "notify"
+    "notify",
+    "recorder"
   ],
   "codeowners": [
     "@T-abr"

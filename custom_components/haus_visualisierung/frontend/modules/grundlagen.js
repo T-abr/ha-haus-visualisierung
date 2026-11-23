@@ -32,6 +32,7 @@ const DEFAULT_LAYOUT = {
   alarm_actions: [],
   house_mode: { enabled: true, auto_away: true, away_delay: 10, auto_night: false, night_start: "23:00", night_end: "06:30", alarmo: "", alarmo_sync: false, check: true, check_devices: [],
     arm: { zuhause: "disarm", nacht: "arm_night", abwesend: "arm_away", urlaub: "arm_vacation" } },
+  presence_sim: { enabled: false, modes: ["urlaub"], switch: "", entities: [], weeks: 2, jitter: 15 },
 };
 /* Hausmodus */
 const HOUSE_MODES = [["zuhause", "Zuhause", "mdi:home-account"], ["nacht", "Nacht", "mdi:weather-night"], ["abwesend", "Abwesend", "mdi:home-export-outline"], ["urlaub", "Urlaub", "mdi:airplane"]];
@@ -47,6 +48,7 @@ const withDefaults = (l) => {
     escalation: { ...structuredClone(DEFAULT_LAYOUT.escalation), ...((l && l.escalation) || {}) },
     alarm_actions: Array.isArray(l && l.alarm_actions) ? l.alarm_actions : [],
     house_mode: { ...structuredClone(DEFAULT_LAYOUT.house_mode), ...((l && l.house_mode) || {}), arm: { ...DEFAULT_LAYOUT.house_mode.arm, ...((l && l.house_mode && l.house_mode.arm) || {}) } },
+    presence_sim: { ...structuredClone(DEFAULT_LAYOUT.presence_sim), ...((l && l.presence_sim) || {}) },
     doorbell: { ...DEFAULT_LAYOUT.doorbell, ...((l && l.doorbell) || {}) },
     heating: { ...structuredClone(DEFAULT_LAYOUT.heating), ...((l && l.heating) || {}), manual: { ...DEFAULT_LAYOUT.heating.manual, ...((l && l.heating && l.heating.manual) || {}) } },
     wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}) },

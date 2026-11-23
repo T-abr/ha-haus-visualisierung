@@ -10,6 +10,10 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Umgeschaltet wird **erst nach Bestätigung**: „Nacht einschalten“ bzw. „Trotzdem Nacht/abwesend“, solange noch etwas offen ist. Wird die Alarmanlage dabei scharf geschaltet, steht das im Fenster.
 - Auf der **Hausmodus-Karte** im Alarmmanager erscheint der Check ebenfalls, wenn vor Nacht/Abwesend noch etwas offen ist; ist alles zu, schaltet die Karte wie bisher.
 - **Einstellungen → Alarme → Gute-Nacht- und Verlassen-Check:** an/aus (`house_mode.check`, Standard an) und **weitere Geräte** (`house_mode.check_devices`, z. B. die Steckdose des Bügeleisens).
+### Neu – Anwesenheits-Simulation im Urlaub
+- **Einstellungen → Alarme → Anwesenheits-Simulation** (`presence_sim`, Standard aus): ausgewählte Lichter und Rollos (auch Schalter) schalten im Hausmodus **Urlaub** (wählbar, z. B. auch Abwesend) oder solange ein eigener Schalter (`input_boolean`/`switch`) an ist.
+- Vorlage ist ein echter Tag aus dem **Verlauf der letzten 1–4 Wochen** (Recorder), bevorzugt derselbe Wochentag; jede Schaltzeit wird zufällig um bis zu ± 15 Minuten (einstellbar) verschoben. Helligkeit und Rollo-Position werden übernommen; beim Start wird der Zustand wie zur selben Uhrzeit am Vorlagetag hergestellt. Um Mitternacht wird der nächste Tag geplant.
+- Läuft im Backend, auch ohne offenes Panel, und **endet sofort**, wenn der Modus wechselt (z. B. Rückkehr → Zuhause). Status, nächste Schaltvorgänge und Protokoll in den Einstellungen (Websocket `haus_visualisierung/presence_sim`).
 
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
@@ -17,6 +21,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ### Tests
 - Neue Gruppe `gutenacht` (Bedienprüfungen): Knöpfe, offene Punkte je Modus, einzeln und alles schließen, Bestätigen/Abbrechen/Esc, Hausmodus-Karte mit und ohne offene Punkte, eigene Geräte, Abschalten, Handybreite. Die Prüfung „Hausmodus“ geht jetzt durch den Check. Backend: `check` und `check_devices` werden geprüft.
+- Anwesenheits-Simulation: Backend (Verlauf auswerten, Plan mit Versatz, Start/Ende nach Modus und Schalter, Rollo-Position, echter Recorder) und neue Gruppe `anwesenheit` der Bedienprüfungen.
 - Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
 
 ## 1.10.0 – 2026-11-23
