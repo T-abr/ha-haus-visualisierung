@@ -710,6 +710,8 @@ def hausmodus():
     hm.click(); pg.wait_for_timeout(400)
     check("HM: Kopfzeile öffnet Alarmmanager mit Hausmodus-Karte", pg.evaluate("location.pathname") == "/haus-visualisierung/alarme" and pg.locator(f"{P} .hmcard .hmb.on[data-mode=zuhause]").count() == 1)
     pg.locator(f"{P} .hmb[data-mode=abwesend]").click(); pg.wait_for_timeout(400)
+    check("HM: Abwesend mit offenen Punkten → erst der Verlassen-Check", pg.locator(f"{P} .gnmodal").count() == 1)
+    pg.locator(f"{P} .gnmodal [data-act=gn-go]").click(); pg.wait_for_timeout(400)
     ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"]
     check("HM: Abwesend schickt set_mode", ws and ws[-1][2]["mode"] == "abwesend")
     titles = pg.evaluate(f"[...document.querySelector('{P}').shadowRoot.querySelectorAll('.allist .alti')].map(x => x.textContent)")
@@ -725,8 +727,8 @@ def hausmodus():
     # Gekoppelt: Umschalten auf Abwesend fragt nach (Anlage wird scharf)
     pg.evaluate(f"(() => {{ const p = document.querySelector('{P}'); p._layout = {{ ...p._layout, house_mode: {{ ...p._layout.house_mode, alarmo_sync: true }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
     pg.locator(f"{P} .hmb[data-mode=abwesend]").click(); pg.wait_for_timeout(300)
-    check("HM: gekoppelt → Abfrage „Alarmanlage wird scharf geschaltet“", pg.locator(f"{P} .mbg .modal").count() == 1 and "scharf" in pg.locator(f"{P} .mbg .mx").inner_text())
-    pg.locator(f"{P} .mbg [data-act=confirm-cancel]").click(); pg.wait_for_timeout(200)
+    check("HM: gekoppelt → Check nennt „Alarmanlage wird scharf geschaltet“", pg.locator(f"{P} .mbg .modal").count() == 1 and "scharf" in pg.locator(f"{P} .mbg .mx").inner_text())
+    pg.locator(f"{P} .mbg [data-act=gn-close]").click(); pg.wait_for_timeout(200)
     ws2 = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"]
     check("HM: Abbrechen schaltet nicht", len(ws2) == len(ws) + 1)
     # Einstellungen
@@ -1603,6 +1605,92 @@ def strompreis():
       return [m.scrollWidth - m.clientWidth, c.right <= 390]; }})()""")
     check("SP: Handy 390 px – Strompreis ohne seitliches Scrollen", geo[0] <= 0 and geo[1])
     mp.close()
+
+
+@gruppe("gutenacht")
+def gute_nacht_check():
+    # ---------- Gute-Nacht- und Verlassen-Check ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.evaluate("sessionStorage.removeItem('hv-alarms')")
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(600)
+    btn = pg.locator(f"{P} .qcard .gnbtn")
+    check("GN: Schnellzugriff hat „Gute Nacht“ und „Ich gehe“", btn.count() == 2 and "Gute Nacht" in btn.nth(0).inner_text() and "Ich gehe" in btn.nth(1).inner_text())
+    nset = lambda: len([x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"])
+    n0, s0 = len(log()), nset()
+    btn.nth(0).click(); pg.wait_for_timeout(300)
+    M = f"{P} .gnmodal"
+    txt = pg.locator(M).inner_text()
+    check("GN: Fenster zeigt offene Punkte, nichts geschaltet", pg.locator(M).count() == 1 and len(log()) == n0 and nset() == s0
+          and "Punkte sind noch offen" in txt)
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: Fenster, Licht, Kaffeemaschine dabei; aus/zu nicht", "binary_sensor.schlafzimmer_fenster" in rows and "light.buro_decke" in rows
+          and "switch.kuche_kaffeemaschine" in rows and "light.bad_decke" not in rows and "binary_sensor.kuche_fenster" not in rows and "lock.haustur" not in rows)
+    check("GN: Medien nur beim Gehen", "media_player.wohnzimmer_sonos" not in rows)
+    check("GN: Sensor ohne Knopf, Licht mit „Aus“", pg.locator(f'{M} .gnrow[data-eid="binary_sensor.schlafzimmer_fenster"] .pbtn').count() == 0
+          and pg.locator(f'{M} .gnrow[data-eid="light.buro_decke"] .pbtn').inner_text() == "Aus")
+    pg.locator(f'{M} .gnrow[data-eid="light.buro_decke"] .pbtn').click(); pg.wait_for_timeout(900)
+    rows2 = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: Einzeln ausschalten → Licht aus, Zeile weg, Modus unverändert", log()[-1] == "light.turn_off" and "light.buro_decke" not in rows2 and nset() == s0)
+    pg.locator(f'{M} .gnrow[data-eid="switch.kuche_kaffeemaschine"] .pbtn').click(); pg.wait_for_timeout(900)
+    check("GN: Kaffeemaschine ausschalten", log()[-1] == "homeassistant.turn_off"
+          and pg.locator(f'{M} .gnrow[data-eid="switch.kuche_kaffeemaschine"]').count() == 0)
+    pg.locator(f"{M} [data-act=gn-close]").click(); pg.wait_for_timeout(200)
+    check("GN: Abbrechen schaltet den Modus nicht", pg.locator(M).count() == 0 and nset() == s0)
+    # Ich gehe: Schloss offen, Garage offen, Medien
+    pg.evaluate("window.__api.set('lock.haustur', 'unlocked')"); pg.evaluate("window.__api.set('cover.garagentor', 'open', { current_position: 100 })"); pg.wait_for_timeout(300)
+    btn.nth(1).click(); pg.wait_for_timeout(300)
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: Ich gehe → Garage, Schloss und Medien dabei", rows[:2] == ["cover.garagentor", "binary_sensor.schlafzimmer_fenster"] and "lock.haustur" in rows and "media_player.wohnzimmer_sonos" in rows)
+    check("GN: Titel und Knopf „Trotzdem abwesend“", "Ich gehe" in pg.locator(f"{M} .mt").inner_text() and pg.locator(f"{M} [data-act=gn-go]").inner_text() == "Trotzdem abwesend")
+    pg.locator(f"{M} [data-act=gn-fixall]").click(); pg.wait_for_timeout(900)
+    lg = log()
+    check("GN: Alles schließen → verriegeln, Garage zu, Licht aus", "lock.lock" in lg[-6:] and "cover.close_cover" in lg[-6:] and "light.turn_off" in lg[-6:]
+          and pg.evaluate("window.__api.log.slice(-6).some(x => x[0] === 'light' && x[2].entity_id.length > 1)"))
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: danach bleiben nur Punkte ohne Knopf bzw. ohne Rückmeldung", "lock.haustur" not in rows and "cover.garagentor" not in rows and "binary_sensor.schlafzimmer_fenster" in rows)
+    pg.evaluate("window.__api.set('binary_sensor.schlafzimmer_fenster', 'off'); window.__api.set('media_player.wohnzimmer_sonos', 'paused')"); pg.wait_for_timeout(900)
+    check("GN: alles zu → „Nichts mehr offen“, Knopf „Abwesend einschalten“", pg.locator(f"{M} .gnok").count() == 1 and pg.locator(f"{M} [data-act=gn-go]").inner_text() == "Abwesend einschalten")
+    pg.locator(f"{M} [data-act=gn-go]").click(); pg.wait_for_timeout(400)
+    ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"]
+    check("GN: Bestätigen schaltet auf Abwesend", len(ws) == s0 + 1 and ws[-1][2]["mode"] == "abwesend" and pg.locator(M).count() == 0)
+    # Hausmodus-Karte: alles zu → direkt; etwas offen → Check
+    pg.evaluate(f"{PP}._go('alarme')"); pg.wait_for_timeout(500)
+    pg.locator(f"{P} .hmb[data-mode=zuhause]").click(); pg.wait_for_timeout(300)
+    s1 = nset()
+    pg.locator(f"{P} .hmb[data-mode=nacht]").click(); pg.wait_for_timeout(300)
+    check("GN: Karte, alles zu → Nacht ohne Check", pg.locator(M).count() == 0 and nset() == s1 + 1)
+    pg.locator(f"{P} .hmb[data-mode=zuhause]").click(); pg.wait_for_timeout(300)
+    pg.evaluate("window.__api.set('light.flur_decke', 'on')"); pg.wait_for_timeout(300)
+    s1 = nset()
+    pg.locator(f"{P} .hmb[data-mode=nacht]").click(); pg.wait_for_timeout(300)
+    check("GN: Karte, Licht an → Check mit „Trotzdem Nacht“", pg.locator(M).count() == 1 and nset() == s1 and pg.locator(f"{M} [data-act=gn-go]").inner_text() == "Trotzdem Nacht")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    check("GN: Esc schließt", pg.locator(M).count() == 0 and nset() == s1)
+    # Einstellungen: abschalten und eigene Geräte
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
+    check("GN: Einstellungen mit Schalter", pg.locator(f'{P} [data-set="house_mode.check"]').is_checked())
+    pg.locator(f"{P} [data-chk-input]").fill("switch.trockner"); pg.locator(f"{P} [data-act=s-chk-add]").click(); pg.wait_for_timeout(200)
+    check("GN: Gerät hinzufügen", pg.evaluate(f"{PP}._draft.house_mode.check_devices") == ["switch.trockner"])
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, house_mode: {{ ...p._layout.house_mode, check_devices: ['switch.trockner'] }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
+    pg.evaluate("window.__api.set('switch.trockner', 'on')"); pg.wait_for_timeout(200)
+    pg.locator(f"{P} .qcard .gnbtn").nth(0).click(); pg.wait_for_timeout(300)
+    check("GN: eigenes Gerät erscheint", pg.locator(f'{M} .gnrow[data-eid="switch.trockner"]').count() == 1)
+    pg.locator(f"{M} [data-act=gn-close]").click(); pg.wait_for_timeout(200)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, house_mode: {{ ...p._layout.house_mode, check: false }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
+    check("GN: abgeschaltet → keine Knöpfe", pg.locator(f"{P} .gnbtn").count() == 0)
+    # Handy: Knöpfe in der Energieleiste, Fenster passt in die Breite
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+    mp = ctx.new_page(); mp.on("pageerror", lambda e: errs.append(str(e)))
+    mp.goto(base.split("?")[0] + "?ov=fokus"); mp.wait_for_timeout(600)
+    check("GN-Handy: Knöpfe in der Leiste", mp.locator(f"{P} .ebar .gnbtn").count() == 2)
+    ov, wide = mp.evaluate(OVL), mp.evaluate(WIDE)
+    check("GN-Handy: nichts überlappt, nichts zu breit", not ov and not wide)
+    if ov or wide: print("     ", ov[:3], wide)
+    mp.locator(f"{P} .ebar .gnbtn").nth(1).click(); mp.wait_for_timeout(300)
+    geo = mp.evaluate(f"(() => {{ const r = document.querySelector('{P}').shadowRoot.querySelector('.gnmodal').getBoundingClientRect(); return [r.left >= 0, r.right <= 390, r.bottom <= 844]; }})()")
+    check("GN-Handy: Fenster passt auf den Bildschirm", all(geo))
+    ctx.close()
 
 
 def auswahl(args):

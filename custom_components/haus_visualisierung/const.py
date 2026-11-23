@@ -106,6 +106,8 @@ DEFAULT_LAYOUT: dict = {
         "night_end": "06:30",
         "alarmo": "",                  # alarm_control_panel; leer = automatisch (Alarmo)
         "alarmo_sync": False,          # Hausmodus und Alarmanlage koppeln
+        "check": True,                 # Gute-Nacht-/Verlassen-Check vor Nacht und Abwesend
+        "check_devices": [],           # weitere Geräte, die der Check prüft (z. B. Bügeleisen-Steckdose)
         "arm": {"zuhause": "disarm", "nacht": "arm_night", "abwesend": "arm_away", "urlaub": "arm_vacation"},
     },
     "escalation": {                # Eskalation: Meldung nach … Minuten nicht quittiert

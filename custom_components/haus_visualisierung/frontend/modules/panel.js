@@ -18,12 +18,13 @@ import { AnsichtenMixin } from "./panel-ansichten.js";
 import { KompaktMixin } from "./panel-kompakt.js";
 import { EinstellungenMixin } from "./panel-einstellungen.js";
 import { AktionenMixin } from "./panel-aktionen.js";
+import { GuteNachtMixin } from "./gutenacht.js";
 
 /* Relative module_url fremder Panels wie bisher gegen den Einstiegspunkt auflösen, nicht gegen modules/. */
 const ENTRY_URL = new URL("../haus-visualisierung.js", import.meta.url);
 
-class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMixin(AnsichtenMixin(
-  AlarmseiteMixin(WandpanelMixin(KlingelMixin(HvBase))))))) {
+class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(EinstellungenMixin(KompaktMixin(AnsichtenMixin(
+  AlarmseiteMixin(WandpanelMixin(KlingelMixin(HvBase)))))))) {
   constructor() {
     super();
     this._view = null;

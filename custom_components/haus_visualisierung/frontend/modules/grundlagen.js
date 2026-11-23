@@ -30,7 +30,7 @@ const DEFAULT_LAYOUT = {
   },
   escalation: { enabled: true, minutes: 5, levels: ["alarm"], push_critical: true },
   alarm_actions: [],
-  house_mode: { enabled: true, auto_away: true, away_delay: 10, auto_night: false, night_start: "23:00", night_end: "06:30", alarmo: "", alarmo_sync: false,
+  house_mode: { enabled: true, auto_away: true, away_delay: 10, auto_night: false, night_start: "23:00", night_end: "06:30", alarmo: "", alarmo_sync: false, check: true, check_devices: [],
     arm: { zuhause: "disarm", nacht: "arm_night", abwesend: "arm_away", urlaub: "arm_vacation" } },
 };
 /* Hausmodus */

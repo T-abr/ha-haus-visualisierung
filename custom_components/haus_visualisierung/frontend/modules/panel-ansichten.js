@@ -277,7 +277,8 @@ const AnsichtenMixin = (Base) => class extends Base {
     const l = esc(m.agg.lights.join(",")), c = esc(m.agg.covers.join(","));
     return `${m.agg.lights.length ? `<button class="${cls}" data-act="lights-off" data-confirm="1" data-eids="${l}">${icon("mdi:lightbulb-off-outline")}<span>Alle Lichter aus</span></button>` : ""}
       ${m.agg.covers.length ? `<button class="${cls}" data-act="list-covers" data-svc="open_cover" data-confirm="1" data-eids="${c}">${icon("mdi:window-shutter-open")}<span>Rollos auf</span></button>
-      <button class="${cls}" data-act="list-covers" data-svc="close_cover" data-confirm="1" data-eids="${c}">${icon("mdi:window-shutter")}<span>Rollos zu</span></button>` : ""}`;
+      <button class="${cls}" data-act="list-covers" data-svc="close_cover" data-confirm="1" data-eids="${c}">${icon("mdi:window-shutter")}<span>Rollos zu</span></button>` : ""}
+      ${this._checkBtns ? this._checkBtns(cls) : ""}`;
   }
   _sceneChips(fav) {
     const h = this._hass;

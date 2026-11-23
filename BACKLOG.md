@@ -9,7 +9,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 
 | # | Idee | Priorität | Aufwand | Status |
 |---|------|-----------|---------|--------|
-| 1 | Gute-Nacht- und Verlassen-Check | hoch | S | neu |
+| 1 | ~~Gute-Nacht- und Verlassen-Check~~ | hoch | S | umgesetzt |
 | 2 | Müll und Termine im Kopf und im Schoner | hoch | S | neu |
 | 3 | „Fertig“-Meldungen für Haushaltsgeräte | hoch | M | neu |
 | 4 | Wasser und Gas mit Leck-Erkennung | hoch | M | neu |
@@ -30,7 +30,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 
 ## Neue Ideen
 
-### 1. Gute-Nacht- und Verlassen-Check
+### 1. ~~Gute-Nacht- und Verlassen-Check~~ (umgesetzt, siehe CHANGELOG)
 Ein Knopf „Gute Nacht“ bzw. „Ich gehe“ (Übersicht, Wandpanel, Handy) zeigt vor dem Moduswechsel, was noch offen
 ist: Fenster und Türen offen, Licht an, Tür nicht verriegelt, Garage offen, Herd/Bügeleisen an. Jede Zeile mit
 „Schließen/Ausschalten“, unten „Trotzdem Nacht/Abwesend“. Baut auf Hausmodus, Fenster- und Lichtgruppen auf, die

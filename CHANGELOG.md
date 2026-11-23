@@ -4,11 +4,19 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Gute-Nacht- und Verlassen-Check
+- Neue Knöpfe **„Gute Nacht“** und **„Ich gehe“** im Schnellzugriff der Übersicht (Cockpit-Spalte, Energieleiste in Aktiv-Fokus und Etagen-Spalten, damit auch auf Handy und Wandpanel). Sie öffnen ein Fenster mit allem, was vor „Nacht“ bzw. „Abwesend“ noch offen ist: **Garage und Tore**, **Fenster und Türen**, **nicht verriegelte Schlösser**, **Geräte** wie Herd, Bügeleisen oder Kaffeemaschine (Schalter mit passendem Namen) und **Licht**; beim Gehen zusätzlich **laufende Medien**.
+- Jede Zeile hat ihren Knopf (Schließen, Verriegeln, Ausschalten, Aus, Pause), **„Alles schließen“** erledigt alle auf einmal; Sensoren (Fenster) öffnen per Tippen die Details. Die Liste aktualisiert sich live.
+- Umgeschaltet wird **erst nach Bestätigung**: „Nacht einschalten“ bzw. „Trotzdem Nacht/abwesend“, solange noch etwas offen ist. Wird die Alarmanlage dabei scharf geschaltet, steht das im Fenster.
+- Auf der **Hausmodus-Karte** im Alarmmanager erscheint der Check ebenfalls, wenn vor Nacht/Abwesend noch etwas offen ist; ist alles zu, schaltet die Karte wie bisher.
+- **Einstellungen → Alarme → Gute-Nacht- und Verlassen-Check:** an/aus (`house_mode.check`, Standard an) und **weitere Geräte** (`house_mode.check_devices`, z. B. die Steckdose des Bügeleisens).
+
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
 - Neue Einstellung **Einstellungen → Wandpanel → „Bildschirmschoner wandern lassen“** (`wallpanel.wander`, Standard aus) für alle, die den Einbrenn-Schutz wollen (z. B. OLED). LCDs wie im iPad brennen praktisch nicht ein.
 
 ### Tests
+- Neue Gruppe `gutenacht` (Bedienprüfungen): Knöpfe, offene Punkte je Modus, einzeln und alles schließen, Bestätigen/Abbrechen/Esc, Hausmodus-Karte mit und ohne offene Punkte, eigene Geräte, Abschalten, Handybreite. Die Prüfung „Hausmodus“ geht jetzt durch den Check. Backend: `check` und `check_devices` werden geprüft.
 - Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
 
 ## 1.10.0 – 2026-11-23

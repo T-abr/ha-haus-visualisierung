@@ -89,6 +89,7 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><input class="inp w" list="dl-all" placeholder="Entität hinzufügen" data-fav-input="1"><button class="pbtn" data-act="s-fav-add">${icon("mdi:plus")}Hinzufügen</button></div></div>`;
     else if (tab === "alarme") body = `${dlAll}
       ${this._setMode(D)}
+      ${this._setCheck ? this._setCheck(D) : ""}
       ${this._setAlerts(D)}
       ${this._setActions(D)}`;
     else if (tab === "technik") body = `${dlAll}

@@ -96,9 +96,11 @@ def _time(raw, default: str) -> str:
 
 def _house_mode(raw: dict) -> dict:
     out = copy.deepcopy(DEFAULT_LAYOUT["house_mode"])
-    for key in ("enabled", "auto_away", "auto_night", "alarmo_sync"):
+    for key in ("enabled", "auto_away", "auto_night", "alarmo_sync", "check"):
         if isinstance(raw.get(key), bool):
             out[key] = raw[key]
+    if "check_devices" in raw:
+        out["check_devices"] = [e for e in _str_list(raw["check_devices"]) if "." in e][:30]
     out["away_delay"] = _int(raw.get("away_delay"), 0, 240, out["away_delay"])
     out["night_start"] = _time(raw.get("night_start"), out["night_start"])
     out["night_end"] = _time(raw.get("night_end"), out["night_end"])
