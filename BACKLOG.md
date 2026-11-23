@@ -16,7 +16,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 5 | Heizung je Raum: Sollwert und Wochenplan | mittel | M | neu |
 | 6 | Garten und Bewässerung mit Regenvorhersage | mittel | M | neu |
 | 7 | Wartungsplaner fürs Haus | mittel | M | neu |
-| 8 | Rückblick und Vorjahresvergleich | mittel | M | neu |
+| 8 | ~~Rückblick und Vorjahresvergleich~~ | mittel | M | umgesetzt (Rest offen) |
 | 9 | Grundriss-Ansicht je Etage | niedrig | L | neu |
 | 10 | Anwesenheits-Simulation im Urlaub | niedrig | M | neu |
 | 11 | Nachtmodus fürs Wandpanel | später | S | vorgemerkt |
@@ -67,10 +67,10 @@ Liste wiederkehrender Aufgaben mit Fälligkeit: Lüftungsfilter, Heizungswartung
 Batteriewechsel (aus der Batterieseite übernommen), Wasserfilter, Auto/Wallbox. Fällige Punkte in den Meldungen,
 „Erledigt“ setzt das nächste Datum. Optional nach Betriebsstunden (z. B. Pumpe, Filter nach Laufzeit).
 
-### 8. Rückblick und Vorjahresvergleich
-Seite oder Karte „Rückblick“: dieser Monat gegen Vormonat und Vorjahresmonat für PV, Verbrauch, Autarkie,
-Kosten, Heizung (mit Heizgradtagen bereinigt) und Wasser. Rekorde („bester PV-Tag des Jahres“). Daten aus der
-Langzeitstatistik, die schon für Woche/Monat/Jahr genutzt wird.
+### 8. ~~Rückblick und Vorjahresvergleich~~
+Umgesetzt als Karte „Rückblick“ auf der Energie-Seite (siehe `CHANGELOG.md`): Monat gegen Vormonat und Vorjahresmonat
+für PV, Verbrauch, Bezug, Einspeisung, Autarkie, Kosten, Temperaturen und Heizgradtage, dazu Rekorde des Jahres.
+Offen: Heizenergie mit Heizgradtagen bereinigt (braucht einen Wärme- bzw. Gaszähler) und Wasser (kommt mit Idee 4).
 
 ### 9. Grundriss-Ansicht je Etage
 Eigenes Bild oder SVG des Grundrisses je Etage hochladen, Räume als Flächen markieren. Darauf Temperatur als

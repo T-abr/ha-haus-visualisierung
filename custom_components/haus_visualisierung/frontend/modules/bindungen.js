@@ -10,6 +10,7 @@ import { shadeWatch, updateShade } from "./wetter.js";
 import { fcastWatch, updateFcast } from "./prognose.js";
 import { energyIds, energyWatch, updateEnDay, updateEnergy, updateEnPriceCard, updateEnTrend } from "./energie.js";
 import { priceWatch, updateWbPrice } from "./strompreis.js";
+import { updateRback } from "./rueckblick.js";
 
 Object.assign(UPD, {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
@@ -38,6 +39,8 @@ Object.assign(UPD, {
   enday: { watch: (el, c) => energyIds(c._model.energy), run: updateEnDay },
   entrend: { watch: (el, c) => energyIds(c._model.energy), run: updateEnTrend },
   enprice: { watch: (el, c) => [...new Set([...energyIds(c._model.energy), ...priceWatch(c._model.price)])], run: updateEnPriceCard },
+  // Rückblick: keine Bindung an Messwerte, gezeichnet beim Aufbau, nach dem Laden und beim Blättern
+  rback: { watch: () => [], run: updateRback },
   wbprice: { watch: (el, c) => { const m = c._model, e = m.energy; return [...priceWatch(m.price), m.tech && m.tech.wb && m.tech.wb.power, e && e.grid].filter(Boolean); }, run: updateWbPrice },
   climtrend: { watch: (el, c) => (el.dataset.kind === "h"
     ? [...humRooms(c._model).flatMap((a) => [a.humId, a.tempId]), ...(c._model._outClim || [])]

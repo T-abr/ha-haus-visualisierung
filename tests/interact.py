@@ -1312,7 +1312,8 @@ def energie():
     check("EN: Energie in der Navigation", pg.locator(f"{P} .nav[data-to=energie]").count() == 1)
     pg.locator(f"{P} .ecard").click(); pg.wait_for_timeout(800)
     check("EN: Tipp auf die Energie-Karte öffnet die Energie-Seite", pg.locator(f"{P} .ptitle h1").inner_text() == "Energie" and pg.locator(f"{P} .nav.active[data-to=energie]").count() == 1)
-    ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] in ("statistics", "history")]
+    # ohne die Langzeitstatistik der Karte Rückblick (Stunden- und Tagesmittel, eigene Prüfungen in Gruppe rueckblick)
+    ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] in ("statistics", "history") and x[2].get("period") not in ("hour", "day")]
     check("EN: eine gesammelte Abfrage für PV, Netz, Haus, Speicher und Strompreis", len(ws) == 1 and ws[0][1] == "statistics"
           and sorted(ws[0][2]["ids"]) == sorted(["sensor.growatt_modbus_pv_power", "sensor.netz_leistung", "sensor.hausverbrauch_ac", "sensor.growatt_modbus_battery_power", "sensor.nordpool_kwh_de_eur"]))
     nd = lambda k: pg.locator(f"{P} .enode.{k}").inner_text().replace("\n", " ")
@@ -1602,6 +1603,68 @@ def strompreis():
     geo = mp.evaluate(f"""(() => {{ const R = document.querySelector('{P}').shadowRoot; const m = R.querySelector('.main'), c = R.querySelector('.enprice').getBoundingClientRect();
       return [m.scrollWidth - m.clientWidth, c.right <= 390]; }})()""")
     check("SP: Handy 390 px – Strompreis ohne seitliches Scrollen", geo[0] <= 0 and geo[1])
+    mp.close()
+
+
+@gruppe("rueckblick")
+def rueckblick():
+    # ---------- Rückblick: Monat gegen Vormonat und Vorjahr, Rekorde (Energie-Seite) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=energie"); pg.wait_for_timeout(900)
+    rb = pg.locator(f"{P} .rback")
+    stats = lambda: [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "statistics" and "sensor.aussen_temperatur" in x[2]["ids"]]
+    q = [x for x in stats() if "sensor.growatt_modbus_pv_power" in x["ids"]]  # im Harness kommen die Zustände nach und nach
+    check("RB: Karte Rückblick auf der Energie-Seite", rb.count() == 1)
+    check("RB: drei Abfragen der Stundenmittel (Monat, Vormonat, Vorjahr) und eine der Tagesmittel", sorted(x["period"] for x in q) == ["day", "hour", "hour", "hour"]
+          and all(x["units"] == {"power": "W", "temperature": "°C"} for x in q))
+    hq = [x for x in q if x["period"] == "hour"][0]["ids"]
+    check("RB: Abfrage mit PV, Haus, Speicher, Netz, Preis, außen und Räumen", all(e in hq for e in ("sensor.growatt_modbus_pv_power", "sensor.hausverbrauch_ac", "sensor.growatt_modbus_battery_power",
+          "sensor.netz_leistung", "sensor.nordpool_kwh_de_eur", "sensor.aussen_temperatur")) and len(hq) > 7)
+    mon = pg.evaluate("new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })")
+    yr = pg.evaluate("new Date().getFullYear()")
+    hd = rb.locator(".rbhd").inner_text()
+    check("RB: Kopf – Monat, Spalten dieser Monat, Vormonat, Vorjahr mit gleichem Abschnitt", rb.locator(".rbm").inner_text() == mon
+          and all(w in hd for w in ("Dieser Monat", "Vormonat", f"Vorjahr {yr - 1}", "1.")))
+    rows = rb.locator(".rbr[data-k]").evaluate_all("r => r.map(x => x.dataset.k)")
+    check("RB: Zeilen Energie, Kosten und Klima", rows == ["pv", "use", "imp", "exp", "autark", "cost", "net", "out", "inn", "hdd"])
+    F = pg.evaluate(f"{R}.querySelector('.rback')._rb.F.map(f => f && {{ pv: f.pv, cost: f.cost, imp: f.imp }})")
+    pvs = rb.locator('.rbr[data-k="pv"] .rbc').all_inner_texts()
+    d = round((F[0]["pv"] / F[1]["pv"] - 1) * 100)
+    check("RB: PV – Vergleich zum Vormonat in Prozent (Jahresgang im Harness)", F[0]["pv"] != F[1]["pv"] and (f"{abs(d)} %" in pvs[1]) and ("+" if d > 0 else "−") in pvs[1])
+    cls = rb.locator('.rbr[data-k="pv"] .rbc em').first.get_attribute("class")
+    check("RB: weniger PV als im Vormonat ist schlecht, mehr ist gut", cls == ("good" if d > 0 else "bad"))
+    check("RB: Kosten mit dem Stundenpreis des Preissensors (nicht fest)", F[0]["cost"] > 0 and abs(F[0]["cost"] - F[0]["imp"] / 1000 * 0.3) > 1
+          and "festem Preis" not in rb.locator(".rbnote").inner_text())
+    rec = rb.locator(".rbrec").inner_text()
+    check("RB: Rekorde des Jahres – bester PV-Tag und -Monat, Verbrauch, wärmster und kältester Tag", f"Rekorde {yr}" in rb.locator(".rbrecw").text_content()
+          and all(w in rec for w in ("Bester PV-Tag", "Bester PV-Monat", "Höchster Verbrauch", "Wärmster Tag", "Kältester Tag")) and "kWh" in rec and "°C" in rec)
+    check("RB: Hinweis auf gleich lange Abschnitte", "gleich lange Abschnitte" in rb.locator(".rbnote").inner_text())
+    check("RB: im laufenden Monat nicht vorblättern", rb.locator('[data-act="rb-month"][data-d="1"]').is_disabled())
+    r0 = pg.evaluate(f"{PP}._stats.renders"); n0 = len(pg.evaluate("window.__api.log"))
+    pg.evaluate("window.__api.set('sensor.growatt_modbus_pv_power', '4100')"); pg.wait_for_timeout(250)
+    check("RB: neuer Messwert – keine Abfrage, kein Neuaufbau", pg.evaluate(f"{PP}._stats.renders") == r0 and not [x for x in pg.evaluate("window.__api.log")[n0:] if x[0] == "ws"])
+    n1 = len(stats())
+    rb.locator('[data-act="rb-month"][data-d="-1"]').click(); pg.wait_for_timeout(400)
+    prev = pg.evaluate("(() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return [d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }), d.toLocaleDateString('de-DE', { month: 'long' }), d.getFullYear()]; })()")
+    q = stats()[n1:]
+    hd = rb.locator(".rbhd").inner_text()
+    check("RB: zurückblättern – Vormonat ganz, drei neue Stundenabfragen", rb.locator(".rbm").inner_text() == prev[0] and "Monat" in hd and prev[1] in hd
+          and "Dieser Monat" not in hd and [x["period"] for x in q].count("hour") == 3)
+    check("RB: vergangener Monat – kein Hinweis auf Abschnitte, vorblättern möglich", "gleich lange" not in rb.locator(".rbnote").inner_text()
+          and not rb.locator('[data-act="rb-month"][data-d="1"]').is_disabled())
+    n2 = len(stats())
+    rb.locator('[data-act="rb-month"][data-d="1"]').click(); pg.wait_for_timeout(300)
+    check("RB: wieder vor – aktueller Monat aus dem Speicher, ohne Abfrage", rb.locator(".rbm").inner_text() == mon and len(stats()) == n2)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, price: {{ ...p._layout.price, use_sensor: false, fixed_ct: 30 }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(500)
+    F = pg.evaluate(f"{R}.querySelector('.rback')._rb.F[0]")
+    check("RB: ohne Preissensor – Kosten mit festem Preis", "festem Preis 30,0 ct/kWh" in rb.locator(".rbnote").inner_text() and abs(F["cost"] - F["imp"] / 1000 * 0.3) < 0.01)
+    pg.goto(dense + "?view=energie&norec"); pg.wait_for_timeout(700)
+    check("RB: ohne Recorder – Hinweis statt Tabelle", "Keine Langzeitstatistik" in rb.locator(".rbmsg").inner_text() and rb.locator(".rbr").count() == 0 and not rb.locator(".rbrecw").is_visible())
+    mp = b.new_page(viewport={"width": 390, "height": 900}); mp.goto(dense + "?view=energie"); mp.wait_for_timeout(900)
+    geo = mp.evaluate(f"""(() => {{ const R = document.querySelector('{P}').shadowRoot; const m = R.querySelector('.main'), c = R.querySelector('.rback').getBoundingClientRect();
+      const cells = [...R.querySelectorAll('.rback .rbc b, .rback .rbc em')].filter(e => e.scrollWidth > e.clientWidth + 1).length;
+      return [m.scrollWidth - m.clientWidth, c.right <= 390, cells, R.querySelectorAll('.rback .rbr[data-k]').length]; }})()""")
+    check("RB: Handy 390 px – Tabelle ohne seitliches Scrollen und ohne abgeschnittene Werte", geo[0] <= 0 and geo[1] and geo[2] == 0 and geo[3] == 10)
     mp.close()
 
 

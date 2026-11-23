@@ -4,6 +4,7 @@
 import { DOMAIN } from "./version.js";
 import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, UPD, withDefaults } from "./grundlagen.js";
 import { rangeSet } from "./verlauf.js";
+import { rbShift } from "./rueckblick.js";
 import { buildModel } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
 
@@ -23,6 +24,7 @@ const AktionenMixin = (Base) => class extends Base {
         card._force = true; UPD[card.dataset.u].run(card, this); card._force = false;
         return;
       }
+      case "rb-month": { const card = t.closest('[data-u="rback"]'); if (card) rbShift(card, this, Number(t.dataset.d) || 0); return; }
       case "clim-kind": this._ck = t.dataset.k === "h" ? "h" : "t"; try { localStorage.setItem("hv-clim-kind", this._ck); } catch (err) { /* egal */ } this._render(); return;
       case "nav": this._go(t.dataset.to); return;
       case "link": this._openLink(t.dataset.path); return;

@@ -4,11 +4,19 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Rückblick mit Vormonat und Vorjahr
+- **Karte „Rückblick“** auf der Energie-Seite (unter dem Verlauf): dieser Monat gegen Vormonat und Vorjahresmonat für **PV erzeugt, Verbrauch, Netzbezug, Einspeisung, Autarkie, Stromkosten und Bilanz** sowie **Ø Außen- und Innentemperatur und Heizgradtage** (20/15). Unter den Vergleichswerten steht die Veränderung (Prozent, Prozentpunkte, € bzw. K), grün wenn besser, orange wenn schlechter.
+- Im laufenden Monat werden **gleich lange Abschnitte** verglichen (1. bis heute, letzte volle Stunde); mit den Pfeilen lassen sich frühere Monate ganz vergleichen (bis drei Jahre zurück).
+- **Kosten** je Stunde: Netzbezug × Stundenmittel des Preissensors (mit Aufschlag), ohne Preissensor mit dem festen Preis; Bilanz = Kosten minus Einspeisevergütung.
+- **Rekorde des Jahres:** bester PV-Tag und -Monat, höchster Tagesverbrauch, wärmster und kältester Tag.
+- Daten aus der Langzeitstatistik des Recorders (drei Abfragen der Stundenmittel, eine der Tagesmittel), nur beim Öffnen und Blättern; Zeiträume mit Lücken werden grau markiert.
+
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.
 - Neue Einstellung **Einstellungen → Wandpanel → „Bildschirmschoner wandern lassen“** (`wallpanel.wander`, Standard aus) für alle, die den Einbrenn-Schutz wollen (z. B. OLED). LCDs wie im iPad brennen praktisch nicht ein.
 
 ### Tests
+- Neue Gruppe `rueckblick` (19 Prüfungen): Abfragen, Spalten und Zeilen, Vergleich und Farbe, Kosten mit Stundenpreis bzw. festem Preis, Rekorde, Blättern mit Speicher, keine Abfrage bei neuen Messwerten, ohne Recorder, Handybreite.
 - Bedienprüfungen: Schoner standardmäßig mittig, Wandern ein-/ausschaltbar, Schalter in den Einstellungen. Die Prüfung „Schoner passt in die Breite“ hing bisher von der Minute ab (Versatz bis 6 vw) und ist jetzt stabil. Backend: `wander` wird geprüft.
 
 ## 1.10.0 – 2026-11-23
