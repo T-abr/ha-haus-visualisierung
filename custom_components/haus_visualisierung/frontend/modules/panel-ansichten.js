@@ -11,7 +11,10 @@ import { heatCardHTML, wbCardHTML } from "./technik.js";
 import { climRooms, climTrendHTML, humRooms } from "./klima.js";
 import { shadeCardHTML, weatherIdOf } from "./wetter.js";
 import { fcastCardHTML } from "./prognose.js";
+import { terminBtnHTML } from "./termine.js";
+import { applCardHTML } from "./geraete.js";
 import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
+import { rbCard } from "./rueckblick.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
 const AnsichtenMixin = (Base) => class extends Base {
@@ -29,6 +32,7 @@ const AnsichtenMixin = (Base) => class extends Base {
       <button class="menu" data-act="menu">${icon("mdi:menu")}</button>
       <div><div class="greet"></div><div class="clock"></div><div class="date"></div></div>
       <span class="sp"></span>
+      ${terminBtnHTML(h, this._layout)}
       ${weather ? `<button class="weather glass" data-u="weather" data-eid="${esc(weather)}" data-act="more">${icon("mdi:weather-partly-cloudy")}<div><div class="wt"></div><div class="wc"></div></div></button>` : ""}
       ${pers ? `<div class="persons">${pers}</div>` : ""}
     </div>`;
@@ -46,7 +50,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     }).join("");
     const hm = this._layout.house_mode && this._layout.house_mode.enabled !== false
       ? `<button class="hmode" data-u="hmode" data-act="go" data-to="alarme" title="Hausmodus">${icon("mdi:home-account")}<span class="hml"></span></button>` : "";
-    const right = `<div class="hright">${hm}
+    const right = `<div class="hright">${hm}${terminBtnHTML(h, this._layout)}
       ${weather ? `<button class="weather glass" data-u="weather" data-eid="${esc(weather)}" data-act="more">${icon("mdi:weather-partly-cloudy")}<span class="wt"></span><span class="wf"></span></button>` : ""}
       ${pers ? `<div class="persons stack">${pers}</div>` : ""}</div>`;
     const menu = `<button class="menu" data-act="menu">${icon("mdi:menu")}</button>`;
@@ -85,12 +89,12 @@ const AnsichtenMixin = (Base) => class extends Base {
     if (isDense(L) && ov === "fokus") return this._ovFokus(fav);
     if (isDense(L)) {
       const tabs = this._isNarrow ? (this._floorTab && m.floors.some((f) => f.id === this._floorTab) ? this._floorTab : m.floors[0].id) : null;
-      return `${this._topbarDense()}${alertsCardHTML("slim")}${fcastCardHTML(h, L)}${houseHTML(m, L, h, { dense: true, tab: tabs })}
+      return `${this._topbarDense()}${alertsCardHTML("slim")}${fcastCardHTML(h, L)}${applCardHTML(h, L)}${houseHTML(m, L, h, { dense: true, tab: tabs })}
         ${fav.length ? `<div class="secttitle">${icon("mdi:star")}Favoriten</div><div class="glass"><div class="rows favrows">${fav.map((e) => rowHTML(h, e, null)).join("")}</div></div>` : ""}`;
     }
     return `${this._topbar()}${this._chips()}
       ${houseHTML(m, L, this._hass)}
-      ${fcastCardHTML(h, L)}
+      ${fcastCardHTML(h, L)}${applCardHTML(h, L)}
       ${fav.length ? `<div class="secttitle">${icon("mdi:star")}Favoriten</div><div class="glass"><div class="tiles">${fav.map((e) => tileHTML(h, e, null)).join("")}</div></div>` : ""}`;
   }
 
@@ -228,6 +232,7 @@ const AnsichtenMixin = (Base) => class extends Base {
       <div class="engrid">${energyFlowHTML(c)}${enDayHTML(tr)}</div>
       ${enPriceCard(c, this._model.price)}
       ${tr ? enTrendHTML(c) : ""}
+      ${tr ? rbCard(this) : ""}
       ${T.wb ? wbCardHTML(this._model.areas.get(T.wb.area) || { id: "" }) : ""}`;
   }
 
@@ -277,7 +282,8 @@ const AnsichtenMixin = (Base) => class extends Base {
     const l = esc(m.agg.lights.join(",")), c = esc(m.agg.covers.join(","));
     return `${m.agg.lights.length ? `<button class="${cls}" data-act="lights-off" data-confirm="1" data-eids="${l}">${icon("mdi:lightbulb-off-outline")}<span>Alle Lichter aus</span></button>` : ""}
       ${m.agg.covers.length ? `<button class="${cls}" data-act="list-covers" data-svc="open_cover" data-confirm="1" data-eids="${c}">${icon("mdi:window-shutter-open")}<span>Rollos auf</span></button>
-      <button class="${cls}" data-act="list-covers" data-svc="close_cover" data-confirm="1" data-eids="${c}">${icon("mdi:window-shutter")}<span>Rollos zu</span></button>` : ""}`;
+      <button class="${cls}" data-act="list-covers" data-svc="close_cover" data-confirm="1" data-eids="${c}">${icon("mdi:window-shutter")}<span>Rollos zu</span></button>` : ""}
+      ${this._checkBtns ? this._checkBtns(cls) : ""}`;
   }
   _sceneChips(fav) {
     const h = this._hass;
@@ -303,6 +309,7 @@ const AnsichtenMixin = (Base) => class extends Base {
           ${alertsCardHTML()}
           ${rows ? `<div class="glass ecard" data-u="roof" data-act="roof"><div class="qhead"><span class="sun">${icon("mdi:white-balance-sunny")}</span>Energie<span class="sp"></span>${icon("mdi:chevron-right")}</div>${rows}</div>` : ""}
           ${fcastCardHTML(h, L, "side")}
+          ${applCardHTML(h, L, "side")}
           <div class="glass qcard"><div class="qhead">${icon("mdi:gesture-tap")}Schnellzugriff</div><div class="qbtns">${this._quickBtns()}</div>${scenes ? `<div class="qscenes">${scenes}</div>` : ""}</div>
           ${other.length ? `<div class="glass qcard"><div class="qhead">${icon("mdi:star")}Favoriten</div><div class="rows">${other.map((e) => rowHTML(h, e, null)).join("")}</div></div>` : ""}
         </aside>
@@ -312,7 +319,7 @@ const AnsichtenMixin = (Base) => class extends Base {
   _ovSpalten(fav) {
     const m = this._model, h = this._hass;
     const other = fav.filter((e) => !["scene", "script"].includes(dom(e)));
-    return `${this._topbarDense()}${this._ebar(fav)}${alertsCardHTML("slim")}${fcastCardHTML(h, this._layout)}
+    return `${this._topbarDense()}${this._ebar(fav)}${alertsCardHTML("slim")}${fcastCardHTML(h, this._layout)}${applCardHTML(h, this._layout)}
       <div class="fcols">${m.floors.map((f) => `<section class="fcol glass${f.outdoor ? " out" : ""}" data-u="floor" data-floor="${esc(f.id)}">${this._floorHead(f)}
         <div class="rrows">${f.areas.map(roomRowHTML).join("")}</div></section>`).join("")}</div>
       ${other.length ? `<div class="secttitle">${icon("mdi:star")}Favoriten</div><div class="glass"><div class="rows favrows">${other.map((e) => rowHTML(h, e, null)).join("")}</div></div>` : ""}`;
@@ -323,7 +330,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     const active = focusRooms(h, m, this._layout);
     const calm = m.floors.map((f) => [f, f.areas.filter((a) => !active.includes(a))]).filter(([, l]) => l.length);
     const other = fav.filter((e) => !["scene", "script"].includes(dom(e)));
-    return `${this._topbarDense()}${alertsCardHTML("fokus")}${this._ebar(fav)}${fcastCardHTML(h, this._layout)}
+    return `${this._topbarDense()}${alertsCardHTML("fokus")}${this._ebar(fav)}${fcastCardHTML(h, this._layout)}${applCardHTML(h, this._layout)}
       <div data-u="focus" data-ids="${esc(active.map((a) => a.id).join(","))}">
         ${active.length
           ? `<div class="secttitle">${icon("mdi:flash")}Jetzt aktiv<span class="gc">${active.length} ${active.length === 1 ? "Raum" : "Räume"}</span></div><div class="factive">${active.map((a) => roomTileHTML(a, true, { act: true })).join("")}</div>`

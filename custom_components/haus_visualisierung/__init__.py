@@ -29,6 +29,7 @@ from .const import (
     PANEL_URL_PATH,
     VERSION,
 )
+from .maintenance import MaintenanceBook
 from .store import LayoutStore
 from .websocket import async_register_websocket
 
@@ -46,6 +47,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await store.async_load()
     data["store"] = store
     data["options"] = {}
+    # Wartungsplaner: wann welche Aufgabe erledigt wurde; gelöschte Aufgaben fallen beim Speichern heraus
+    book = MaintenanceBook(hass)
+    await book.async_load()
+    data["maintenance"] = book
+    store.async_add_listener(lambda layout: book.prune({t["id"] for t in layout["maintenance"]["tasks"]}))
 
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.http.async_register_static_paths(

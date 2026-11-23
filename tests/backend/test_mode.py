@@ -168,3 +168,14 @@ async def test_alarm_panel_triggered(hass: HomeAssistant) -> None:
     await _tick(hass)
     a = monitor.book.alarms.get("alarmpanel:alarm_control_panel.alarmo")
     assert a and a["level"] == "alarm" and a["title"] == "Alarmo ausgelöst"
+
+
+def test_check_settings_sanitized() -> None:
+    """Gute-Nacht-Check: Schalter und eigene Geräte werden geprüft, Standard ist an."""
+    from custom_components.haus_visualisierung.store import sanitize
+
+    hm = sanitize({})["house_mode"]
+    assert hm["check"] is True and hm["check_devices"] == []
+    hm = sanitize({"house_mode": {"check": False, "check_devices": ["switch.buegeleisen", "kein_punkt", 3, ""]}})["house_mode"]
+    assert hm["check"] is False and hm["check_devices"] == ["switch.buegeleisen"]
+    assert sanitize({"house_mode": {"check": "ja"}})["house_mode"]["check"] is True

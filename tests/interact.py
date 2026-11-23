@@ -710,6 +710,8 @@ def hausmodus():
     hm.click(); pg.wait_for_timeout(400)
     check("HM: Kopfzeile öffnet Alarmmanager mit Hausmodus-Karte", pg.evaluate("location.pathname") == "/haus-visualisierung/alarme" and pg.locator(f"{P} .hmcard .hmb.on[data-mode=zuhause]").count() == 1)
     pg.locator(f"{P} .hmb[data-mode=abwesend]").click(); pg.wait_for_timeout(400)
+    check("HM: Abwesend mit offenen Punkten → erst der Verlassen-Check", pg.locator(f"{P} .gnmodal").count() == 1)
+    pg.locator(f"{P} .gnmodal [data-act=gn-go]").click(); pg.wait_for_timeout(400)
     ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"]
     check("HM: Abwesend schickt set_mode", ws and ws[-1][2]["mode"] == "abwesend")
     titles = pg.evaluate(f"[...document.querySelector('{P}').shadowRoot.querySelectorAll('.allist .alti')].map(x => x.textContent)")
@@ -725,8 +727,8 @@ def hausmodus():
     # Gekoppelt: Umschalten auf Abwesend fragt nach (Anlage wird scharf)
     pg.evaluate(f"(() => {{ const p = document.querySelector('{P}'); p._layout = {{ ...p._layout, house_mode: {{ ...p._layout.house_mode, alarmo_sync: true }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
     pg.locator(f"{P} .hmb[data-mode=abwesend]").click(); pg.wait_for_timeout(300)
-    check("HM: gekoppelt → Abfrage „Alarmanlage wird scharf geschaltet“", pg.locator(f"{P} .mbg .modal").count() == 1 and "scharf" in pg.locator(f"{P} .mbg .mx").inner_text())
-    pg.locator(f"{P} .mbg [data-act=confirm-cancel]").click(); pg.wait_for_timeout(200)
+    check("HM: gekoppelt → Check nennt „Alarmanlage wird scharf geschaltet“", pg.locator(f"{P} .mbg .modal").count() == 1 and "scharf" in pg.locator(f"{P} .mbg .mx").inner_text())
+    pg.locator(f"{P} .mbg [data-act=gn-close]").click(); pg.wait_for_timeout(200)
     ws2 = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"]
     check("HM: Abbrechen schaltet nicht", len(ws2) == len(ws) + 1)
     # Einstellungen
@@ -902,6 +904,39 @@ def einstellungen_reiter():
     check("TR-Handy: Antippen zeigt den Wert", "on" in mp.locator(f"{P} .trend .trtip").get_attribute("class"))
     mp.wait_for_timeout(2700)
     check("TR-Handy: Anzeige verschwindet nach kurzer Zeit", "on" not in mp.locator(f"{P} .trend .trtip").get_attribute("class"))
+    ctx.close()
+
+@gruppe("anwesenheit")
+def anwesenheits_simulation():
+    # ---------- Anwesenheits-Simulation (Reiter „Alarme“) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(700)
+    sec = pg.locator(f'{P} .set[data-sec=presence_sim]')
+    D = lambda k: pg.evaluate(f"document.querySelector('{P}')._draft.presence_sim.{k}")
+    check("AS: Abschnitt im Reiter „Alarme“, standardmäßig aus, nur Urlaub", sec.count() == 1 and not pg.locator(f'{P} [data-set="presence_sim.enabled"]').is_checked()
+          and [("on" in (sec.locator(".mchip").nth(i).get_attribute("class") or "")) for i in range(4)] == [False, False, False, True])
+    check("AS: Status vom Backend (Vorlage, nächste Schaltvorgänge, Protokoll)", "Läuft" in sec.inner_text() and "Flur Decke an" in sec.inner_text()
+          and "Simulation gestartet" in sec.inner_text() and any(x[1] == "presence_sim" for x in pg.evaluate("window.__api.log") if x[0] == "ws"))
+    pg.locator(f'{P} label.tgl:has([data-set="presence_sim.enabled"])').click(); pg.wait_for_timeout(150)
+    sec.locator('.mchip[data-m=abwesend]').click(); pg.wait_for_timeout(150)
+    check("AS: einschalten und Modus Abwesend dazu", D("enabled") is True and D("modes") == ["abwesend", "urlaub"])
+    inp = pg.locator(f"{P} [data-sim-input]")
+    inp.fill("light.wohnzimmer_decke"); pg.locator(f"{P} [data-act=s-sim-add]").click(); pg.wait_for_timeout(150)
+    pg.locator(f"{P} [data-sim-input]").fill("cover.buro_rollo"); pg.locator(f"{P} [data-act=s-sim-add]").click(); pg.wait_for_timeout(150)
+    pg.locator(f"{P} [data-sim-input]").fill("sensor.kamin_temperatur"); pg.locator(f"{P} [data-act=s-sim-add]").click(); pg.wait_for_timeout(150)
+    check("AS: Licht und Rollo hinzugefügt, Sensor abgelehnt", D("entities") == ["light.wohnzimmer_decke", "cover.buro_rollo"])
+    check("AS: Reiter als ungespeichert markiert", "dirty" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class"))
+    pg.locator(f'{P} [data-act=s-sim-del][data-eid="light.wohnzimmer_decke"]').click(); pg.wait_for_timeout(150)
+    check("AS: Gerät entfernen", D("entities") == ["cover.buro_rollo"])
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout)")
+    check("AS: gespeichert", saved["presence_sim"]["enabled"] and saved["presence_sim"]["entities"] == ["cover.buro_rollo"])
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+    mp = ctx.new_page(); mp.on("pageerror", lambda e: errs.append(str(e)))
+    mp.goto(base.split("?")[0] + "?view=einstellungen/alarme"); mp.wait_for_timeout(700)
+    wide = mp.evaluate(WIDE)
+    check("AS-Handy: nichts breiter als der Bildschirm", not wide)
+    if wide: print("     ", wide[:3])
     ctx.close()
 
 @gruppe("technik")
@@ -1312,7 +1347,8 @@ def energie():
     check("EN: Energie in der Navigation", pg.locator(f"{P} .nav[data-to=energie]").count() == 1)
     pg.locator(f"{P} .ecard").click(); pg.wait_for_timeout(800)
     check("EN: Tipp auf die Energie-Karte öffnet die Energie-Seite", pg.locator(f"{P} .ptitle h1").inner_text() == "Energie" and pg.locator(f"{P} .nav.active[data-to=energie]").count() == 1)
-    ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] in ("statistics", "history")]
+    # ohne die Langzeitstatistik der Karte Rückblick (Stunden- und Tagesmittel, eigene Prüfungen in Gruppe rueckblick)
+    ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] in ("statistics", "history") and x[2].get("period") not in ("hour", "day")]
     check("EN: eine gesammelte Abfrage für PV, Netz, Haus, Speicher und Strompreis", len(ws) == 1 and ws[0][1] == "statistics"
           and sorted(ws[0][2]["ids"]) == sorted(["sensor.growatt_modbus_pv_power", "sensor.netz_leistung", "sensor.hausverbrauch_ac", "sensor.growatt_modbus_battery_power", "sensor.nordpool_kwh_de_eur"]))
     nd = lambda k: pg.locator(f"{P} .enode.{k}").inner_text().replace("\n", " ")
@@ -1439,6 +1475,78 @@ def wetter():
     saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.shading)")
     check("WE: Ausrichtung gespeichert", saved and saved["facing"].get("cover.buro_rollo") == "O" and saved["hot"] == 26)
 
+@gruppe("termine")
+def termine():
+    # ---------- Müllabfuhr und Termine (Kopfzeile, Bildschirmschoner, Einstellungen) ----------
+    from datetime import datetime, timezone
+    # feste Uhrzeit: Montag, 23.11.2026, 19:00 in Berlin (Vorabend der Abfuhr)
+    ctx = b.new_context(viewport={"width": 1440, "height": 1000}, timezone_id="Europe/Berlin", locale="de-DE")
+    ctx.clock.set_fixed_time(datetime(2026, 11, 23, 18, 0, tzinfo=timezone.utc))
+    tp = ctx.new_page(); tp.on("pageerror", lambda e: errs.append(str(e)))
+    TP = "document.querySelector('haus-visualisierung-panel')"
+    tp.goto(dense); tp.wait_for_timeout(500)
+    check("TE: ohne Kalender kein Termin-Knopf", tp.locator(f"{P} .termin").count() == 0)
+    tp.evaluate(f"""(() => {{ const a = window.__api;
+      a.calEvents = {{
+        'calendar.abfallkalender': [
+          {{ summary: 'Gelbe Tonne', start: {{ date: '2026-11-24' }}, end: {{ date: '2026-11-25' }} }},
+          {{ summary: 'Papier', start: {{ date: '2026-11-24' }}, end: {{ date: '2026-11-25' }} }},
+          {{ summary: 'Restmüll', start: {{ date: '2026-11-27' }}, end: {{ date: '2026-11-28' }} }} ],
+        'calendar.familie': [
+          {{ summary: 'Elternabend', start: {{ dateTime: '2026-11-23T20:00:00+01:00' }}, end: {{ dateTime: '2026-11-23T21:30:00+01:00' }} }},
+          {{ summary: 'Zahnarzt', start: {{ dateTime: '2026-11-24T15:30:00+01:00' }}, end: {{ dateTime: '2026-11-24T16:00:00+01:00' }} }},
+          {{ summary: 'Vorbei', start: {{ dateTime: '2026-11-23T08:00:00+01:00' }}, end: {{ dateTime: '2026-11-23T09:00:00+01:00' }} }} ] }};
+      a.set('calendar.abfallkalender', 'off', {{ friendly_name: 'Abfallkalender', message: 'Gelbe Tonne', all_day: true, start_time: '2026-11-24 00:00:00', end_time: '2026-11-25 00:00:00' }});
+      a.set('calendar.familie', 'off', {{ friendly_name: 'Familie', message: 'Elternabend', all_day: false, start_time: '2026-11-23 20:00:00', end_time: '2026-11-23 21:30:00' }});
+      const p = {TP}; p._dirty = true; p._schedule(); }})()"""); tp.wait_for_timeout(500)
+    btn = tp.locator(f"{P} .termin")
+    check("TE: Müllkalender automatisch erkannt – Knopf in der Kopfzeile", btn.count() == 1 and btn.is_visible())
+    check("TE: am Vorabend „Morgen: Gelbe Tonne, Papier“ hervorgehoben", "Morgen: Gelbe Tonne, Papier" in btn.inner_text() and "hot" in (btn.get_attribute("class") or ""))
+    calls = [x[2] for x in tp.evaluate("window.__api.log") if x[0] == "api"]
+    check("TE: Kalender-API nur für gewählte Kalender (Familie noch nicht)", any(c.startswith("calendars/calendar.abfallkalender?start=") for c in calls) and not any("familie" in c for c in calls))
+    check("TE: Tooltip mit Abfuhr", "Abfuhr Morgen: Gelbe Tonne, Papier" in (btn.get_attribute("title") or ""))
+    btn.click(); tp.wait_for_timeout(200)
+    check("TE: Tipp öffnet den Kalender (mehr Infos)", tp.evaluate("window.__moreInfo || ''") == "calendar.abfallkalender")
+    # Familienkalender als „Termine“ – Termin heute geht vor, solange die Abfuhr nicht hervorgehoben ist
+    tp.evaluate(f"(() => {{ const p = {TP}; p._layout = {{ ...p._layout, termine: {{ ...p._layout.termine, cals: {{ 'calendar.familie': 'event' }}, evening: 20 }} }}; p._dirty = true; p._schedule(); }})()"); tp.wait_for_timeout(500)
+    check("TE: Termin heute vor Abfuhr morgen (vor dem Vorabend)", "Heute 20:00 Elternabend" in btn.inner_text() and "hot" not in (btn.get_attribute("class") or ""))
+    tip = btn.get_attribute("title") or ""
+    check("TE: Tooltip mit Terminen, Vergangenes fehlt", "Morgen 15:30 Zahnarzt" in tip and "Vorbei" not in tip and "Abfuhr Morgen" in tip)
+    # Bildschirmschoner
+    tp.evaluate(f"(() => {{ const p = {TP}; p._saverShow(); }})()"); tp.wait_for_timeout(200)
+    sc = tp.locator(f"{P} .saver .svcal")
+    st = sc.inner_text() if sc.count() else ""
+    check("TE: Schoner – Abfuhr und Termine", "Morgen: Gelbe Tonne, Papier" in st and "Heute 20:00 Elternabend" in st and "Morgen 15:30 Zahnarzt" in st)
+    check("TE: Schoner – Tonnenfarbe (gelb)", "#f2c230" in (sc.locator(".svwaste").get_attribute("style") or ""))
+    tp.evaluate(f"(() => {{ const p = {TP}; p._layout = {{ ...p._layout, termine: {{ ...p._layout.termine, saver: false }} }}; p._saverUpdate(5, true); }})()")
+    check("TE: Schoner abschaltbar", sc.inner_text().strip() == "")
+    tp.evaluate(f"{TP}._saverHide()")
+    # ohne Kalender-API: nächster Termin aus den Attributen
+    tp.evaluate(f"""(() => {{ const a = window.__api; a.calFail = true; a.set('calendar.abfuhr_neu', 'off', {{ friendly_name: 'Müllabfuhr', message: 'Biotonne', all_day: true, start_time: '2026-11-24 00:00:00', end_time: '2026-11-25 00:00:00' }});
+      const p = {TP}; p._layout = {{ ...p._layout, termine: {{ ...p._layout.termine, cals: {{ 'calendar.abfallkalender': '-' }}, evening: 17 }} }}; p._dirty = true; p._schedule(); }})()"""); tp.wait_for_timeout(500)
+    check("TE: API nicht lesbar – Attribute der Entität, „Nicht anzeigen“ greift", "Morgen: Biotonne" in btn.inner_text() and "Gelbe" not in btn.inner_text())
+    # Handy: nur die hervorgehobene Abfuhr, ohne Text
+    tp.set_viewport_size({"width": 390, "height": 844}); tp.wait_for_timeout(400)
+    w = tp.evaluate(f"(() => {{ const e = {TP}.shadowRoot.querySelector('.termin'); const t = e && e.querySelector('.tmt'); return e ? [getComputedStyle(e).display, t ? getComputedStyle(t).display : ''] : null; }})()")
+    check("TE: Handy – nur Symbol", w is not None and w[0] != "none" and w[1] == "none")
+    tp.set_viewport_size({"width": 1440, "height": 1000})
+    # Einstellungen
+    tp.evaluate(f"{TP}._go('einstellungen/darstellung')"); tp.wait_for_timeout(500)
+    sec = tp.locator(f"{P} .set[data-sec=termine]")
+    check("TE: Einstellungen – Abschnitt mit Kalendern", sec.count() == 1 and sec.locator("select[data-term-cal]").count() == 3)
+    check("TE: Automatisch erkannt – Müllabfuhr", "Automatisch (Müllabfuhr)" in sec.locator('select[data-term-cal="calendar.abfuhr_neu"]').inner_text())
+    sel = sec.locator('select[data-term-cal="calendar.familie"]')
+    sel.select_option("event"); sel.dispatch_event("change")
+    hd = sec.locator('input[data-set="termine.header"]')
+    hd.evaluate("e => { e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); }")
+    sec.locator('input[data-set="termine.evening"]').fill("18"); sec.locator('input[data-set="termine.evening"]').dispatch_event("change")
+    tp.locator(f"{P} [data-act=s-save]").click(); tp.wait_for_timeout(300)
+    saved = tp.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.termine)")
+    check("TE: gespeichert (Art je Kalender, Kopfzeile aus, Vorabend 18 Uhr)", saved and saved["cals"].get("calendar.familie") == "event" and saved["header"] is False and saved["evening"] == 18)
+    tp.goto(dense); tp.wait_for_timeout(500)
+    check("TE: Kopfzeile abgeschaltet – kein Knopf", tp.locator(f"{P} .termin").count() == 0)
+    ctx.close()
+
 @gruppe("prognose")
 def prognose():
     # ---------- Übersicht: Karte „Vorhersage“ mit Wetter und Solarprognose ----------
@@ -1497,6 +1605,76 @@ def prognose():
     check("PR: Abschalten gespeichert", saved and saved["enabled"] is False)
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
     check("PR: abgeschaltet – keine Karte", pg.locator(f"{P} .fcast").count() == 0)
+
+@gruppe("geraete")
+def geraete():
+    # ---------- Übersicht: Karte „Geräte“ (Waschmaschine, Trockner, Spülmaschine) aus sensor.haus_geraete ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(600)
+    check("GE: ohne Sensor keine Karte", pg.locator(f"{P} .appl").count() == 0)
+    pg.evaluate("""(() => { const a = window.__api, now = Date.now() / 1000;
+      a.set('sensor.waschmaschine_leistung', '1900', { friendly_name: 'Waschmaschine Leistung', device_class: 'power', unit_of_measurement: 'W' });
+      a.set('sensor.haus_geraete', '1', { geraete: [
+        { id: 'wash', name: 'Waschmaschine', kind: 'wash', icon: 'mdi:washing-machine', state: 'laeuft', since: now - 42 * 60, start: now - 42 * 60, end: null, kwh: 0.61, cost: 0.12, own: null,
+          power: 'sensor.waschmaschine_leistung', status: '', door: '', remaining: '', auto: true, n: 3, avg_min: 100, avg_kwh: 0.9, avg_cost: 0.25, last: { start: now - 90000, end: now - 84000, kwh: 0.92, cost: 0.28, own: 0.4 } },
+        { id: 'dish', name: 'Spülmaschine', kind: 'dish', icon: 'mdi:dishwasher', state: 'fertig', since: now - 12 * 60, start: now - 160 * 60, end: now - 12 * 60, kwh: 1.05, cost: 0.21, own: 0.35,
+          power: '', status: '', door: '', remaining: '', auto: false, n: 1, avg_min: 148, avg_kwh: 1.05, avg_cost: 0.21, last: null },
+        { id: 'dry', name: 'Trockner', kind: 'dry', icon: 'mdi:tumble-dryer', state: 'aus', since: now - 86400, start: null, end: null, kwh: 0, cost: 0, own: null,
+          power: '', status: '', door: '', remaining: '', auto: false, n: 2, avg_min: 90, avg_kwh: 2.2, avg_cost: 0.6, last: { start: now - 200000, end: now - 194600, kwh: 2.4, cost: 0.66, own: null } } ] });
+      const p = document.querySelector('haus-visualisierung-panel'); p._dirty = true; p._schedule(); })()"""); pg.wait_for_timeout(400)
+    card = pg.locator(f"{P} .cside .appl")
+    check("GE: Cockpit – Karte in der rechten Spalte", card.count() == 1 and card.locator(".apl").count() == 3)
+    check("GE: Kopf zählt fertig und laufend", card.locator(".aplsum").inner_text().replace("\xa0", " ") == "1 fertig · 1 läuft")
+    w = card.locator(".apl.laeuft").inner_text().replace("\xa0", " ")
+    check("GE: läuft – seit, Restzeit geschätzt, Leistung, bisher", "läuft seit 42 min" in w and "noch ca. 58 min" in w and "1,9 kW" in w and "0,61 kWh · 0,12 €" in w)
+    d = card.locator(".apl.fertig").inner_text().replace("\xa0", " ")
+    check("GE: fertig – seit, Dauer, Energie, Kosten, eigener Strom", "fertig seit 12 min" in d and "Dauer 2:28 h" in d and "1,05 kWh · 0,21 € (35 % eigener Strom)" in d)
+    t = card.locator(".apl.aus").inner_text().replace("\xa0", " ")
+    check("GE: aus – letzter Durchgang und Schnitt", "zuletzt 2,40 kWh · 0,66 €" in t and "Ø 0,60 €" in t)
+    # Netz bezieht 5,5 kW (Harness) → kein PV-Tipp; Einspeisung 2 kW → Tipp „jetzt starten“
+    check("GE: Netzbezug – kein PV-Tipp", "Überschuss" not in card.locator(".apltip").inner_text().replace("\xa0", " "))
+    pg.evaluate("window.__api.set('sensor.netz_leistung', '-2100', { unit_of_measurement: 'W', device_class: 'power' })"); pg.wait_for_timeout(200)
+    check("GE: Einspeisung – Tipp jetzt starten", "Jetzt starten: 2,9 kW PV-Überschuss" in card.locator(".apltip").inner_text().replace("\xa0", " "))
+    # Meldung: Hinweis „Spülmaschine fertig“ in der Warnkarte
+    check("GE: Meldung in der Warnkarte", "Spülmaschine fertig" in pg.locator(f"{P} .cside .acard").inner_text().replace("\xa0", " "))
+    # Quittieren über „Erledigt“
+    card.locator(".aplack").click(); pg.wait_for_timeout(300)
+    acks = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "appliance_ack"]
+    check("GE: Erledigt schickt appliance_ack", len(acks) == 1 and acks[0][2]["appliance"] == "dish")
+    check("GE: danach aus, keine Meldung mehr", card.locator(".apl.fertig").count() == 0 and "Spülmaschine fertig" not in pg.locator(f"{P} .cside .acard").inner_text().replace("\xa0", " "))
+    # Handy (Aktiv-Fokus): nichts ragt heraus
+    pg.set_viewport_size({"width": 390, "height": 844})
+    pg.goto(dense + "?ov=fokus"); pg.wait_for_timeout(600)
+    pg.evaluate("""(() => { const a = window.__api, now = Date.now() / 1000;
+      a.set('sensor.haus_geraete', '1', { geraete: [{ id: 'wash', name: 'Waschmaschine mit sehr langem Namen im Keller', kind: 'wash', icon: 'mdi:washing-machine', state: 'fertig', since: now - 300, start: now - 6300, end: now - 300, kwh: 0.9, cost: 0.27, own: 0.5, power: '', remaining: '', n: 1, avg_min: 100, last: null }] });
+      const p = document.querySelector('haus-visualisierung-panel'); p._dirty = true; p._schedule(); })()"""); pg.wait_for_timeout(400)
+    c2 = pg.locator(f"{P} .appl")
+    check("GE: Aktiv-Fokus – Karte da", c2.count() == 1 and c2.locator(".aplack").count() == 1)
+    over = pg.evaluate(f"(() => {{ const c = {R}.querySelector('.appl'); return c.scrollWidth - c.clientWidth; }})()")
+    check("GE: Handy – nichts ragt aus der Karte", over <= 1 and pg.evaluate(WIDE) == [])
+    # Einstellungen → Technik: Gerät hinzufügen, speichern
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500); stab(pg, "technik")
+    sec = pg.locator(f'{P} [data-sec="appliances"]')
+    check("GE: Einstellungen – Abschnitt Haushaltsgeräte", sec.count() == 1 and sec.locator('[data-set="appliances.enabled"]').count() == 1)
+    sec.locator('[data-act="s-appl-add"]').first.click(); pg.wait_for_timeout(200)
+    sec = pg.locator(f'{P} [data-sec="appliances"]')
+    sec.locator('[data-set="appliances.items.0.name"]').fill("Waschmaschine Keller")
+    sec.locator('[data-set="appliances.items.0.power"]').fill("sensor.waschmaschine_leistung")
+    sec.locator('[data-set="appliances.items.0.stop_min"]').fill("12")
+    sec.locator('[data-set="appliances.items.0.stop_min"]').dispatch_event("change")
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.appliances)")
+    it = (saved or {}).get("items") or [{}]
+    check("GE: Gerät gespeichert", it[0].get("name") == "Waschmaschine Keller" and it[0].get("power") == "sensor.waschmaschine_leistung" and it[0].get("stop_min") == 12)
+    stab(pg, "alarme")
+    check("GE: feste Regel „Haushaltsgerät fertig“", pg.locator(f'{P} [data-set="alerts.builtin.appliances"]').count() == 1)
+    # Schoner: Hinweis „… fertig seit …“
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
+    pg.evaluate("""(() => { const a = window.__api, now = Date.now() / 1000;
+      a.set('sensor.haus_geraete', '1', { geraete: [{ id: 'dry', name: 'Trockner', kind: 'dry', icon: 'mdi:tumble-dryer', state: 'fertig', since: now - 600, start: now - 6000, end: now - 600, kwh: 2, cost: 0.6, power: '', remaining: '', n: 1, last: null }] });
+      document.querySelector('haus-visualisierung-panel')._saverShow(); })()"""); pg.wait_for_timeout(300)
+    check("GE: Schoner zeigt fertiges Gerät", "Trockner fertig seit 10 min" in pg.locator(f"{P} .saver .svhint").inner_text().replace("\xa0", " "))
 
 @gruppe("energie")
 def energie_zeitraum():
@@ -1603,6 +1781,228 @@ def strompreis():
       return [m.scrollWidth - m.clientWidth, c.right <= 390]; }})()""")
     check("SP: Handy 390 px – Strompreis ohne seitliches Scrollen", geo[0] <= 0 and geo[1])
     mp.close()
+
+
+@gruppe("gutenacht")
+def gute_nacht_check():
+    # ---------- Gute-Nacht- und Verlassen-Check ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.evaluate("sessionStorage.removeItem('hv-alarms')")
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(600)
+    btn = pg.locator(f"{P} .qcard .gnbtn")
+    check("GN: Schnellzugriff hat „Gute Nacht“ und „Ich gehe“", btn.count() == 2 and "Gute Nacht" in btn.nth(0).inner_text() and "Ich gehe" in btn.nth(1).inner_text())
+    nset = lambda: len([x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"])
+    n0, s0 = len(log()), nset()
+    btn.nth(0).click(); pg.wait_for_timeout(300)
+    M = f"{P} .gnmodal"
+    txt = pg.locator(M).inner_text()
+    check("GN: Fenster zeigt offene Punkte, nichts geschaltet", pg.locator(M).count() == 1 and len(log()) == n0 and nset() == s0
+          and "Punkte sind noch offen" in txt)
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: Fenster, Licht, Kaffeemaschine dabei; aus/zu nicht", "binary_sensor.schlafzimmer_fenster" in rows and "light.buro_decke" in rows
+          and "switch.kuche_kaffeemaschine" in rows and "light.bad_decke" not in rows and "binary_sensor.kuche_fenster" not in rows and "lock.haustur" not in rows)
+    check("GN: Medien nur beim Gehen", "media_player.wohnzimmer_sonos" not in rows)
+    check("GN: Sensor ohne Knopf, Licht mit „Aus“", pg.locator(f'{M} .gnrow[data-eid="binary_sensor.schlafzimmer_fenster"] .pbtn').count() == 0
+          and pg.locator(f'{M} .gnrow[data-eid="light.buro_decke"] .pbtn').inner_text() == "Aus")
+    pg.locator(f'{M} .gnrow[data-eid="light.buro_decke"] .pbtn').click(); pg.wait_for_timeout(900)
+    rows2 = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: Einzeln ausschalten → Licht aus, Zeile weg, Modus unverändert", log()[-1] == "light.turn_off" and "light.buro_decke" not in rows2 and nset() == s0)
+    pg.locator(f'{M} .gnrow[data-eid="switch.kuche_kaffeemaschine"] .pbtn').click(); pg.wait_for_timeout(900)
+    check("GN: Kaffeemaschine ausschalten", log()[-1] == "homeassistant.turn_off"
+          and pg.locator(f'{M} .gnrow[data-eid="switch.kuche_kaffeemaschine"]').count() == 0)
+    pg.locator(f"{M} [data-act=gn-close]").click(); pg.wait_for_timeout(200)
+    check("GN: Abbrechen schaltet den Modus nicht", pg.locator(M).count() == 0 and nset() == s0)
+    # Ich gehe: Schloss offen, Garage offen, Medien
+    pg.evaluate("window.__api.set('lock.haustur', 'unlocked')"); pg.evaluate("window.__api.set('cover.garagentor', 'open', { current_position: 100 })"); pg.wait_for_timeout(300)
+    btn.nth(1).click(); pg.wait_for_timeout(300)
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: Ich gehe → Garage, Schloss und Medien dabei", rows[:2] == ["cover.garagentor", "binary_sensor.schlafzimmer_fenster"] and "lock.haustur" in rows and "media_player.wohnzimmer_sonos" in rows)
+    check("GN: Titel und Knopf „Trotzdem abwesend“", "Ich gehe" in pg.locator(f"{M} .mt").inner_text() and pg.locator(f"{M} [data-act=gn-go]").inner_text() == "Trotzdem abwesend")
+    pg.locator(f"{M} [data-act=gn-fixall]").click(); pg.wait_for_timeout(900)
+    lg = log()
+    check("GN: Alles schließen → verriegeln, Garage zu, Licht aus", "lock.lock" in lg[-6:] and "cover.close_cover" in lg[-6:] and "light.turn_off" in lg[-6:]
+          and pg.evaluate("window.__api.log.slice(-6).some(x => x[0] === 'light' && x[2].entity_id.length > 1)"))
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.gnrow')].map(r => r.dataset.eid)")
+    check("GN: danach bleiben nur Punkte ohne Knopf bzw. ohne Rückmeldung", "lock.haustur" not in rows and "cover.garagentor" not in rows and "binary_sensor.schlafzimmer_fenster" in rows)
+    pg.evaluate("window.__api.set('binary_sensor.schlafzimmer_fenster', 'off'); window.__api.set('media_player.wohnzimmer_sonos', 'paused')"); pg.wait_for_timeout(900)
+    check("GN: alles zu → „Nichts mehr offen“, Knopf „Abwesend einschalten“", pg.locator(f"{M} .gnok").count() == 1 and pg.locator(f"{M} [data-act=gn-go]").inner_text() == "Abwesend einschalten")
+    pg.locator(f"{M} [data-act=gn-go]").click(); pg.wait_for_timeout(400)
+    ws = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "set_mode"]
+    check("GN: Bestätigen schaltet auf Abwesend", len(ws) == s0 + 1 and ws[-1][2]["mode"] == "abwesend" and pg.locator(M).count() == 0)
+    # Hausmodus-Karte: alles zu → direkt; etwas offen → Check
+    pg.evaluate(f"{PP}._go('alarme')"); pg.wait_for_timeout(500)
+    pg.locator(f"{P} .hmb[data-mode=zuhause]").click(); pg.wait_for_timeout(300)
+    s1 = nset()
+    pg.locator(f"{P} .hmb[data-mode=nacht]").click(); pg.wait_for_timeout(300)
+    check("GN: Karte, alles zu → Nacht ohne Check", pg.locator(M).count() == 0 and nset() == s1 + 1)
+    pg.locator(f"{P} .hmb[data-mode=zuhause]").click(); pg.wait_for_timeout(300)
+    pg.evaluate("window.__api.set('light.flur_decke', 'on')"); pg.wait_for_timeout(300)
+    s1 = nset()
+    pg.locator(f"{P} .hmb[data-mode=nacht]").click(); pg.wait_for_timeout(300)
+    check("GN: Karte, Licht an → Check mit „Trotzdem Nacht“", pg.locator(M).count() == 1 and nset() == s1 and pg.locator(f"{M} [data-act=gn-go]").inner_text() == "Trotzdem Nacht")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    check("GN: Esc schließt", pg.locator(M).count() == 0 and nset() == s1)
+    # Einstellungen: abschalten und eigene Geräte
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
+    check("GN: Einstellungen mit Schalter", pg.locator(f'{P} [data-set="house_mode.check"]').is_checked())
+    pg.locator(f"{P} [data-chk-input]").fill("switch.trockner"); pg.locator(f"{P} [data-act=s-chk-add]").click(); pg.wait_for_timeout(200)
+    check("GN: Gerät hinzufügen", pg.evaluate(f"{PP}._draft.house_mode.check_devices") == ["switch.trockner"])
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, house_mode: {{ ...p._layout.house_mode, check_devices: ['switch.trockner'] }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
+    pg.evaluate("window.__api.set('switch.trockner', 'on')"); pg.wait_for_timeout(200)
+    pg.locator(f"{P} .qcard .gnbtn").nth(0).click(); pg.wait_for_timeout(300)
+    check("GN: eigenes Gerät erscheint", pg.locator(f'{M} .gnrow[data-eid="switch.trockner"]').count() == 1)
+    pg.locator(f"{M} [data-act=gn-close]").click(); pg.wait_for_timeout(200)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, house_mode: {{ ...p._layout.house_mode, check: false }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
+    check("GN: abgeschaltet → keine Knöpfe", pg.locator(f"{P} .gnbtn").count() == 0)
+    # Handy: Knöpfe in der Energieleiste, Fenster passt in die Breite
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+    mp = ctx.new_page(); mp.on("pageerror", lambda e: errs.append(str(e)))
+    mp.goto(base.split("?")[0] + "?ov=fokus"); mp.wait_for_timeout(600)
+    check("GN-Handy: Knöpfe in der Leiste", mp.locator(f"{P} .ebar .gnbtn").count() == 2)
+    ov, wide = mp.evaluate(OVL), mp.evaluate(WIDE)
+    check("GN-Handy: nichts überlappt, nichts zu breit", not ov and not wide)
+    if ov or wide: print("     ", ov[:3], wide)
+    mp.locator(f"{P} .ebar .gnbtn").nth(1).click(); mp.wait_for_timeout(300)
+    geo = mp.evaluate(f"(() => {{ const r = document.querySelector('{P}').shadowRoot.querySelector('.gnmodal').getBoundingClientRect(); return [r.left >= 0, r.right <= 390, r.bottom <= 844]; }})()")
+    check("GN-Handy: Fenster passt auf den Bildschirm", all(geo))
+    ctx.close()
+
+
+@gruppe("rueckblick")
+def rueckblick():
+    # ---------- Rückblick: Monat gegen Vormonat und Vorjahr, Rekorde (Energie-Seite) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=energie"); pg.wait_for_timeout(900)
+    rb = pg.locator(f"{P} .rback")
+    stats = lambda: [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "statistics" and "sensor.aussen_temperatur" in x[2]["ids"]]
+    q = [x for x in stats() if "sensor.growatt_modbus_pv_power" in x["ids"]]  # im Harness kommen die Zustände nach und nach
+    check("RB: Karte Rückblick auf der Energie-Seite", rb.count() == 1)
+    check("RB: drei Abfragen der Stundenmittel (Monat, Vormonat, Vorjahr) und eine der Tagesmittel", sorted(x["period"] for x in q) == ["day", "hour", "hour", "hour"]
+          and all(x["units"] == {"power": "W", "temperature": "°C"} for x in q))
+    hq = [x for x in q if x["period"] == "hour"][0]["ids"]
+    check("RB: Abfrage mit PV, Haus, Speicher, Netz, Preis, außen und Räumen", all(e in hq for e in ("sensor.growatt_modbus_pv_power", "sensor.hausverbrauch_ac", "sensor.growatt_modbus_battery_power",
+          "sensor.netz_leistung", "sensor.nordpool_kwh_de_eur", "sensor.aussen_temperatur")) and len(hq) > 7)
+    mon = pg.evaluate("new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })")
+    yr = pg.evaluate("new Date().getFullYear()")
+    hd = rb.locator(".rbhd").inner_text()
+    check("RB: Kopf – Monat, Spalten dieser Monat, Vormonat, Vorjahr mit gleichem Abschnitt", rb.locator(".rbm").inner_text() == mon
+          and all(w in hd for w in ("Dieser Monat", "Vormonat", f"Vorjahr {yr - 1}", "1.")))
+    rows = rb.locator(".rbr[data-k]").evaluate_all("r => r.map(x => x.dataset.k)")
+    check("RB: Zeilen Energie, Kosten und Klima", rows == ["pv", "use", "imp", "exp", "autark", "cost", "net", "out", "inn", "hdd"])
+    F = pg.evaluate(f"{R}.querySelector('.rback')._rb.F.map(f => f && {{ pv: f.pv, cost: f.cost, imp: f.imp }})")
+    pvs = rb.locator('.rbr[data-k="pv"] .rbc').all_inner_texts()
+    d = round((F[0]["pv"] / F[1]["pv"] - 1) * 100)
+    check("RB: PV – Vergleich zum Vormonat in Prozent (Jahresgang im Harness)", F[0]["pv"] != F[1]["pv"] and (f"{abs(d)} %" in pvs[1]) and ("+" if d > 0 else "−") in pvs[1])
+    cls = rb.locator('.rbr[data-k="pv"] .rbc em').first.get_attribute("class")
+    check("RB: weniger PV als im Vormonat ist schlecht, mehr ist gut", cls == ("good" if d > 0 else "bad"))
+    check("RB: Kosten mit dem Stundenpreis des Preissensors (nicht fest)", F[0]["cost"] > 0 and abs(F[0]["cost"] - F[0]["imp"] / 1000 * 0.3) > 1
+          and "festem Preis" not in rb.locator(".rbnote").inner_text())
+    rec = rb.locator(".rbrec").inner_text()
+    check("RB: Rekorde des Jahres – bester PV-Tag und -Monat, Verbrauch, wärmster und kältester Tag", f"Rekorde {yr}" in rb.locator(".rbrecw").text_content()
+          and all(w in rec for w in ("Bester PV-Tag", "Bester PV-Monat", "Höchster Verbrauch", "Wärmster Tag", "Kältester Tag")) and "kWh" in rec and "°C" in rec)
+    check("RB: Hinweis auf gleich lange Abschnitte", "gleich lange Abschnitte" in rb.locator(".rbnote").inner_text())
+    check("RB: im laufenden Monat nicht vorblättern", rb.locator('[data-act="rb-month"][data-d="1"]').is_disabled())
+    r0 = pg.evaluate(f"{PP}._stats.renders"); n0 = len(pg.evaluate("window.__api.log"))
+    pg.evaluate("window.__api.set('sensor.growatt_modbus_pv_power', '4100')"); pg.wait_for_timeout(250)
+    check("RB: neuer Messwert – keine Abfrage, kein Neuaufbau", pg.evaluate(f"{PP}._stats.renders") == r0 and not [x for x in pg.evaluate("window.__api.log")[n0:] if x[0] == "ws"])
+    n1 = len(stats())
+    rb.locator('[data-act="rb-month"][data-d="-1"]').click(); pg.wait_for_timeout(400)
+    prev = pg.evaluate("(() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return [d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }), d.toLocaleDateString('de-DE', { month: 'long' }), d.getFullYear()]; })()")
+    q = stats()[n1:]
+    hd = rb.locator(".rbhd").inner_text()
+    check("RB: zurückblättern – Vormonat ganz, drei neue Stundenabfragen", rb.locator(".rbm").inner_text() == prev[0] and "Monat" in hd and prev[1] in hd
+          and "Dieser Monat" not in hd and [x["period"] for x in q].count("hour") == 3)
+    check("RB: vergangener Monat – kein Hinweis auf Abschnitte, vorblättern möglich", "gleich lange" not in rb.locator(".rbnote").inner_text()
+          and not rb.locator('[data-act="rb-month"][data-d="1"]').is_disabled())
+    n2 = len(stats())
+    rb.locator('[data-act="rb-month"][data-d="1"]').click(); pg.wait_for_timeout(300)
+    check("RB: wieder vor – aktueller Monat aus dem Speicher, ohne Abfrage", rb.locator(".rbm").inner_text() == mon and len(stats()) == n2)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, price: {{ ...p._layout.price, use_sensor: false, fixed_ct: 30 }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(500)
+    F = pg.evaluate(f"{R}.querySelector('.rback')._rb.F[0]")
+    check("RB: ohne Preissensor – Kosten mit festem Preis", "festem Preis 30,0 ct/kWh" in rb.locator(".rbnote").inner_text() and abs(F["cost"] - F["imp"] / 1000 * 0.3) < 0.01)
+    pg.goto(dense + "?view=energie&norec"); pg.wait_for_timeout(700)
+    check("RB: ohne Recorder – Hinweis statt Tabelle", "Keine Langzeitstatistik" in rb.locator(".rbmsg").inner_text() and rb.locator(".rbr").count() == 0 and not rb.locator(".rbrecw").is_visible())
+    mp = b.new_page(viewport={"width": 390, "height": 900}); mp.goto(dense + "?view=energie"); mp.wait_for_timeout(900)
+    geo = mp.evaluate(f"""(() => {{ const R = document.querySelector('{P}').shadowRoot; const m = R.querySelector('.main'), c = R.querySelector('.rback').getBoundingClientRect();
+      const cells = [...R.querySelectorAll('.rback .rbc b, .rback .rbc em')].filter(e => e.scrollWidth > e.clientWidth + 1).length;
+      return [m.scrollWidth - m.clientWidth, c.right <= 390, cells, R.querySelectorAll('.rback .rbr[data-k]').length]; }})()""")
+    check("RB: Handy 390 px – Tabelle ohne seitliches Scrollen und ohne abgeschnittene Werte", geo[0] <= 0 and geo[1] and geo[2] == 0 and geo[3] == 10)
+    mp.close()
+
+
+@gruppe("wartung")
+def wartung():
+    # ---------- Wartungsplaner: Aufgaben anlegen, Fälligkeit, Erledigt und Rückgängig, Meldungen ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense); pg.wait_for_timeout(500)
+    check("WT: ohne Aufgaben keine Seite Wartung in der Navigation", pg.locator(f'{P} .nav[data-to="wartung"]').count() == 0)
+    iv = pg.evaluate("[['2026-01-31', 1, 'monate'], ['2024-02-29', 1, 'jahre'], ['2026-11-23', 2, 'wochen'], ['2026-12-30', 3, 'tage'], ['2026-11-23', 6, 'monate']].map(a => window.__HAUS_VIS__.addInterval(...a))")
+    check("WT: Intervalle rechnen (Monatsende, Schaltjahr, Wochen, Jahreswechsel)", iv == ["2026-02-28", "2025-02-28", "2026-12-07", "2027-01-02", "2027-05-23"])
+    # Einstellungen → Technik: zwei Vorlagen und eine eigene Aufgabe
+    pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(500)
+    check("WT: Abschnitt in Einstellungen → Technik", pg.locator(f"{P} .set h2:has-text('Wartungsplaner')").count() == 1)
+    pg.locator(f"{P} [data-act=s-wt-tpl][data-tpl=filter]").click(); pg.wait_for_timeout(150)
+    pg.locator(f"{P} [data-act=s-wt-tpl][data-tpl=rauch]").click(); pg.wait_for_timeout(150)
+    pg.locator(f"{P} [data-act=s-wt-add]").click(); pg.wait_for_timeout(150)
+    rows = pg.locator(f"{P} .wtask")
+    check("WT: drei Aufgaben im Entwurf", rows.count() == 3)
+    rows.nth(2).locator('[data-set$=".title"]').fill("Dachrinne reinigen")
+    rows.nth(2).locator('[data-set$=".interval"]').fill("6")
+    rows.nth(2).locator('[data-set$=".unit"]').select_option("wochen")
+    check("WT: Entwurf ungespeichert markiert", "dirty" in pg.locator(f"{P} .stab[data-tab=technik]").get_attribute("class"))
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.maintenance)")
+    today = pg.evaluate("(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()")
+    tk = saved["tasks"]
+    check("WT: gespeichert mit Titel, Intervall und Startdatum heute", len(tk) == 3 and tk[0]["title"] == "Lüftungsfilter wechseln" and tk[0]["interval"] == 6
+          and tk[2]["title"] == "Dachrinne reinigen" and tk[2]["unit"] == "wochen" and tk[2]["interval"] == 6 and all(t["since"] == today for t in tk))
+    # Navigation und Seite: alles frisch angelegt → nichts fällig
+    nav = pg.locator(f'{P} .nav[data-to="wartung"]')
+    check("WT: Seite Wartung in der Navigation", nav.count() == 1 and pg.locator(f'{P} .nav[data-to="wartung"] .wbadge').count() == 0)
+    nav.click(); pg.wait_for_timeout(300)
+    check("WT: Seite zeigt alle Aufgaben, nichts fällig", pg.locator(f"{P} .wrow").count() == 3 and pg.locator(f"{P} .wrow.due").count() == 0 and "nichts fällig" in pg.locator(f"{P} .ptitle .psub").inner_text())
+    check("WT: Dachrinne zuerst (früheste Fälligkeit), Intervall im Text", "Dachrinne" in pg.locator(f"{P} .wrow").first.inner_text() and "alle 6 Wochen" in pg.locator(f"{P} .wrow").first.inner_text())
+    # Filter vor 7 Monaten zuletzt gewechselt, Rauchmelder in 10 Tagen fällig → Fällig und Demnächst
+    pg.evaluate("""(() => { const p = document.querySelector('haus-visualisierung-panel'), add = window.__HAUS_VIS__.addInterval;
+      const d = new Date(), iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const back = (n, u) => { const x = new Date(); if (u === 'm') x.setMonth(x.getMonth() - n); else x.setDate(x.getDate() - n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+      const M = structuredClone(p._layout.maintenance); M.tasks[0].since = back(7, 'm'); M.tasks[1].since = back(355, 'd');
+      return window.__api.hass.callWS({ type: 'x/save', layout: { ...p._layout, maintenance: M } }).then((r) => { p._layout = { ...p._layout, maintenance: r.layout.maintenance }; p._dirty = true; p._schedule(); }); })()""")
+    pg.wait_for_timeout(300)
+    due = pg.locator(f"{P} .wsec.due .wrow")
+    check("WT: überfällige Aufgabe unter „Fällig“", due.count() == 1 and "Lüftungsfilter" in due.inner_text() and "fällig" in due.locator(".wdue").inner_text() and "seit" in due.locator(".wdue").inner_text())
+    check("WT: bald fällige unter „Demnächst“", pg.locator(f"{P} .wsec.soon .wrow").count() == 1 and "Rauchmelder" in pg.locator(f"{P} .wsec.soon").inner_text())
+    check("WT: Zahl der fälligen an der Navigation", pg.locator(f'{P} .nav[data-to="wartung"] .wbadge').inner_text() == "1")
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('maint:')).map(a => [a.level, a.title, a.to]); }})()")
+    check("WT: fällige Aufgabe als Hinweis in den Meldungen", al == [["info", "Wartung fällig · Lüftungsfilter wechseln", "wartung"]])
+    # Erledigt → nächstes Datum, Rückgängig
+    due.locator("[data-act=wt-done]").click(); pg.wait_for_timeout(300)
+    calls = [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "maintenance_done"]
+    check("WT: Erledigt schickt die Aufgabe ans Backend", len(calls) == 1 and calls[0]["task"] == tk[0]["id"] and not calls[0].get("undo"))
+    row = pg.locator(f'{P} .wrow[data-task="{tk[0]["id"]}"]')
+    check("WT: danach nicht mehr fällig, zuletzt heute von Tobias", pg.locator(f"{P} .wsec.due").count() == 0 and "ok" in row.get_attribute("class") and "Tobias" in row.inner_text())
+    nxt = pg.evaluate(f"window.__HAUS_VIS__.addInterval('{today}', 6, 'monate')")
+    check("WT: Hinweis mit nächstem Datum", "nächstes Mal" in pg.locator(f"{P} .toast").inner_text() if pg.locator(f"{P} .toast").count() else False)
+    check("WT: Fälligkeit in sechs Monaten", ".".join(reversed(nxt.split("-"))) in row.locator(".wdue").inner_text())
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('maint:')).length; }})()")
+    check("WT: Meldung verschwindet", al == 0 and pg.locator(f'{P} .nav[data-to="wartung"] .wbadge').count() == 0)
+    row.locator("[data-act=wt-undo]").click(); pg.wait_for_timeout(300)
+    check("WT: Rückgängig – wieder fällig", pg.locator(f"{P} .wsec.due .wrow").count() == 1 and pg.locator(f"{P} [data-act=wt-undo]").count() == 0)
+    # Handy: nichts ragt heraus, Knöpfe erreichbar
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    check("WT: Handy – nichts ragt aus der Seite", not pg.evaluate(WIDE))
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    # Feste Regel „Wartung fällig“ abschalten → keine Meldung, Seite bleibt
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, builtin: {{ ...p._layout.alerts.builtin, maintenance: false }} }} }}; p._dirty = true; p._schedule(); }})()"); pg.wait_for_timeout(300)
+    al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('maint:')).length; }})()")
+    check("WT: Regel aus – keine Meldung, Seite zeigt weiter fällig", al == 0 and pg.locator(f"{P} .wsec.due .wrow").count() == 1)
+    # Aufgabe löschen; ohne Aufgaben verschwindet die Seite aus der Navigation
+    pg.locator(f'{P} .nav[data-to="einstellungen"]').click(); pg.wait_for_timeout(300); stab(pg, "technik")
+    for _ in range(3):
+        pg.locator(f"{P} [data-act=s-wt-del]").first.click(); pg.wait_for_timeout(120)
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    check("WT: alle Aufgaben gelöscht – keine Seite Wartung mehr", pg.locator(f"{P} .wtask").count() == 0 and pg.locator(f'{P} .nav[data-to="wartung"]').count() == 0)
 
 
 def auswahl(args):

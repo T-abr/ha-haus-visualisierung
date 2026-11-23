@@ -9,6 +9,8 @@ import { heatHover } from "./technik.js";
 import { climHover, sparkHover } from "./klima.js";
 import { enHover } from "./energie.js";
 import { fcListen, fcUnlisten } from "./wetter.js";
+import { termListen, termUnlisten } from "./termine.js";
+import { MAINT, maintDueCount, maintOn, maintPageHTML, setMaint } from "./wartung.js";
 import { LOGO, STYLES } from "./stile.js";
 import { HvBase } from "./basis.js";
 import { KlingelMixin } from "./panel-klingel.js";
@@ -18,12 +20,13 @@ import { AnsichtenMixin } from "./panel-ansichten.js";
 import { KompaktMixin } from "./panel-kompakt.js";
 import { EinstellungenMixin } from "./panel-einstellungen.js";
 import { AktionenMixin } from "./panel-aktionen.js";
+import { GuteNachtMixin } from "./gutenacht.js";
 
 /* Relative module_url fremder Panels wie bisher gegen den Einstiegspunkt auflösen, nicht gegen modules/. */
 const ENTRY_URL = new URL("../haus-visualisierung.js", import.meta.url);
 
-class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMixin(AnsichtenMixin(
-  AlarmseiteMixin(WandpanelMixin(KlingelMixin(HvBase))))))) {
+class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(EinstellungenMixin(KompaktMixin(AnsichtenMixin(
+  AlarmseiteMixin(WandpanelMixin(KlingelMixin(HvBase)))))))) {
   constructor() {
     super();
     this._view = null;
@@ -73,7 +76,7 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     this._clockT = setInterval(() => { if (!document.hidden) this._tickClock(); }, 15000);
     this._alertT = setInterval(() => {
       if (document.hidden || !this._model) return;
-      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"], [data-u="shade"], [data-u="fcast"]').forEach((el) => UPD[el.dataset.u].run(el, this));
+      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"], [data-u="shade"], [data-u="fcast"], [data-u="termin"], [data-u="appl"]').forEach((el) => UPD[el.dataset.u].run(el, this));
     }, 30000);
     // Wettervorhersage: neue Daten frischen Kopfzeile, Karten „Sonne & Wetter“ und „Vorhersage“ sowie Bildschirmschoner auf
     this._onForecast = this._onForecast || (() => {
@@ -82,6 +85,13 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
       this._saverDirty = true;
     });
     fcListen(this._onForecast);
+    // Termine aus den Kalendern: Kopfzeile und Bildschirmschoner auffrischen, sobald sie da sind
+    this._onTermine = this._onTermine || (() => {
+      if (!this._model) return;
+      this.shadowRoot.querySelectorAll('[data-u="termin"]').forEach((el) => UPD.termin.run(el, this));
+      this._saverDirty = true;
+    });
+    termListen(this._onTermine);
     if (!this._alWired) {
       this._alWired = true;
       const r = this.shadowRoot;
@@ -152,6 +162,7 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     clearInterval(this._clockT);
     clearInterval(this._alertT);
     fcUnlisten(this._onForecast);
+    termUnlisten(this._onTermine);
     clearInterval(this._wallT); this._wallT = 0;
     if (this._wallWired) {
       window.removeEventListener("pointerdown", this._onWallAct, true);
@@ -194,6 +205,12 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     this._sub = this._hass.connection
       .subscribeMessage((msg) => {
         if (msg.version) this._serverVersion = msg.version;
+        if (msg.maintenance) {
+          // Wartungsplaner: neuer Erledigt-Stand (auch von anderen Geräten); gleicher Stand wie nach eigenem Tipp → nichts tun
+          const same = JSON.stringify(msg.maintenance) === JSON.stringify(MAINT);
+          setMaint(msg.maintenance);
+          if (!same && !msg.layout && this._view !== "einstellungen") { this._dirty = true; this._schedule(); }
+        }
         if (msg.layout) {
           this._layout = withDefaults(msg.layout);
           this._startCams();
@@ -257,9 +274,11 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     if (view === "einstellungen" && !isAdmin) view = "overview";
     const active = view === "raum" ? "overview" : view;
 
-    // Energie nur, wenn es Energiedaten gibt
-    const navList = NAV.filter(([k]) => k !== "energie" || (this._model && this._model.energy));
-    const nav = navList.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : ""}<span>${t}</span></button>`).join("");
+    // Energie nur, wenn es Energiedaten gibt; Wartung nur mit Aufgaben (Zahl = fällige)
+    const navList = NAV.filter(([k]) => (k !== "energie" || (this._model && this._model.energy)) && (k !== "wartung" || maintOn(L)));
+    const nDue = maintOn(L) ? maintDueCount(L) : 0;
+    const badge = (k) => (k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : k === "wartung" && nDue ? `<i class="nbadge on wbadge">${nDue}</i>` : "");
+    const nav = navList.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${badge(k)}<span>${t}</span></button>`).join("");
     const links = (L.links || []).filter((l) => l.path).map((l) => `<button class="nav${view === "extern" && panelPathOf(l.path) === this._arg ? " active" : ""}" data-act="link" data-path="${esc(l.path)}" title="${esc(l.title)}">${icon(l.icon || "mdi:link")}<span>${esc(l.title)}</span></button>`).join("");
 
     let body;
@@ -404,6 +423,7 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
       case "sicherheit": return d ? this._vSecurityDense() : this._vSecurity();
       case "alarme": return this._vAlarme();
       case "batterien": return d ? this._vBatteriesDense() : this._vBatteries();
+      case "wartung": return maintPageHTML(this._layout, !!(this._hass.user && this._hass.user.is_admin));
       case "einstellungen": return this._vSettings();
       case "extern": return `<div class="extwrap"><div class="extload">${icon("mdi:loading", "spin")}Lade …</div></div>`;
       default: return this._vOverview();

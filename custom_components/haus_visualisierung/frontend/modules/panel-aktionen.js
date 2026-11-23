@@ -4,8 +4,12 @@
 import { DOMAIN } from "./version.js";
 import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, UPD, withDefaults } from "./grundlagen.js";
 import { rangeSet } from "./verlauf.js";
+import { rbShift } from "./rueckblick.js";
 import { buildModel } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
+import { simAction } from "./anwesenheit.js";
+import { applList } from "./geraete.js";
+import { maintCall, newTask } from "./wartung.js";
 
 const AktionenMixin = (Base) => class extends Base {
   async _actionExtra(act, t) {
@@ -23,6 +27,7 @@ const AktionenMixin = (Base) => class extends Base {
         card._force = true; UPD[card.dataset.u].run(card, this); card._force = false;
         return;
       }
+      case "rb-month": { const card = t.closest('[data-u="rback"]'); if (card) rbShift(card, this, Number(t.dataset.d) || 0); return; }
       case "clim-kind": this._ck = t.dataset.k === "h" ? "h" : "t"; try { localStorage.setItem("hv-clim-kind", this._ck); } catch (err) { /* egal */ } this._render(); return;
       case "nav": this._go(t.dataset.to); return;
       case "link": this._openLink(t.dataset.path); return;
@@ -33,7 +38,7 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-bell-test": this._closeBell(); this._showBell(true, this._draft ? this._draft.doorbell : null); return;
       case "saver": this._saverShow(); return;
       case "s-wall-device": this._wallSet(!this._wallIsOn()); this._toast(this._wallIsOn() ? "Dieses Gerät ist jetzt ein Wandpanel" : "Wandpanel-Modus aus"); return;
-      case "s-saver-test": { const prev = this._layout; this._layout = { ...prev, wallpanel: { ...this._wallCfg(), ...((this._draft && this._draft.wallpanel) || {}) } }; this._saverShow(); this._layout = prev; this._wallActive = Date.now(); return; }
+      case "s-saver-test": { const prev = this._layout; this._layout = { ...prev, wallpanel: { ...this._wallCfg(), ...((this._draft && this._draft.wallpanel) || {}) }, ...(this._draft && this._draft.termine ? { termine: this._draft.termine } : {}) }; this._saverShow(); this._layout = prev; this._wallActive = Date.now(); return; }
       case "ftab": this._floorTab = t.dataset.floor; this._dirty = true; this._flush(); return;
       case "al-open-page": if (t.dataset.key) this._alSel = t.dataset.key; this._alTab = "leitstelle"; if (this._view === "alarme") this._alRefresh(); else this._go("alarme"); return;
       case "al-sel": this._alSel = t.dataset.key || null; this._alRefresh(); if (this._isNarrow && this._alSel) { const d = this.shadowRoot.querySelector(".aldetail"); if (d && d.scrollIntoView) d.scrollIntoView({ behavior: "smooth", block: "nearest" }); } return;
@@ -45,6 +50,11 @@ const AktionenMixin = (Base) => class extends Base {
       case "al-unmute": this._alCall({ key: t.dataset.key, action: "unmute" }, "Stummschaltung aufgehoben"); return;
       case "al-mute": this._alCall(t.dataset.until ? { key: t.dataset.key, action: "mute", until: t.dataset.until } : { key: t.dataset.key, action: "mute", minutes: Number(t.dataset.min) || 60 },
         t.dataset.until === "resolved" ? "Stumm bis behoben" : t.dataset.until === "morning" ? "Stumm bis morgen 7 Uhr" : "1 Stunde stumm"); return;
+      case "appl-ack": {
+        try { await this._hass.callWS({ type: `${DOMAIN}/appliance_ack`, appliance: t.dataset.id }); this._toast("Quittiert"); } catch (err) { this._toast(`Quittieren fehlgeschlagen: ${err && err.message ? err.message : err}`); }
+        return;
+      }
+      case "wt-done": case "wt-undo": maintCall(this, t.dataset.task, act === "wt-undo"); return;
       case "al-lock": this._call("lock", "lock", { entity_id: t.dataset.eid }); this._toast("Wird verriegelt"); return;
       case "hm-set": {
         const md = t.dataset.mode;
@@ -69,6 +79,7 @@ const AktionenMixin = (Base) => class extends Base {
       catch (err) { this._toast(`Speichern fehlgeschlagen: ${err && err.message ? err.message : err}`); }
       return;
     }
+    if (act.startsWith("s-sim-") && simAction(this, act, t)) return;
     if (!D) return;
     const h = this._hass;
     switch (act) {
@@ -179,6 +190,16 @@ const AktionenMixin = (Base) => class extends Base {
         if (T) D.alerts.rules = [...D.alerts.rules, { ...T, enabled: true }];
         break;
       }
+      case "s-appl-add": {
+        // Vorschlag aus den automatisch erkannten Geräten übernehmen, sonst leere Zeile
+        const auto = applList(this._hass, { appliances: { enabled: true } }).filter((a) => a.auto && !D.appliances.items.some((x) => x.power === a.power));
+        const a = t.dataset.auto === "1" && auto.length ? auto : [null];
+        D.appliances.items = [...D.appliances.items, ...a.map((x) => ({ name: x ? x.name : "", kind: x ? x.kind : "", power: x ? x.power : "", energy: "", status: "", door: "", remaining: "", start_w: 10, stop_w: 5, stop_min: 5 }))];
+        break;
+      }
+      case "s-appl-del": D.appliances.items = D.appliances.items.filter((_, i) => i !== Number(t.dataset.i)); break;
+      case "s-wt-add": case "s-wt-tpl": D.maintenance.tasks = [...(D.maintenance.tasks || []), newTask(t.dataset.tpl)]; break;
+      case "s-wt-del": D.maintenance.tasks = D.maintenance.tasks.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-link-add": D.links = [...(D.links || []), { title: "", icon: "mdi:link", path: "", embed: true, mode: "theme" }]; break;
       case "s-link-del": D.links = D.links.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-tab": {

@@ -19,6 +19,7 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
+from .maintenance import UNITS as MAINT_UNITS
 
 _LIST_OF_STR = (
     "area_order",
@@ -96,9 +97,11 @@ def _time(raw, default: str) -> str:
 
 def _house_mode(raw: dict) -> dict:
     out = copy.deepcopy(DEFAULT_LAYOUT["house_mode"])
-    for key in ("enabled", "auto_away", "auto_night", "alarmo_sync"):
+    for key in ("enabled", "auto_away", "auto_night", "alarmo_sync", "check"):
         if isinstance(raw.get(key), bool):
             out[key] = raw[key]
+    if "check_devices" in raw:
+        out["check_devices"] = [e for e in _str_list(raw["check_devices"]) if "." in e][:30]
     out["away_delay"] = _int(raw.get("away_delay"), 0, 240, out["away_delay"])
     out["night_start"] = _time(raw.get("night_start"), out["night_start"])
     out["night_end"] = _time(raw.get("night_end"), out["night_end"])
@@ -113,6 +116,25 @@ def _house_mode(raw: dict) -> dict:
 
 _LEVEL_LIST = ("alarm", "warn", "info")
 _GA = re.compile(r"^\d{1,2}/\d{1,2}/\d{1,3}$|^\d{1,2}/\d{1,4}$|^\d{1,5}$")
+
+
+_SIM_DOMAINS = ("light.", "cover.", "switch.", "input_boolean.")
+
+
+def _presence_sim(raw: dict) -> dict:
+    """Anwesenheits-Simulation: Schalter, Modi, Geräte, Zeitraum und Zufallsversatz."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["presence_sim"])
+    if isinstance(raw.get("enabled"), bool):
+        out["enabled"] = raw["enabled"]
+    if isinstance(raw.get("modes"), list):
+        out["modes"] = _modes(raw["modes"]) or out["modes"]
+    sw = _entity(raw.get("switch"))
+    out["switch"] = sw if sw.startswith(("input_boolean.", "switch.")) else ""
+    ents = [_entity(e) for e in raw.get("entities", [])] if isinstance(raw.get("entities"), list) else []
+    out["entities"] = list(dict.fromkeys(e for e in ents if e.startswith(_SIM_DOMAINS)))[:60]
+    out["weeks"] = _int(raw.get("weeks"), 1, 4, out["weeks"])
+    out["jitter"] = _int(raw.get("jitter"), 0, 60, out["jitter"])
+    return out
 
 
 def _escalation(raw: dict) -> dict:
@@ -258,6 +280,61 @@ def _forecast(raw: dict) -> dict:
     return out
 
 
+def _termine(raw: dict) -> dict:
+    """Müllabfuhr und Termine: Schalter, Vorlauf, Vorabend-Stunde und Art je Kalender."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["termine"])
+    for key in ("enabled", "header", "saver"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    out["days"] = _int(raw.get("days"), 1, 14, out["days"])
+    out["evening"] = _int(raw.get("evening"), 12, 23, out["evening"])
+    cals = raw.get("cals") if isinstance(raw.get("cals"), dict) else {}
+    for eid, kind in list(cals.items())[:100]:
+        e = _entity(eid)
+        if e.startswith("calendar.") and kind in ("waste", "event", "-"):
+            out["cals"][e] = kind
+    return out
+
+
+_KINDS = ("wash", "dry", "dish", "other")
+_UML = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+
+
+def _appliances(raw: dict) -> dict:
+    """Haushaltsgeräte: Schalter und Geräte mit Leistungs-, Energie-, Status-, Tür- und Restzeit-Entität."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["appliances"])
+    for key in ("enabled", "auto"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    items, ids = [], set()
+    for it in raw.get("items", [])[:12] if isinstance(raw.get("items"), list) else []:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name", ""))[:40].strip() if isinstance(it.get("name"), str) else ""
+        item = {
+            "name": name,
+            "kind": it.get("kind") if it.get("kind") in _KINDS else "",
+            "power": _entity(it.get("power")),
+            "energy": _entity(it.get("energy")),
+            "status": _entity(it.get("status")),
+            "door": _entity(it.get("door")),
+            "remaining": _entity(it.get("remaining")),
+            "start_w": _num(it.get("start_w"), 1, 2000, 10),
+            "stop_w": _num(it.get("stop_w"), 0.5, 2000, 5),
+            "stop_min": _int(it.get("stop_min"), 1, 60, 5),
+        }
+        if item["stop_w"] > item["start_w"]:
+            item["stop_w"] = item["start_w"]
+        base = re.sub(r"[^a-z0-9]+", "_", str(it.get("id") or name or item["power"].split(".")[-1] or "geraet").lower().translate(_UML)).strip("_")[:30] or "geraet"
+        aid, n = base, 2
+        while aid in ids:
+            aid, n = f"{base}_{n}", n + 1
+        ids.add(aid)
+        items.append({"id": aid, **item})
+    out["items"] = items
+    return out
+
+
 def _price(raw: dict) -> dict:
     """Strompreis: Sensor, Schalter und Preise in ct/kWh."""
     out = copy.deepcopy(DEFAULT_LAYOUT["price"])
@@ -269,6 +346,40 @@ def _price(raw: dict) -> dict:
     out["feed_in_ct"] = _num(raw.get("feed_in_ct"), 0, 100, out["feed_in_ct"])
     out["surcharge_ct"] = _num(raw.get("surcharge_ct"), -50, 100, out["surcharge_ct"])
     out["window_h"] = _int(raw.get("window_h"), 1, 12, out["window_h"])
+    return out
+
+
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TASK_ID = re.compile(r"^[a-z0-9_-]{1,24}$")
+
+
+def _maintenance(raw: dict) -> dict:
+    """Wartungsplaner: Schalter, Vorlauf und Aufgaben mit Intervall und Startdatum."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["maintenance"])
+    if isinstance(raw.get("enabled"), bool):
+        out["enabled"] = raw["enabled"]
+    out["lead_days"] = _int(raw.get("lead_days"), 0, 90, out["lead_days"])
+    seen: set[str] = set()
+    for i, t in enumerate(raw.get("tasks", [])[:50] if isinstance(raw.get("tasks"), list) else []):
+        if not isinstance(t, dict):
+            continue
+        tid = str(t.get("id", "")).lower()
+        if not _TASK_ID.match(tid) or tid in seen:
+            tid = f"w{i}"
+            while tid in seen:
+                tid += "x"
+        seen.add(tid)
+        ic = str(t.get("icon", ""))[:60]
+        since = str(t.get("since", ""))[:10]
+        out["tasks"].append({
+            "id": tid,
+            "title": str(t.get("title", ""))[:60],
+            "icon": ic if ic.startswith("mdi:") else "mdi:wrench-clock",
+            "interval": _int(t.get("interval"), 1, 120, 12),
+            "unit": t.get("unit") if t.get("unit") in MAINT_UNITS else "monate",
+            "since": since if _DATE.match(since) else "",
+            "note": str(t.get("note", ""))[:200],
+        })
     return out
 
 
@@ -361,6 +472,8 @@ def sanitize(raw: Any) -> dict:
         result["alarm_actions"] = _actions(raw["alarm_actions"])
     if isinstance(raw.get("house_mode"), dict):
         result["house_mode"] = _house_mode(raw["house_mode"])
+    if isinstance(raw.get("presence_sim"), dict):
+        result["presence_sim"] = _presence_sim(raw["presence_sim"])
     if isinstance(raw.get("doorbell"), dict):
         db = raw["doorbell"]
         out = copy.deepcopy(DEFAULT_LAYOUT["doorbell"])
@@ -386,6 +499,12 @@ def sanitize(raw: Any) -> dict:
         result["forecast"] = _forecast(raw["forecast"])
     if isinstance(raw.get("price"), dict):
         result["price"] = _price(raw["price"])
+    if isinstance(raw.get("termine"), dict):
+        result["termine"] = _termine(raw["termine"])
+    if isinstance(raw.get("appliances"), dict):
+        result["appliances"] = _appliances(raw["appliances"])
+    if isinstance(raw.get("maintenance"), dict):
+        result["maintenance"] = _maintenance(raw["maintenance"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 

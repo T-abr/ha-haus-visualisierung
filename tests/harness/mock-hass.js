@@ -176,6 +176,16 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     user: { is_admin: true, name: "Tobias" }, language: "de", themes: { darkMode: true, themes: {} },
     formatEntityState: fmt,
     callService: async (d, svc, data) => { api.log.push([d, svc, data]); api.applyService(d, svc, data); },
+    // Kalender-API: GET calendars/<entity>?start=…&end=… → Termine aus api.calEvents (Tests setzen sie)
+    callApi: async (method, path) => {
+      api.log.push(["api", method, path]);
+      const m = String(path).match(/^calendars\/([^?]+)\?/);
+      if (method === "GET" && m) {
+        if (api.calFail) throw new Error("Kalender nicht erreichbar");
+        return api.calEvents[decodeURIComponent(m[1])] || [];
+      }
+      throw new Error(`unbekannt: ${method} ${path}`);
+    },
     callWS: async (msg) => {
       if (msg.type.endsWith("/alarm_action")) { api.log.push(["ws", "alarm_action", msg]); return api.alarmAction(msg); }
       if (msg.type.endsWith("/set_mode")) {
@@ -192,11 +202,34 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         if (A.type === "knx" && !A.address) { const e = new Error("Aktion unvollständig (Entität, Gruppenadresse oder TTS-Dienst fehlt)"); e.code = "invalid"; throw e; }
         return { calls: A.type === "knx" ? [{ domain: "knx", service: "send", data: { address: A.address, payload: A.payload } }] : [{ domain: "script", service: "turn_on", data: {} }] };
       }
+      if (msg.type.endsWith("/appliance_ack")) {
+        // wie das Backend: Gerät „fertig“ → „aus“
+        api.log.push(["ws", "appliance_ack", msg]);
+        const st = hass.states["sensor.haus_geraete"], l = (st && st.attributes.geraete) || [];
+        if (!l.some((a) => a.id === msg.appliance && a.state === "fertig")) { const e = new Error("Gerät ist nicht fertig"); e.code = "not_found"; throw e; }
+        const geraete = l.map((a) => (a.id === msg.appliance ? { ...a, state: "aus", since: Date.now() / 1000 } : a));
+        api.set("sensor.haus_geraete", String(geraete.filter((a) => a.state === "fertig").length), { geraete });
+        return { ok: true };
+      }
       if (msg.type.endsWith("/alarm_code")) { api.log.push(["ws", "alarm_code", msg]); api.alarmSnap.mode = { ...(api.alarmSnap.mode || {}), code: !!msg.code }; api.alarmPush(); return { code: !!msg.code }; }
       if (msg.type.endsWith("/alarm_log")) { api.log.push(["ws", "alarm_log", msg]); return { log: api.alarmSnap.log.filter((e) => e.ts >= Date.now() / 1000 - msg.days * 86400), stats: api.alarmStats || [] }; }
+      if (msg.type.endsWith("/presence_sim")) { api.log.push(["ws", "presence_sim", {}]); return api.simInfo || { active: true, source: "2026-11-16", note: "", planned: 2, next: [{ ts: Date.now() / 1000 + 3600, entity: "light.flur_decke", name: "Flur Decke", action: "an" }, { ts: Date.now() / 1000 + 7200, entity: "cover.buro_rollo", name: "Büro Rollo", action: "zu" }], log: [{ ts: Date.now() / 1000 - 600, type: "start", text: "Simulation gestartet (Hausmodus Urlaub)" }, { ts: Date.now() / 1000 - 300, type: "schalten", text: "Wohnzimmer Decke an", entity: "light.wohnzimmer_decke" }] }; }
       if (msg.type.endsWith("/push_info")) return { services: ["mobile_app_iphone_tobias", "mobile_app_pixel", "persistent_notification"], targets: ["mobile_app_iphone_tobias", "mobile_app_pixel"], active: [] };
       if (msg.type.endsWith("/push_test")) { api.log.push(["ws", "push_test", {}]); return { targets: (layout.push && layout.push.targets && layout.push.targets.length) ? layout.push.targets : ["mobile_app_iphone_tobias", "mobile_app_pixel"] }; }
       if (msg.type.endsWith("/save")) { layout = msg.layout; return { layout }; }
+      if (msg.type.endsWith("/maintenance_done")) {
+        // Wartungsplaner: wie websocket.py – heute erledigt bzw. letztes Erledigt zurücknehmen, Stand an das Abo
+        api.log.push(["ws", "maintenance_done", msg]);
+        const tasks = ((layout.maintenance || {}).tasks || []).map((t) => t.id);
+        if (!tasks.includes(msg.task)) { const e = new Error("Aufgabe nicht gefunden"); e.code = "not_found"; throw e; }
+        const M = api.maint, d = new Date(), day = msg.date || `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const e = M[msg.task] = M[msg.task] || { history: [] };
+        if (msg.undo) e.history = e.history.slice(0, -1); else e.history = [...e.history, { date: day, by: "Tobias" }];
+        if (e.history.length) { e.last = e.history[e.history.length - 1].date; e.by = "Tobias"; } else delete M[msg.task];
+        api.maint = { ...M };
+        if (api.layoutCb) setTimeout(() => api.layoutCb({ maintenance: api.maint }), 0);
+        return { maintenance: api.maint };
+      }
       // Recorder: 5-Minuten-Statistik nur für Sensoren mit state_class, sonst Verlauf (wie Home Assistant)
       if (msg.type === "recorder/statistics_during_period") {
         api.log.push(["ws", "statistics", { ids: msg.statistic_ids, period: msg.period, start: msg.start_time, units: msg.units }]);
@@ -260,7 +293,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         };
         throw Object.assign(new Error("No config found."), { code: "config_not_found" });
       }
-      return { version: window.__HAUS_VIS__.VERSION, options: {}, layout };
+      return { version: window.__HAUS_VIS__.VERSION, options: {}, layout, maintenance: api.maint };
     },
     connection: { subscribeMessage: async (cb, msg) => {
       if (msg && msg.type === "weather/subscribe_forecast") {
@@ -269,12 +302,13 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         return () => { api.fcCbs = api.fcCbs.filter((c) => c !== cb); };
       }
       if (msg && msg.type && msg.type.endsWith("/alarms_subscribe")) { api.alarmCb = cb; setTimeout(() => cb(api.alarmSnap), 0); return () => { api.alarmCb = null; }; }
-      setTimeout(() => cb({ version: window.__HAUS_VIS__.VERSION, options: {}, layout }), 0); return () => {}; } },
+      api.layoutCb = cb; setTimeout(() => cb({ version: window.__HAUS_VIS__.VERSION, options: {}, layout, maintenance: api.maint }), 0); return () => {}; } },
   };
   const api = {
-    hass, log: [],
+    hass, log: [], maint: {}, layoutCb: null,
     // Vorhersage (täglich): heute, morgen … – mild; Tests setzen mit fcSet([[hoch, tief, Lage], …]) andere Werte
     forecast: [], fcCbs: [],
+    calEvents: {}, calFail: false,
     fcSet(rows) {
       const d0 = new Date(); d0.setHours(12, 0, 0, 0);
       api.forecast = rows.map(([hi, lo, cond, rain], i) => ({ datetime: new Date(d0.getTime() + i * 86400000).toISOString(), temperature: hi, templow: lo, condition: cond, precipitation: rain || 0 }));

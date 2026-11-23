@@ -8,14 +8,18 @@ import { ALARMS } from "./warnungen.js";
 import { techCfg } from "./technik.js";
 import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 import { solarCfg } from "./prognose.js";
+import { simSettingsHTML } from "./anwesenheit.js";
+import { calKind } from "./termine.js";
+import { applList } from "./geraete.js";
+import { maintSettingsHTML } from "./wartung.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
 const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
-  alarme: ["house_mode", "alerts", "escalation", "alarm_actions"],
+  alarme: ["house_mode", "presence_sim", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
-  technik: ["heating", "wallbox", "shading"],
+  technik: ["heating", "wallbox", "shading", "appliances", "maintenance"],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
@@ -89,11 +93,15 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><input class="inp w" list="dl-all" placeholder="Entität hinzufügen" data-fav-input="1"><button class="pbtn" data-act="s-fav-add">${icon("mdi:plus")}Hinzufügen</button></div></div>`;
     else if (tab === "alarme") body = `${dlAll}
       ${this._setMode(D)}
+      ${this._setCheck ? this._setCheck(D) : ""}
+      ${simSettingsHTML(this, D)}
       ${this._setAlerts(D)}
       ${this._setActions(D)}`;
     else if (tab === "technik") body = `${dlAll}
       ${this._setTech(D)}
-      ${this._setShade(D)}`;
+      ${this._setAppl(D)}
+      ${this._setShade(D)}
+      ${maintSettingsHTML(D)}`;
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
       ${this._setBell(D)}`;
@@ -126,6 +134,7 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
         <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
       ${this._setForecast(D)}
+      ${this._setTermine(D)}
       ${this._setPrice(D)}
       <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
         <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
@@ -153,6 +162,30 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="srow"><span class="lbl">Solarprognose zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.solar" data-bool="1" ${F.solar !== false ? "checked" : ""}><span></span></label></div>
       ${inp("solar_today", "PV-Prognose heute", "Energie in kWh; leer = automatisch")}
       ${inp("solar_tomorrow", "PV-Prognose morgen", "Energie in kWh; leer = automatisch")}
+    </div>`;
+  }
+
+  /* Müllabfuhr und Termine: welche Kalender zählen, Kopfzeile, Bildschirmschoner */
+  _setTermine(D) {
+    const h = this._hass, T = D.termine || {}, C = T.cals || {};
+    const cals = Object.keys(h.states).filter((e) => e.startsWith("calendar.")).sort((a, b) => entName(h, a).localeCompare(entName(h, b), "de"));
+    const KIND = { waste: "Müllabfuhr", event: "Termine", "": "Nicht anzeigen" };
+    const tg = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><label class="tgl"><input type="checkbox" data-set="termine.${key}" data-bool="1" ${T[key] !== false ? "checked" : ""}><span></span></label></div>`;
+    const row = (e) => {
+      const cur = C[e] || "", auto = calKind(h, { cals: {} }, e);
+      return `<div class="srow"><span class="lbl">${esc(entName(h, e))}<small>${esc(e)}</small></span>
+        <select class="inp" data-term-cal="${esc(e)}"><option value="">Automatisch (${KIND[auto]})</option>
+        ${[["waste", "Müllabfuhr"], ["event", "Termine"], ["-", "Nicht anzeigen"]].map(([k, t]) => `<option value="${k}" ${cur === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
+    };
+    return `<div class="set glass" data-sec="termine"><h2>${icon("mdi:trash-can-outline")}Müllabfuhr und Termine</h2>
+      <p class="hint">„Morgen: Gelbe Tonne“ oder „Heute 15:30 Zahnarzt“ in der Kopfzeile und im Bildschirmschoner; am Vorabend der Abfuhr hervorgehoben. Quelle sind Kalender aus Home Assistant, z. B. von Waste Collection Schedule, einer Abfall-Integration, einem ICS-Kalender oder Google/CalDAV. Kalender mit „Abfall“, „Müll“ oder „Tonne“ im Namen zählen automatisch als Müllabfuhr; Familienkalender hier auf „Termine“ stellen.</p>
+      ${tg("enabled", "Müllabfuhr und Termine zeigen")}
+      ${tg("header", "In der Kopfzeile", "der wichtigste nächste Eintrag; am Handy nur die Abfuhr am Vorabend")}
+      ${tg("saver", "Im Bildschirmschoner", "Abfuhr und bis zu drei Termine von heute und morgen")}
+      <div class="srow"><span class="lbl">Abfuhr hervorheben ab<small>Uhr am Vorabend; am Morgen der Abfuhr bis 10 Uhr</small></span><input class="inp s" type="number" min="12" max="23" data-set="termine.evening" data-num="1" value="${esc(String(T.evening ?? 17))}"><span class="rl">Uhr</span></div>
+      <div class="srow"><span class="lbl">Vorausschau<small>Tage, für den Tooltip in der Kopfzeile</small></span><input class="inp s" type="number" min="1" max="14" data-set="termine.days" data-num="1" value="${esc(String(T.days ?? 7))}"><span class="rl">Tage</span></div>
+      <div class="fl-title">Kalender</div>
+      ${cals.length ? cals.map(row).join("") : '<p class="hint">Keine Kalender gefunden. Waste Collection Schedule oder eine andere Kalender-Integration in Home Assistant einrichten.</p>'}
     </div>`;
   }
 
@@ -260,6 +293,30 @@ const EinstellungenMixin = (Base) => class extends Base {
   }
 
   /* Beschattung: Hinweise nach Wettervorhersage, Sonnenstand und Ausrichtung der Rollos */
+  /* Haushaltsgeräte: Erkennung über Leistung oder Status, Tür zum Quittieren, Restzeit */
+  _setAppl(D) {
+    const A = D.appliances || { enabled: true, auto: true, items: [] }, h = this._hass;
+    const found = applList(h, { appliances: { enabled: true } });
+    const auto = found.filter((a) => a.auto);
+    const kinds = [["", "Automatisch (Name)"], ["wash", "Waschmaschine"], ["dry", "Trockner"], ["dish", "Spülmaschine"], ["other", "Anderes Gerät"]];
+    const ent = (i, key, ph, title) => `<input class="inp" style="flex:1 1 200px" list="dl-all" data-set="appliances.items.${i}.${key}" value="${esc(A.items[i][key] || "")}" placeholder="${ph}" title="${title}">`;
+    const nm = (i, key, unit, min, max, title) => `<input class="inp xs" type="number" min="${min}" max="${max}" step="1" data-set="appliances.items.${i}.${key}" data-num="1" value="${esc(String(A.items[i][key] ?? ""))}" title="${title}"><span class="rl">${unit}</span>`;
+    const rows = A.items.map((it, i) => `<div class="actcard">
+      <div class="actrow"><input class="inp" style="flex:1 1 160px" data-set="appliances.items.${i}.name" value="${esc(it.name || "")}" placeholder="Name, z. B. Waschmaschine">
+        <select class="inp" data-set="appliances.items.${i}.kind">${kinds.map(([k, t]) => `<option value="${k}" ${(it.kind || "") === k ? "selected" : ""}>${t}</option>`).join("")}</select>
+        <button class="sbtn danger" data-act="s-appl-del" data-i="${i}" title="Entfernen">${icon("mdi:delete-outline")}</button></div>
+      <div class="actrow sub">${ent(i, "power", "Leistung: sensor.…_power", "Leistung in W (Steckdose mit Messung)")}${ent(i, "status", "Programmstatus (optional)", "z. B. Home Connect, Miele: läuft/fertig")}</div>
+      <div class="actrow sub">${ent(i, "energy", "Energiezähler in kWh (optional)", "genauer als die aufsummierte Leistung")}${ent(i, "door", "Tür (optional): binary_sensor.…", "Tür auf quittiert „fertig“")}${ent(i, "remaining", "Restzeit (optional)", "Zeitpunkt oder Minuten")}</div>
+      <div class="actrow sub"><span class="rl">läuft ab</span>${nm(i, "start_w", "W", 1, 2000, "Startgrenze: so viel Leistung mindestens 1 Minute lang")}<span class="rl">fertig unter</span>${nm(i, "stop_w", "W", 1, 2000, "Stoppgrenze")}<span class="rl">für</span>${nm(i, "stop_min", "min", 1, 60, "so lange unter der Stoppgrenze (Spülmaschine trocknet oft lange ohne Strom: eher 10–20 min)")}</div></div>`).join("");
+    return `<div class="set glass" data-sec="appliances"><h2>${icon("mdi:washing-machine")}Haushaltsgeräte</h2>
+      <p class="hint">Karte „Geräte“ auf der Übersicht: läuft seit, Restzeit, „fertig seit …“, Energie und Kosten je Durchgang (Strompreis aus Darstellung → Strompreis; eigener PV-Strom zählt nicht). Bei „fertig“ kommt eine Meldung (Hinweis, auch als Push), bis jemand quittiert, die Tür öffnet oder das Gerät neu startet. Dazu ein Tipp, wann sich das Starten lohnt (PV-Überschuss, günstiges Zeitfenster, Solarprognose).</p>
+      <div class="srow"><span class="lbl">Haushaltsgeräte auswerten</span><label class="tgl"><input type="checkbox" data-set="appliances.enabled" data-bool="1" ${A.enabled !== false ? "checked" : ""}><span></span></label></div>
+      <div class="srow"><span class="lbl">Automatisch erkennen<small>ohne eigene Einträge: Leistungssensoren mit Waschmaschine, Trockner oder Spülmaschine im Namen${auto.length ? ` – erkannt: ${esc(auto.map((a) => `${a.name} (${a.power})`).join(", "))}` : " – zurzeit keine erkannt"}</small></span><label class="tgl"><input type="checkbox" data-set="appliances.auto" data-bool="1" ${A.auto !== false ? "checked" : ""}><span></span></label></div>
+      ${rows ? `<div class="appllist">${rows}</div>` : ""}
+      <div class="srow"><button class="pbtn" data-act="s-appl-add">${icon("mdi:plus")}Gerät hinzufügen</button>${auto.length && !A.items.length ? `<button class="pbtn" data-act="s-appl-add" data-auto="1">${icon("mdi:auto-fix")}Erkannte übernehmen und anpassen</button>` : ""}</div>
+    </div>`;
+  }
+
   _setShade(D) {
     const h = this._hass, m = buildModel(h, { ...D, hidden_areas: [] }), S = D.shading || {};
     const F = S.facing || {}, loc = homeLoc(h), wid = weatherIdOf(h, D);
@@ -372,7 +429,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const types = [["knx", "KNX-Telegramm"], ["switch", "Schalter / Licht"], ["siren", "Sirene"], ["tts", "Durchsage (z. B. Sonos)"], ["script", "Skript"]];
     const whens = [["neu", "sofort bei neuer Meldung"], ["eskalation", "bei Eskalation"]];
     const bi = [["contacts", "Fenster oder Tür offen"], ["window_heating", "Fenster beim Heizen"], ["safety", "Melder ausgelöst"], ["alarm_panel", "Alarmanlage ausgelöst"],
-      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"], ["mold", "Schimmelrisiko"]];
+      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"], ["mold", "Schimmelrisiko"], ["appliances", "Haushaltsgerät fertig"]];
     const scopes = [["alarm", "alle Alarme"], ["warn", "Alarme und Warnungen"], ["all", "alle Meldungen"], ...bi.map(([k, t]) => [`b:${k}`, `Regel: ${t}`]),
       ...D.alerts.rules.map((r, i) => [`r:${i}`, `Eigene Regel: ${r.title || r.entity || i + 1}`])];
     const sel = (path, opts, cur, cls = "") => `<select class="inp ${cls}" data-set="${path}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${cur === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
@@ -428,7 +485,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const bi = [["contacts", "Fenster oder Tür offen", "Warnung"], ["window_heating", "Fenster offen, während der Raum heizt", "Warnung"], ["safety", "Melder ausgelöst (Rauch, Wasser, Gas …)", "Alarm"],
       ["locks", "Schloss entriegelt", "Warnung"], ["garage", "Garagentor oder Tor offen", "Warnung"], ["battery", "Batterien kritisch", "Warnung"], ["offline", "Geräte nicht erreichbar", "Hinweis"],
       ["presence_away", "Bewegung erkannt, während niemand zu Hause ist", "Alarm"], ["alarm_panel", "Alarmanlage ausgelöst (z. B. Alarmo)", "Alarm"],
-      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"]];
+      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"], ["appliances", "Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)", "Hinweis"], ["maintenance", "Wartung fällig (Wartungsplaner)", "Hinweis"]];
     const allM = HOUSE_MODES.map((x) => x[0]);
     const mchips = (path, cur) => `<span class="mchips" title="gilt in diesen Hausmodi">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
     const bmodes = (k) => (A.modes && A.modes[k] && A.modes[k].length ? A.modes[k] : BUILTIN_MODES[k] || allM);
@@ -609,6 +666,14 @@ const EinstellungenMixin = (Base) => class extends Base {
       const sv = t.dataset.pushTarget, P = this._draft.push;
       P.targets = t.checked ? [...new Set([...P.targets, sv])] : P.targets.filter((x) => x !== sv);
       this._rerenderSettings();
+      return;
+    }
+    if (t.dataset && t.dataset.termCal && e.type === "change" && this._draft) {
+      const T = this._draft.termine = { ...(this._draft.termine || {}) }, C = T.cals = { ...(T.cals || {}) };
+      if (t.value) C[t.dataset.termCal] = t.value; else delete C[t.dataset.termCal];
+      this._dirtySettings = true;
+      const msg = this.shadowRoot.querySelector(".savebar .msg");
+      if (msg) msg.textContent = "Ungespeicherte Änderungen";
       return;
     }
     if (t.dataset && t.dataset.shadeFace && e.type === "change" && this._draft) {

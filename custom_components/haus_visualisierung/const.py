@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -81,6 +81,8 @@ DEFAULT_LAYOUT: dict = {
             "presence_away": True,     # Bewegung/Präsenz, während niemand zu Hause ist
             "alarm_panel": True,       # Alarmanlage (z. B. Alarmo) ausgelöst
             "mold": True,              # Schimmelrisiko: Raumfeuchte zu hoch – jetzt lüften
+            "appliances": True,        # Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)
+            "maintenance": True,       # Wartungsplaner: Aufgabe fällig
         },
         "modes": {},                   # {feste Regel: [Hausmodi]} – fehlt = Standard (BUILTIN_MODES)
         "contacts_min": 0,             # Fenster erst nach … Minuten melden
@@ -106,7 +108,17 @@ DEFAULT_LAYOUT: dict = {
         "night_end": "06:30",
         "alarmo": "",                  # alarm_control_panel; leer = automatisch (Alarmo)
         "alarmo_sync": False,          # Hausmodus und Alarmanlage koppeln
+        "check": True,                 # Gute-Nacht-/Verlassen-Check vor Nacht und Abwesend
+        "check_devices": [],           # weitere Geräte, die der Check prüft (z. B. Bügeleisen-Steckdose)
         "arm": {"zuhause": "disarm", "nacht": "arm_night", "abwesend": "arm_away", "urlaub": "arm_vacation"},
+    },
+    "presence_sim": {              # Anwesenheits-Simulation (presence.py)
+        "enabled": False,
+        "modes": ["urlaub"],           # läuft in diesen Hausmodi …
+        "switch": "",                  # … oder solange dieser Schalter an ist (input_boolean/switch)
+        "entities": [],                # Lichter und Rollos
+        "weeks": 2,                    # Vorlage aus den letzten … Wochen (Verlauf)
+        "jitter": 15,                  # Schaltzeiten zufällig um bis zu ± … Minuten verschieben
     },
     "escalation": {                # Eskalation: Meldung nach … Minuten nicht quittiert
         "enabled": True,
@@ -133,6 +145,22 @@ DEFAULT_LAYOUT: dict = {
     "forecast": {                  # Karte „Vorhersage“ auf der Übersicht: Wetter und Solarprognose
         "enabled": True, "solar": True,
         "solar_today": "", "solar_tomorrow": "",   # leer = automatisch (Forecast.Solar, Solcast)
+    },
+    "termine": {                   # Müllabfuhr und Termine in Kopfzeile und Bildschirmschoner (Kalender-Entitäten)
+        "enabled": True, "header": True, "saver": True,
+        "days": 7,                     # so viele Tage im Voraus lesen
+        "evening": 17,                 # Abfuhr morgen ab dieser Stunde hervorheben
+        "cals": {},                    # {calendar_id: "waste"|"event"|"-"}, fehlt = Müllabfuhr, wenn der Name passt
+    },
+    "appliances": {                # Haushaltsgeräte: „läuft“/„fertig“, Energie und Kosten je Durchgang (appliances.py)
+        "enabled": True,
+        "auto": True,                  # ohne Einträge: Leistungssensoren nach Namen (Waschmaschine, Trockner, Spülmaschine)
+        "items": [],                   # [{id, name, kind, power, energy, status, door, remaining, start_w, stop_w, stop_min}]
+    },
+    "maintenance": {               # Wartungsplaner: wiederkehrende Aufgaben (erledigt-Daten: maintenance.py)
+        "enabled": True,
+        "lead_days": 14,               # „demnächst“ ab … Tagen vor der Fälligkeit
+        "tasks": [],                   # [{id, title, icon, interval, unit (tage|wochen|monate|jahre), since, note}]
     },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",
