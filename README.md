@@ -33,6 +33,8 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Schnittstelle: [DISPLAY_PROTOKOLL.md](DISPLAY_PROTOKOLL.md) (Protokoll 1; Push und Einrichten ab 1.13.0 mit Firmware 0.2.0).
 - **Wandpanel-Modus** je Gerät (auch per `?wandpanel=1`): Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr,
   Wetter, Hausmodus und Meldungen, automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
+- **Als Standard-Dashboard** (Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“): Home Assistant öffnet
+  statt der Übersicht die Visualisierung, für den eigenen Benutzer, für alle oder nur auf diesem Gerät.
 - **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Technik, Displays, Darstellung) und Sortieren per Ziehen.
 - **Eingebettete Panels** (Solar, Protect, Dashboards) mit fester Navigation und Haus-Farben.
 - **Klingel-Overlay** mit Kamera, Live-Bild und Türöffner (Schalter, Taste, Schloss).

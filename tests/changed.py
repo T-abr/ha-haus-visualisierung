@@ -41,6 +41,7 @@ GRUPPEN_FUER = {
     "modules/geraete.js": {"geraete"},
     "modules/wartung.js": {"wartung"},
     "modules/wanddisplay.js": {"displays"},
+    "modules/standard.js": {"standard"},
     "modules/karten.js": set(),  # Karten für eigene Dashboards: keine Bedienprüfung, nur pytest (Importe)
     # alle Gruppen: grundlagen, modell, basis, bausteine, aktualisierer, bindungen, hausschnitt, stile,
     # warnungen, version, panel.js, panel-ansichten, panel-aktionen, panel-einstellungen, panel-kompakt
