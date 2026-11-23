@@ -371,7 +371,8 @@ async def test_display_doorbell(hass: HomeAssistant, hass_ws_client, freezer: Fr
     reg.async_get_or_create("camera", "unifiprotect", "g4_cam", suggested_object_id="g4_hoch", device_id=dev.id)
     hass.states.async_set("camera.einfahrt", "idle", {"access_token": "falsch"})
     hass.states.async_set("camera.g4_hoch", "idle", {"access_token": "abc", "friendly_name": "Haustür"})
-    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:00:00.000+00:00", {"device_class": "doorbell", "event_type": "ring"})
+    # nach einem Neustart: Ereignis-Entität „unknown“ bis zum ersten Klingeln
+    hass.states.async_set("event.g4_doorbell", "unknown", {"device_class": "doorbell"})
     hass.states.async_set("switch.tueroeffner", "off")
     await _setup(hass)
     store = hass.data[DOMAIN]["store"]
@@ -383,19 +384,26 @@ async def test_display_doorbell(hass: HomeAssistant, hass_ws_client, freezer: Fr
     hub = hass.data[DOMAIN]["displays"]
     assert hub.bell_entity() == "event.g4_doorbell" and hub.bell_camera() == "camera.g4_hoch"
 
-    # Neues Klingel-Ereignis → Overlay; nur Attribute geändert → nichts
-    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:00:00.000+00:00", {"device_class": "doorbell", "event_type": "ring", "x": 1})
-    await hass.async_block_till_done()
-    assert last() is None
-    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:01:00.000+00:00", {"device_class": "doorbell", "event_type": "ring"})
+    # Erstes Klingeln nach dem Neustart (unknown → Zeitstempel) → Overlay
+    now = lambda: dt_util.utcnow().isoformat()  # noqa: E731
+    hass.states.async_set("event.g4_doorbell", now(), {"device_class": "doorbell", "event_type": "ring"})
     await hass.async_block_till_done()
     k = last()
     assert k["t"] == "Es klingelt" and k["s"].startswith("Haustür · ") and k["tuer"] is True and k["offen"] is False
     assert k["bild"] == "http://10.0.0.2:8123/api/camera_proxy/camera.g4_hoch?token=abc&width=432&height=243"
     assert json.loads(hub.payloads["kueche"]["klingel"]) is None
-    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:01:10.000+00:00", {"device_class": "doorbell", "event_type": "ring"})
+    freezer.tick(timedelta(seconds=10))
+    hass.states.async_set("event.g4_doorbell", now(), {"device_class": "doorbell", "event_type": "ring"})
     await hass.async_block_till_done()
     assert last()["t"] == "Es klingelt erneut" and last()["n"] == k["n"] + 1
+    n2 = last()["n"]
+    # nur Attribute geändert, oder Entität nach Verbindungsabbruch wieder da (alter Zeitstempel) → kein Klingeln
+    st = hass.states.get("event.g4_doorbell").state
+    hass.states.async_set("event.g4_doorbell", st, {"device_class": "doorbell", "event_type": "ring", "x": 1})
+    hass.states.async_set("event.g4_doorbell", "unavailable", {"device_class": "doorbell"})
+    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:00:00+00:00", {"device_class": "doorbell", "event_type": "ring"})
+    await hass.async_block_till_done()
+    assert last()["n"] == n2
 
     # „Tür öffnen“ vom Display: Schalter ein, nach dem Impuls aus; Overlay bleibt noch kurz offen
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "klingel:tuer"}, blocking=True)

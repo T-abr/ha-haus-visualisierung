@@ -4,6 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.16.1 – 2026-11-23
+
+### Behoben – Wanddisplay: Klingel
+- Das Wanddisplay reagierte nicht auf echtes Klingeln, nur auf „Klingel testen“: Nach einem Neustart von Home Assistant steht die Klingel-Entität (z. B. UniFi Protect) auf „unbekannt“, bis zum ersten Klingeln, und dieser Wechsel wurde verworfen. Jetzt zählt jedes frische Klingel-Ereignis (höchstens 60 s alt); eine Entität, die nach einem Verbindungsabbruch mit altem Zeitstempel zurückkommt, löst weiterhin nichts aus.
+
+### Performance
+- Unverändert gegenüber 1.16.0: nur die Prüfung im Backend bei Zustandsänderungen der Klingel-Entität, das Panel ist nicht betroffen.
+
+### Tests
+- `test_display.py`: erstes Klingeln nach dem Neustart (unbekannt → Ereignis), Entität nach Verbindungsabbruch wieder da (kein Klingeln).
+
 ## 1.16.0 – 2026-11-23
 
 Mitgelieferte Firmware **0.5.0** – Update im Reiter Displays über „Update auf 0.5.0“.
