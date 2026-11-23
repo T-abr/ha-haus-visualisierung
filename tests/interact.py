@@ -1498,6 +1498,76 @@ def prognose():
     pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
     check("PR: abgeschaltet – keine Karte", pg.locator(f"{P} .fcast").count() == 0)
 
+@gruppe("geraete")
+def geraete():
+    # ---------- Übersicht: Karte „Geräte“ (Waschmaschine, Trockner, Spülmaschine) aus sensor.haus_geraete ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(600)
+    check("GE: ohne Sensor keine Karte", pg.locator(f"{P} .appl").count() == 0)
+    pg.evaluate("""(() => { const a = window.__api, now = Date.now() / 1000;
+      a.set('sensor.waschmaschine_leistung', '1900', { friendly_name: 'Waschmaschine Leistung', device_class: 'power', unit_of_measurement: 'W' });
+      a.set('sensor.haus_geraete', '1', { geraete: [
+        { id: 'wash', name: 'Waschmaschine', kind: 'wash', icon: 'mdi:washing-machine', state: 'laeuft', since: now - 42 * 60, start: now - 42 * 60, end: null, kwh: 0.61, cost: 0.12, own: null,
+          power: 'sensor.waschmaschine_leistung', status: '', door: '', remaining: '', auto: true, n: 3, avg_min: 100, avg_kwh: 0.9, avg_cost: 0.25, last: { start: now - 90000, end: now - 84000, kwh: 0.92, cost: 0.28, own: 0.4 } },
+        { id: 'dish', name: 'Spülmaschine', kind: 'dish', icon: 'mdi:dishwasher', state: 'fertig', since: now - 12 * 60, start: now - 160 * 60, end: now - 12 * 60, kwh: 1.05, cost: 0.21, own: 0.35,
+          power: '', status: '', door: '', remaining: '', auto: false, n: 1, avg_min: 148, avg_kwh: 1.05, avg_cost: 0.21, last: null },
+        { id: 'dry', name: 'Trockner', kind: 'dry', icon: 'mdi:tumble-dryer', state: 'aus', since: now - 86400, start: null, end: null, kwh: 0, cost: 0, own: null,
+          power: '', status: '', door: '', remaining: '', auto: false, n: 2, avg_min: 90, avg_kwh: 2.2, avg_cost: 0.6, last: { start: now - 200000, end: now - 194600, kwh: 2.4, cost: 0.66, own: null } } ] });
+      const p = document.querySelector('haus-visualisierung-panel'); p._dirty = true; p._schedule(); })()"""); pg.wait_for_timeout(400)
+    card = pg.locator(f"{P} .cside .appl")
+    check("GE: Cockpit – Karte in der rechten Spalte", card.count() == 1 and card.locator(".apl").count() == 3)
+    check("GE: Kopf zählt fertig und laufend", card.locator(".aplsum").inner_text().replace("\xa0", " ") == "1 fertig · 1 läuft")
+    w = card.locator(".apl.laeuft").inner_text().replace("\xa0", " ")
+    check("GE: läuft – seit, Restzeit geschätzt, Leistung, bisher", "läuft seit 42 min" in w and "noch ca. 58 min" in w and "1,9 kW" in w and "0,61 kWh · 0,12 €" in w)
+    d = card.locator(".apl.fertig").inner_text().replace("\xa0", " ")
+    check("GE: fertig – seit, Dauer, Energie, Kosten, eigener Strom", "fertig seit 12 min" in d and "Dauer 2:28 h" in d and "1,05 kWh · 0,21 € (35 % eigener Strom)" in d)
+    t = card.locator(".apl.aus").inner_text().replace("\xa0", " ")
+    check("GE: aus – letzter Durchgang und Schnitt", "zuletzt 2,40 kWh · 0,66 €" in t and "Ø 0,60 €" in t)
+    # Netz bezieht 5,5 kW (Harness) → kein PV-Tipp; Einspeisung 2 kW → Tipp „jetzt starten“
+    check("GE: Netzbezug – kein PV-Tipp", "Überschuss" not in card.locator(".apltip").inner_text().replace("\xa0", " "))
+    pg.evaluate("window.__api.set('sensor.netz_leistung', '-2100', { unit_of_measurement: 'W', device_class: 'power' })"); pg.wait_for_timeout(200)
+    check("GE: Einspeisung – Tipp jetzt starten", "Jetzt starten: 2,9 kW PV-Überschuss" in card.locator(".apltip").inner_text().replace("\xa0", " "))
+    # Meldung: Hinweis „Spülmaschine fertig“ in der Warnkarte
+    check("GE: Meldung in der Warnkarte", "Spülmaschine fertig" in pg.locator(f"{P} .cside .acard").inner_text().replace("\xa0", " "))
+    # Quittieren über „Erledigt“
+    card.locator(".aplack").click(); pg.wait_for_timeout(300)
+    acks = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "appliance_ack"]
+    check("GE: Erledigt schickt appliance_ack", len(acks) == 1 and acks[0][2]["appliance"] == "dish")
+    check("GE: danach aus, keine Meldung mehr", card.locator(".apl.fertig").count() == 0 and "Spülmaschine fertig" not in pg.locator(f"{P} .cside .acard").inner_text().replace("\xa0", " "))
+    # Handy (Aktiv-Fokus): nichts ragt heraus
+    pg.set_viewport_size({"width": 390, "height": 844})
+    pg.goto(dense + "?ov=fokus"); pg.wait_for_timeout(600)
+    pg.evaluate("""(() => { const a = window.__api, now = Date.now() / 1000;
+      a.set('sensor.haus_geraete', '1', { geraete: [{ id: 'wash', name: 'Waschmaschine mit sehr langem Namen im Keller', kind: 'wash', icon: 'mdi:washing-machine', state: 'fertig', since: now - 300, start: now - 6300, end: now - 300, kwh: 0.9, cost: 0.27, own: 0.5, power: '', remaining: '', n: 1, avg_min: 100, last: null }] });
+      const p = document.querySelector('haus-visualisierung-panel'); p._dirty = true; p._schedule(); })()"""); pg.wait_for_timeout(400)
+    c2 = pg.locator(f"{P} .appl")
+    check("GE: Aktiv-Fokus – Karte da", c2.count() == 1 and c2.locator(".aplack").count() == 1)
+    over = pg.evaluate(f"(() => {{ const c = {R}.querySelector('.appl'); return c.scrollWidth - c.clientWidth; }})()")
+    check("GE: Handy – nichts ragt aus der Karte", over <= 1 and pg.evaluate(WIDE) == [])
+    # Einstellungen → Technik: Gerät hinzufügen, speichern
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500); stab(pg, "technik")
+    sec = pg.locator(f'{P} [data-sec="appliances"]')
+    check("GE: Einstellungen – Abschnitt Haushaltsgeräte", sec.count() == 1 and sec.locator('[data-set="appliances.enabled"]').count() == 1)
+    sec.locator('[data-act="s-appl-add"]').first.click(); pg.wait_for_timeout(200)
+    sec = pg.locator(f'{P} [data-sec="appliances"]')
+    sec.locator('[data-set="appliances.items.0.name"]').fill("Waschmaschine Keller")
+    sec.locator('[data-set="appliances.items.0.power"]').fill("sensor.waschmaschine_leistung")
+    sec.locator('[data-set="appliances.items.0.stop_min"]').fill("12")
+    sec.locator('[data-set="appliances.items.0.stop_min"]').dispatch_event("change")
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.appliances)")
+    it = (saved or {}).get("items") or [{}]
+    check("GE: Gerät gespeichert", it[0].get("name") == "Waschmaschine Keller" and it[0].get("power") == "sensor.waschmaschine_leistung" and it[0].get("stop_min") == 12)
+    stab(pg, "alarme")
+    check("GE: feste Regel „Haushaltsgerät fertig“", pg.locator(f'{P} [data-set="alerts.builtin.appliances"]').count() == 1)
+    # Schoner: Hinweis „… fertig seit …“
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(500)
+    pg.evaluate("""(() => { const a = window.__api, now = Date.now() / 1000;
+      a.set('sensor.haus_geraete', '1', { geraete: [{ id: 'dry', name: 'Trockner', kind: 'dry', icon: 'mdi:tumble-dryer', state: 'fertig', since: now - 600, start: now - 6000, end: now - 600, kwh: 2, cost: 0.6, power: '', remaining: '', n: 1, last: null }] });
+      document.querySelector('haus-visualisierung-panel')._saverShow(); })()"""); pg.wait_for_timeout(300)
+    check("GE: Schoner zeigt fertiges Gerät", "Trockner fertig seit 10 min" in pg.locator(f"{P} .saver .svhint").inner_text().replace("\xa0", " "))
+
 @gruppe("energie")
 def energie_zeitraum():
     # ---------- Energie-Seite: Woche, Monat, Jahr als Energie je Tag bzw. Monat (1.9.0) ----------

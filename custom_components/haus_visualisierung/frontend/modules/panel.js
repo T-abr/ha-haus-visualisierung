@@ -73,7 +73,7 @@ class HausVisualisierungPanel extends AktionenMixin(EinstellungenMixin(KompaktMi
     this._clockT = setInterval(() => { if (!document.hidden) this._tickClock(); }, 15000);
     this._alertT = setInterval(() => {
       if (document.hidden || !this._model) return;
-      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"], [data-u="shade"], [data-u="fcast"]').forEach((el) => UPD[el.dataset.u].run(el, this));
+      this.shadowRoot.querySelectorAll('[data-u="alerts"], [data-k="alerts"], [data-u="alarmpage"], [data-u="navbadge"], [data-u="shade"], [data-u="fcast"], [data-u="appl"]').forEach((el) => UPD[el.dataset.u].run(el, this));
     }, 30000);
     // Wettervorhersage: neue Daten frischen Kopfzeile, Karten „Sonne & Wetter“ und „Vorhersage“ sowie Bildschirmschoner auf
     this._onForecast = this._onForecast || (() => {

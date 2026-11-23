@@ -258,6 +258,45 @@ def _forecast(raw: dict) -> dict:
     return out
 
 
+_KINDS = ("wash", "dry", "dish", "other")
+_UML = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+
+
+def _appliances(raw: dict) -> dict:
+    """Haushaltsgeräte: Schalter und Geräte mit Leistungs-, Energie-, Status-, Tür- und Restzeit-Entität."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["appliances"])
+    for key in ("enabled", "auto"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    items, ids = [], set()
+    for it in raw.get("items", [])[:12] if isinstance(raw.get("items"), list) else []:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name", ""))[:40].strip() if isinstance(it.get("name"), str) else ""
+        item = {
+            "name": name,
+            "kind": it.get("kind") if it.get("kind") in _KINDS else "",
+            "power": _entity(it.get("power")),
+            "energy": _entity(it.get("energy")),
+            "status": _entity(it.get("status")),
+            "door": _entity(it.get("door")),
+            "remaining": _entity(it.get("remaining")),
+            "start_w": _num(it.get("start_w"), 1, 2000, 10),
+            "stop_w": _num(it.get("stop_w"), 0.5, 2000, 5),
+            "stop_min": _int(it.get("stop_min"), 1, 60, 5),
+        }
+        if item["stop_w"] > item["start_w"]:
+            item["stop_w"] = item["start_w"]
+        base = re.sub(r"[^a-z0-9]+", "_", str(it.get("id") or name or item["power"].split(".")[-1] or "geraet").lower().translate(_UML)).strip("_")[:30] or "geraet"
+        aid, n = base, 2
+        while aid in ids:
+            aid, n = f"{base}_{n}", n + 1
+        ids.add(aid)
+        items.append({"id": aid, **item})
+    out["items"] = items
+    return out
+
+
 def _price(raw: dict) -> dict:
     """Strompreis: Sensor, Schalter und Preise in ct/kWh."""
     out = copy.deepcopy(DEFAULT_LAYOUT["price"])
@@ -386,6 +425,8 @@ def sanitize(raw: Any) -> dict:
         result["forecast"] = _forecast(raw["forecast"])
     if isinstance(raw.get("price"), dict):
         result["price"] = _price(raw["price"])
+    if isinstance(raw.get("appliances"), dict):
+        result["appliances"] = _appliances(raw["appliances"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 

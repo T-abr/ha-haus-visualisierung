@@ -426,6 +426,21 @@ details[open]>summary.shead{padding-bottom:2px}
 .fchint:empty{display:none}.fchint{margin-top:8px}
 .fchb{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:0;border-radius:10px;background:rgba(255,196,87,.12);color:inherit;font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
 .fchb>span{flex:1;min-width:0}.fchb ha-icon{--mdc-icon-size:18px;color:var(--hv-warm);flex:none}.fchb ha-icon:last-child{color:var(--hv-dim)}
+.appl{padding:10px 12px 12px;margin-bottom:12px}.appl.side{margin-bottom:0;border-radius:16px}
+.aplh{display:flex;align-items:center;gap:8px;margin-bottom:6px;min-height:26px}.aplh>ha-icon{--mdc-icon-size:20px;color:var(--hv-dim)}.aplh b{font-size:15px;font-weight:600}
+.aplsum{font-size:12.5px;color:var(--hv-dim)}.appl.done .aplsum{color:var(--hv-ok);font-weight:600}
+.apls{display:flex;flex-direction:column;gap:4px}
+.apl{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;background:var(--hv-surface-2)}
+.aplic{display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;border:0;border-radius:10px;background:none;color:var(--hv-dim);cursor:pointer}
+.aplic ha-icon{--mdc-icon-size:22px}.apl.laeuft .aplic{color:var(--hv-accent)}.apl.fertig .aplic{color:var(--hv-ok)}
+.apl.laeuft .aplic ha-icon{animation:aplspin 3s linear infinite}@keyframes aplspin{0%,80%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+.apln{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.apln b{font-size:14px;font-weight:600}.apln small{font-size:12px;color:var(--hv-dim);overflow-wrap:anywhere}
+.apl.fertig .aplst{color:var(--hv-ok);font-weight:600}.apl.laeuft .aplst{color:var(--hv-text)}
+.aplack{flex:none}
+.apltip:empty{display:none}.apltip{margin-top:8px}
+.apltp{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;background:var(--hv-surface-2);font-size:12.5px}
+.apltp ha-icon{--mdc-icon-size:18px;color:var(--hv-dim);flex:none}.apltp.pv{background:rgba(255,196,87,.12)}.apltp.pv ha-icon{color:var(--hv-warm)}
+@media (prefers-reduced-motion:reduce){.apl.laeuft .aplic ha-icon{animation:none}}
 .set p.hint.warn{color:var(--hv-warm)}
 .svhint{font-size:clamp(14px,2vw,19px);color:#ffc277}.svhint:empty{display:none}.svhint span{display:inline-flex;align-items:center;gap:8px}.svhint ha-icon{--mdc-icon-size:1.2em}
 .cktog{display:inline-flex;align-items:center;gap:6px}.cktog small{font-size:11.5px;color:var(--hv-dim);margin-right:2px}

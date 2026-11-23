@@ -192,6 +192,15 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         if (A.type === "knx" && !A.address) { const e = new Error("Aktion unvollständig (Entität, Gruppenadresse oder TTS-Dienst fehlt)"); e.code = "invalid"; throw e; }
         return { calls: A.type === "knx" ? [{ domain: "knx", service: "send", data: { address: A.address, payload: A.payload } }] : [{ domain: "script", service: "turn_on", data: {} }] };
       }
+      if (msg.type.endsWith("/appliance_ack")) {
+        // wie das Backend: Gerät „fertig“ → „aus“
+        api.log.push(["ws", "appliance_ack", msg]);
+        const st = hass.states["sensor.haus_geraete"], l = (st && st.attributes.geraete) || [];
+        if (!l.some((a) => a.id === msg.appliance && a.state === "fertig")) { const e = new Error("Gerät ist nicht fertig"); e.code = "not_found"; throw e; }
+        const geraete = l.map((a) => (a.id === msg.appliance ? { ...a, state: "aus", since: Date.now() / 1000 } : a));
+        api.set("sensor.haus_geraete", String(geraete.filter((a) => a.state === "fertig").length), { geraete });
+        return { ok: true };
+      }
       if (msg.type.endsWith("/alarm_code")) { api.log.push(["ws", "alarm_code", msg]); api.alarmSnap.mode = { ...(api.alarmSnap.mode || {}), code: !!msg.code }; api.alarmPush(); return { code: !!msg.code }; }
       if (msg.type.endsWith("/alarm_log")) { api.log.push(["ws", "alarm_log", msg]); return { log: api.alarmSnap.log.filter((e) => e.ts >= Date.now() / 1000 - msg.days * 86400), stats: api.alarmStats || [] }; }
       if (msg.type.endsWith("/push_info")) return { services: ["mobile_app_iphone_tobias", "mobile_app_pixel", "persistent_notification"], targets: ["mobile_app_iphone_tobias", "mobile_app_pixel"], active: [] };

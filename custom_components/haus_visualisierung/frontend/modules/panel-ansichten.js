@@ -11,6 +11,7 @@ import { heatCardHTML, wbCardHTML } from "./technik.js";
 import { climRooms, climTrendHTML, humRooms } from "./klima.js";
 import { shadeCardHTML, weatherIdOf } from "./wetter.js";
 import { fcastCardHTML } from "./prognose.js";
+import { applCardHTML } from "./geraete.js";
 import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
@@ -85,12 +86,12 @@ const AnsichtenMixin = (Base) => class extends Base {
     if (isDense(L) && ov === "fokus") return this._ovFokus(fav);
     if (isDense(L)) {
       const tabs = this._isNarrow ? (this._floorTab && m.floors.some((f) => f.id === this._floorTab) ? this._floorTab : m.floors[0].id) : null;
-      return `${this._topbarDense()}${alertsCardHTML("slim")}${fcastCardHTML(h, L)}${houseHTML(m, L, h, { dense: true, tab: tabs })}
+      return `${this._topbarDense()}${alertsCardHTML("slim")}${fcastCardHTML(h, L)}${applCardHTML(h, L)}${houseHTML(m, L, h, { dense: true, tab: tabs })}
         ${fav.length ? `<div class="secttitle">${icon("mdi:star")}Favoriten</div><div class="glass"><div class="rows favrows">${fav.map((e) => rowHTML(h, e, null)).join("")}</div></div>` : ""}`;
     }
     return `${this._topbar()}${this._chips()}
       ${houseHTML(m, L, this._hass)}
-      ${fcastCardHTML(h, L)}
+      ${fcastCardHTML(h, L)}${applCardHTML(h, L)}
       ${fav.length ? `<div class="secttitle">${icon("mdi:star")}Favoriten</div><div class="glass"><div class="tiles">${fav.map((e) => tileHTML(h, e, null)).join("")}</div></div>` : ""}`;
   }
 
@@ -303,6 +304,7 @@ const AnsichtenMixin = (Base) => class extends Base {
           ${alertsCardHTML()}
           ${rows ? `<div class="glass ecard" data-u="roof" data-act="roof"><div class="qhead"><span class="sun">${icon("mdi:white-balance-sunny")}</span>Energie<span class="sp"></span>${icon("mdi:chevron-right")}</div>${rows}</div>` : ""}
           ${fcastCardHTML(h, L, "side")}
+          ${applCardHTML(h, L, "side")}
           <div class="glass qcard"><div class="qhead">${icon("mdi:gesture-tap")}Schnellzugriff</div><div class="qbtns">${this._quickBtns()}</div>${scenes ? `<div class="qscenes">${scenes}</div>` : ""}</div>
           ${other.length ? `<div class="glass qcard"><div class="qhead">${icon("mdi:star")}Favoriten</div><div class="rows">${other.map((e) => rowHTML(h, e, null)).join("")}</div></div>` : ""}
         </aside>
@@ -312,7 +314,7 @@ const AnsichtenMixin = (Base) => class extends Base {
   _ovSpalten(fav) {
     const m = this._model, h = this._hass;
     const other = fav.filter((e) => !["scene", "script"].includes(dom(e)));
-    return `${this._topbarDense()}${this._ebar(fav)}${alertsCardHTML("slim")}${fcastCardHTML(h, this._layout)}
+    return `${this._topbarDense()}${this._ebar(fav)}${alertsCardHTML("slim")}${fcastCardHTML(h, this._layout)}${applCardHTML(h, this._layout)}
       <div class="fcols">${m.floors.map((f) => `<section class="fcol glass${f.outdoor ? " out" : ""}" data-u="floor" data-floor="${esc(f.id)}">${this._floorHead(f)}
         <div class="rrows">${f.areas.map(roomRowHTML).join("")}</div></section>`).join("")}</div>
       ${other.length ? `<div class="secttitle">${icon("mdi:star")}Favoriten</div><div class="glass"><div class="rows favrows">${other.map((e) => rowHTML(h, e, null)).join("")}</div></div>` : ""}`;
@@ -323,7 +325,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     const active = focusRooms(h, m, this._layout);
     const calm = m.floors.map((f) => [f, f.areas.filter((a) => !active.includes(a))]).filter(([, l]) => l.length);
     const other = fav.filter((e) => !["scene", "script"].includes(dom(e)));
-    return `${this._topbarDense()}${alertsCardHTML("fokus")}${this._ebar(fav)}${fcastCardHTML(h, this._layout)}
+    return `${this._topbarDense()}${alertsCardHTML("fokus")}${this._ebar(fav)}${fcastCardHTML(h, this._layout)}${applCardHTML(h, this._layout)}
       <div data-u="focus" data-ids="${esc(active.map((a) => a.id).join(","))}">
         ${active.length
           ? `<div class="secttitle">${icon("mdi:flash")}Jetzt aktiv<span class="gc">${active.length} ${active.length === 1 ? "Raum" : "Räume"}</span></div><div class="factive">${active.map((a) => roomTileHTML(a, true, { act: true })).join("")}</div>`

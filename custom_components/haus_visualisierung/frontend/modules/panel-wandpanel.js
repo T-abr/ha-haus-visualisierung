@@ -6,6 +6,7 @@ import { WEATHER_ICON } from "./aktualisierer.js";
 import { curMode, evalAlerts, LEVEL_ICON, LEVELS } from "./warnungen.js";
 import { finite } from "./verlauf.js";
 import { dayOf, fcDays, shadeHeadline, shadeHints } from "./wetter.js";
+import { applSaverHint } from "./geraete.js";
 
 const WandpanelMixin = (Base) => class extends Base {
   /* ---------- Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite ---------- */
@@ -164,7 +165,8 @@ const WandpanelMixin = (Base) => class extends Base {
     parts.push(`<span>${icon(MODE_ICON[md])}${MODE_NAME[md]}</span>`);
     setHtml(el.querySelector(".svrow"), parts.join(""));
     const hl = this._model ? shadeHeadline(shadeHints(h, this._model, this._layout)) : "";
-    setHtml(el.querySelector(".svhint"), hl ? `<span>${icon("mdi:window-shutter-alert")}${esc(hl)}</span>` : "");
+    const ap = applSaverHint(h, this._layout);
+    setHtml(el.querySelector(".svhint"), [ap ? `<span class="svappl">${icon(ap.icon)}${esc(ap.text)}</span>` : "", hl ? `<span>${icon("mdi:window-shutter-alert")}${esc(hl)}</span>` : ""].filter(Boolean).join("<br>"));
     const al = this._model ? evalAlerts(h, this._model, this._layout) : [];
     const top = al.length ? al.reduce((a, b) => (LEVELS[b.level] > LEVELS[a.level] ? b : a)) : null;
     setHtml(el.querySelector(".svstat"), top ? `<span class="${top.level}">${icon(LEVEL_ICON[top.level])}${al.length === 1 ? esc(top.title) : `${al.length} Meldungen · ${esc(top.title)}`}</span>` : `<span class="ok">${icon("mdi:shield-check")}Alles in Ordnung</span>`);
