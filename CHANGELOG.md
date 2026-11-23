@@ -4,6 +4,35 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.15.0 – 2026-11-23
+
+Mitgelieferte Firmware **0.4.0** – Update im Reiter Displays über „Update auf 0.4.0“ (ab 0.3.0 über das Netz).
+Enthält auch alle Änderungen aus 1.14.0 (Standard-Dashboard, Firmware-Updates über das Netz), die nicht einzeln veröffentlicht wurden.
+
+### Neu – Wanddisplay: Bildschirmschoner und farbige Werte
+- **Bildschirmschoner** wie am Wandpanel, je Display unter Einstellungen → Displays einschaltbar (Wartezeit, Helligkeit): große Uhr, Datum, Wetter, PV, morgen, Hausmodus, Müll und Termine, fertige Geräte, Meldungen. Tippen weckt, ein Alarm auch; das Display springt dabei auf Start.
+- **Farbige Werte** in den Kacheln wie im Panel: „Haus **612 W** · Netz **−2,4 kW**“ (blau/violett), Autarkie hervorgehoben, Luftfeuchte gedimmt, „lüften“ blau.
+
+### Neu – Wanddisplay: eigene Seiten
+- **Einstellungen → Displays → „Eigene Seiten“**: je Display bis zu drei Seiten mit Name und Symbol, auf jeder bis zu sechs Entitäten (Licht, Schalter, Szenen, Skripte, Sensoren …) mit eigenem Namen, Symbol und Reihenfolge. Die Seiten erscheinen im Dock nach den festen Seiten; ein Tipp auf eine Kachel schaltet bzw. löst aus, Sensoren zeigen ihren Wert. Wirkt nach dem Speichern sofort.
+- Symbole nur aus dem Vorrat der Firmware (jetzt 120, u. a. Lampen, Rollos, Steckdosen, Klima, Medien); Entitäts-Symbole, die das Display nicht kennt, ersetzt die Integration durch eines passend zur Domäne statt „?“.
+- Braucht Firmware 0.4.0 (Bereich `eigene`, Ziel `eigen:<seite>:<kachel>`, kein neues Protokoll); ältere Firmware ignoriert die Seiten.
+
+### Behoben – Wanddisplay
+- Wetter zeigt bei leichtem Frost „0°“ statt „-0°“.
+- Hintergrund mit dem Verlauf der Visualisierung (vorher einfarbig), auf 16 Bit gerastert gegen Streifen.
+- Hintergrundlicht dimmt mit 25 kHz statt 150 Hz: kein Surren oder Fiepen mehr.
+- **Kacheln lassen sich bedienen**: Ein Tipp auf eine Entitäts-Kachel schaltet jetzt (Licht, Schalter, Lüfter, Abdeckung, Schloss, Klima, Mediaplayer umschalten; Szene, Skript, Taster auslösen). Die Firmware meldete den Tipp bisher nicht. Energie-, Klima-, Meldungs- und Geräte-Kacheln öffnen dann ihre Seite.
+
+### Performance
+- Großes Testhaus (`tests/perf/measure.py`): Aufbau 6,6–26,3 ms je Seite (Übersicht 16,6–21,4 ms), 0 Neuaufbauten, hass-Setter Ø 22–33 µs – unverändert; eigene Seiten und Schoner werden nur im Reiter „Displays“ gebaut. Im Backend gehen an die Geräte weiter nur geänderte Bereiche; der Schoner-Inhalt wird nur gerechnet, wenn er eingeschaltet ist. Auf dem Display liegt der Hintergrund als fertiges Bild im Flash (≈ 460 kB), LVGL zeichnet nur geänderte Flächen neu.
+
+### Tests
+- `test_display.py`: Tipp auf Kacheln (`kachel:N`), `tap_service`, eigene Seiten (Prüfen, Push, Tipp).
+- Bedienprüfung „displays“: eigene Seite anlegen, Entitäten, Symbol, Reihenfolge, Bildschirmschoner, Speichern.
+- `test_display.py`: Bildschirmschoner (Einstellungen, Inhalt), farbige Werte (`sr`/`vr`).
+- Testumgebung: Preis-Statistik im Harness folgt dem festen Stundengang (nie negativ); die Prüfung „Kosten mit dem Stundenpreis“ im Rückblick hing sonst von der Uhrzeit des Testlaufs ab (PR #37).
+
 ## 1.14.0 – 2026-11-23
 
 ### Neu – Als Standard-Dashboard von Home Assistant

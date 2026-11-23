@@ -57,6 +57,7 @@ DEFAULT_TILES = ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"]
 # Farben wie im Panel (stile.js)
 C_WARM, C_COOL, C_OK, C_ALERT, C_HEAT, C_ACCENT, C_GRID, C_DIM = (
     "#ffc457", "#63c7ff", "#4fd18b", "#ff6b5b", "#ff8a3d", "#5aa0ff", "#b39cff", "#9aa3b2")
+C_TEXT = "#eef2f8"
 MODES = [("zuhause", "Zuhause", "home-account", C_OK), ("nacht", "Nacht", "weather-night", C_ACCENT),
          ("abwesend", "Abwesend", "home-export-outline", C_WARM), ("urlaub", "Urlaub", "airplane", C_GRID)]
 MODE_INFO = {k: (n, i, f) for k, n, i, f in MODES}
@@ -100,6 +101,8 @@ CAL_TTL = 15 * 60
 # ---------- Formatierung (deutsch) ----------
 def de(v: float, digits: int = 1) -> str:
     txt = f"{v:,.{digits}f}"
+    if txt.startswith("-") and not txt.strip("-0.,"):  # -0,2 auf 0 Stellen ist „0“, nicht „-0“
+        txt = txt[1:]
     return txt.replace(",", " ").replace(".", ",").replace(" ", ".")
 
 
@@ -136,6 +139,88 @@ def slug(value: Any) -> str:
 def device_service(device: str) -> str:
     """Name des ESPHome-Dienstes, über den das Gerät seine Inhalte bekommt (wie ESPHome ihn bildet)."""
     return f"{device.replace('-', '_')}_{SERVICE_DATA}"
+
+
+TOGGLE_DOMAINS = ("light", "switch", "fan", "input_boolean", "cover", "siren", "humidifier", "media_player", "climate")
+PRESS = {"button": ("button", "press"), "input_button": ("input_button", "press"),
+         "scene": ("scene", "turn_on"), "script": ("script", "turn_on")}
+
+
+def rc(text: Any, color: str) -> str:
+    """Farbiger Abschnitt für Texte mit LVGL-Recolor („#rrggbb Text#“, Felder sr/vr ab Firmware 0.4.0)."""
+    return f"#{color[1:]} {str(text).replace('#', '')}#"
+
+
+def tap_service(eid: str, st: State | None) -> tuple[str, str] | None:
+    """Dienst für einen Tipp auf eine entity:-Kachel (None = nur anzeigen)."""
+    domain = eid.split(".", 1)[0]
+    if domain == "lock":
+        return ("lock", "lock" if st and st.state != "locked" else "unlock")
+    if domain in PRESS:
+        return PRESS[domain]
+    if domain in TOGGLE_DOMAINS:
+        return ("homeassistant", "toggle")
+    return None
+
+
+# Symbole, die die Firmware kennt (tools/icons.txt im Repository ha-haus-display); andere zeigt sie als „?“
+DISPLAY_ICONS = frozenset({
+    "air-conditioner", "airplane", "alarm-light", "alert", "alert-circle", "arrow-left", "battery", "battery-70",
+    "bed", "bell", "bell-alert", "biohazard", "blinds", "bottle-wine-outline", "calendar", "calendar-clock", "car",
+    "cctv", "ceiling-light", "chart-donut", "check", "check-circle-outline", "circle-outline", "close", "coffee",
+    "currency-eur", "desk-lamp", "door", "door-closed", "door-open", "eye", "fan", "fan-off", "fire", "flash",
+    "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump",
+    "help-circle-outline", "home", "home-account", "home-export-outline", "home-lightning-bolt", "home-thermometer",
+    "home-variant", "lamp", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on",
+    "lightbulb-outline", "lightning-bolt", "lock", "lock-alert", "lock-open", "lock-open-variant", "motion-sensor",
+    "music", "newspaper-variant-outline", "palette", "pool", "power", "power-plug", "power-plug-outline",
+    "power-socket-eu", "radiator", "recycle", "robot-vacuum", "script-text", "shield-check", "shield-home",
+    "shield-lock", "shower", "silverware-fork-knife", "snowflake", "sofa", "sofa-outline", "solar-power-variant",
+    "speaker", "speaker-play", "sprinkler", "star", "string-lights", "television", "thermometer", "thermostat",
+    "toggle-switch", "toggle-switch-off-outline", "transmission-tower", "trash-can-outline", "tree-outline",
+    "update", "view-dashboard", "washing-machine", "water", "water-percent", "weather-cloudy", "weather-fog",
+    "weather-hail", "weather-lightning", "weather-lightning-rainy", "weather-night", "weather-partly-cloudy",
+    "weather-pouring", "weather-rainy", "weather-snowy", "weather-snowy-rainy", "weather-sunny", "weather-windy",
+    "weather-windy-variant", "window-closed", "window-open-variant", "window-shutter", "window-shutter-open",
+})
+DOMAIN_ICON = {"light": "lightbulb", "switch": "toggle-switch", "fan": "fan", "cover": "window-shutter", "lock": "lock",
+               "climate": "thermostat", "media_player": "television", "scene": "palette", "script": "script-text",
+               "button": "gesture-tap-button", "input_button": "gesture-tap-button", "input_boolean": "toggle-switch",
+               "binary_sensor": "eye", "sensor": "gauge", "siren": "bell", "humidifier": "water-percent"}
+CUSTOM_PAGES, CUSTOM_TILES = 3, 6
+ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+
+
+def display_icon(want: Any, eid: str, st: State | None) -> str:
+    """Symbol für das Display: gewünschtes bzw. das der Entität, sonst passend zur Domäne (nur DISPLAY_ICONS)."""
+    for cand in (want, st.attributes.get("icon") if st else None):
+        name = str(cand or "").removeprefix("mdi:")
+        if name in DISPLAY_ICONS:
+            return name
+    domain = eid.split(".", 1)[0]
+    if domain == "light" and st is not None and is_on(st):
+        return "lightbulb-on"
+    if domain == "lock" and st is not None and st.state == "unlocked":
+        return "lock-open"
+    return DOMAIN_ICON.get(domain, "circle-outline")
+
+
+def sanitize_custom(raw: Any) -> list[dict]:
+    """Eigene Seiten eines Displays: bis zu drei, je bis zu sechs Entitäten mit eigenem Namen und Symbol."""
+    out = []
+    for pg in raw[:20] if isinstance(raw, list) else []:
+        if not isinstance(pg, dict) or len(out) >= CUSTOM_PAGES:
+            continue
+        tiles = []
+        for t in pg.get("tiles", [])[:30] if isinstance(pg.get("tiles"), list) else []:
+            if len(tiles) < CUSTOM_TILES and isinstance(t, dict) and isinstance(t.get("entity"), str) and ENTITY_RE.match(t["entity"]):
+                ic = str(t.get("icon") or "").removeprefix("mdi:")
+                tiles.append({"entity": t["entity"], "name": str(t.get("name") or "")[:30],
+                              "icon": ic if ic in DISPLAY_ICONS else ""})
+        ic = str(pg.get("icon") or "").removeprefix("mdi:")
+        out.append({"name": str(pg.get("name") or f"Seite {len(out) + 1}")[:20].strip(),
+                    "icon": ic if ic in DISPLAY_ICONS else "view-dashboard", "tiles": tiles})
+    return out
 
 
 def sanitize_displays(raw: Any) -> list[dict]:
@@ -177,6 +262,10 @@ def sanitize_displays(raw: Any) -> list[dict]:
             "bright_night": _int("bright_night", 0, 100, 10),
             "wake": d.get("wake", True) is not False,
             "device": dev,
+            "custom": sanitize_custom(d.get("custom")),
+            "saver": d.get("saver") is True,
+            "saver_min": _int("saver_min", 1, 120, 5),
+            "saver_bright": _int("saver_bright", 0, 100, 20),
         })
     return out
 
@@ -270,6 +359,7 @@ class DisplayHub:
         ents = {v for v in (c or {}).values() if isinstance(v, str) and "." in v}
         ents |= set(self.monitor._all)
         ents |= {e for d in self.displays for t in d["tiles"] if t.startswith("entity:") for e in [t[7:]]}
+        ents |= {t["entity"] for d in self.displays for pg in d.get("custom", []) for t in pg["tiles"]}
         return ents
 
     @callback
@@ -583,15 +673,17 @@ class DisplayHub:
             F = self.energy_now()
             if F:
                 net = F["grid"]
+                netz = f"{'−' if net is not None and net < 0 else ''}{kw(abs(net))}" if net is not None else ""
                 base.update(i="solar-power-variant", f=C_WARM, v=kw(F["pv"]), vf=C_WARM,
-                            s=f"Haus {kw(F['home'])}" + (f" · Netz {'−' if net < 0 else ''}{kw(abs(net))}" if net is not None else ""))
+                            s=f"Haus {kw(F['home'])}" + (f" · Netz {netz}" if net is not None else ""),
+                            sr=f"Haus {rc(kw(F['home']), C_COOL)}" + (f" · Netz {rc(netz, C_GRID)}" if net is not None else ""))
                 if F["soc"] is not None:
                     base.update(b=round(F["soc"]), bf=C_OK, u=f"Akku {round(F['soc'])} %")
         elif key == "energie_heute":
             D = self.energy_day()
             base.update(n="Heute", i="chart-donut", f=C_OK, v=f"{de(D['pv'] / 1000, 1)} kWh", s="PV seit Mitternacht")
             if D["autark"] is not None:
-                base.update(s=f"Autarkie {pct(D['autark'])}", b=round(D["autark"] * 100), bf=C_WARM)
+                base.update(s=f"Autarkie {pct(D['autark'])}", sr=f"Autarkie {rc(pct(D['autark']), C_TEXT)}", b=round(D["autark"] * 100), bf=C_WARM)
             fc = (self.layout.get("forecast") or {}).get("solar_tomorrow")
             if fc and (v := num(get(fc))) is not None:
                 base["u"] = f"morgen {de(v, 1)} kWh"
@@ -600,8 +692,9 @@ class DisplayHub:
             base.update(n="Haus Ø", i="thermometer", f=C_HEAT)
             if K["t"] is not None:
                 base["v"] = f"{de(K['t'], 1)}°" + (f"  {round(K['h'])} %" if K["h"] is not None else "")
+                base["vr"] = f"{de(K['t'], 1)}°" + ("  " + rc(f"{round(K['h'])} %", C_DIM) if K["h"] is not None else "")
             if K["vent"]:
-                base.update(s=f"{K['vent'][0]} lüften", vf="")
+                base.update(s=f"{K['vent'][0]} lüften", sr=rc(f"{K['vent'][0]} lüften", C_COOL), vf="")
             if K["out"] is not None:
                 base["u"] = f"Außen {de(K['out'], 1)}°"
         elif key == "morgen":
@@ -635,7 +728,7 @@ class DisplayHub:
             eid = key[7:]
             st = get(eid)
             name, room = self._short(eid)
-            base.update(n=name, s=room, i=str((st.attributes.get("icon") if st else None) or "").removeprefix("mdi:") or "circle-outline")
+            base.update(n=name, s=room, i=display_icon(None, eid, st))
             if st is not None:
                 v = num(st)
                 unit = st.attributes.get("unit_of_measurement")
@@ -643,6 +736,41 @@ class DisplayHub:
                     {"on": "an", "off": "aus", "open": "offen", "closed": "zu", "unavailable": "nicht erreichbar"}.get(st.state, st.state)
                 base["f"] = C_WARM if is_on(st) else C_DIM
         return base
+
+    def schoner(self) -> dict:
+        """Bildschirmschoner wie am Wandpanel: Wetter, PV, morgen, Hausmodus; Müll und Termine; fertige Geräte; Meldungen."""
+        K = self.kopf()
+        zeile = []
+        if w := K.get("wetter"):
+            zeile.append({"i": w["i"], "t": w["t"]})
+        F = self.energy_now()
+        if F and F["pv"] is not None and F["pv"] > 50:
+            zeile.append({"i": "solar-power-variant", "t": kw(F["pv"])})
+        if w and w["morgen"]:
+            zeile.append({"i": "calendar", "t": w["morgen"][:1].upper() + w["morgen"][1:]})
+        zeile.append({"i": K["modus"]["i"], "t": K["modus"]["n"]})
+        termine = []
+        if T := self.termine():
+            if T["waste"]:
+                color, ic = bin_of(T["waste"][0])
+                termine.append({"i": ic, "f": color, "t": f"{T['waste_word']}: {', '.join(T['waste'])}", "hot": T["hot"]})
+            termine += [{"i": "calendar-clock", "f": C_DIM, "t": e, "hot": False} for e in T["events"][:3 - len(termine)]]
+        done = self._done_appliances()
+        al = self._alerts()
+        lvl = al[0].get("level") if al else None
+        status = ({"i": "alarm-light" if lvl == "alarm" else "bell-alert", "f": C_ALERT if lvl == "alarm" else C_WARM,
+                   "t": str(al[0].get("title", "")) if len(al) == 1 else f"{len(al)} Meldungen · {al[0].get('title', '')}"}
+                  if al else {"i": "shield-check", "f": C_OK, "t": "Alles in Ordnung"})
+        return {"zeile": zeile[:4], "termine": termine,
+                "hinweis": {"i": "check-circle-outline", "t": " · ".join(f"{x} fertig" for x in done[:2])} if done else None,
+                "status": status}
+
+    def custom_tile(self, t: dict) -> dict:
+        """Kachel einer eigenen Seite: wie eine entity:-Kachel, mit eigenem Namen und Symbol."""
+        x = self.tile(f"entity:{t['entity']}")
+        out = {"i": display_icon(t["icon"], t["entity"], self.hass.states.get(t["entity"])), "f": x["f"],
+               "n": t["name"] or x["n"], "v": x["v"], "vf": x["vf"], "s": x["s"]}
+        return out
 
     def hinweis(self, items: list[dict]) -> dict | None:
         al = self._alerts()
@@ -690,7 +818,8 @@ class DisplayHub:
         return {
             "protokoll": PROTOCOL,
             "einstellungen": _dumps({"name": d["name"], "seiten": d["pages"], "hinweis": d["hint"], "hell_tag": d["bright_day"],
-                                     "hell_nacht": d["bright_night"], "wecken": d["wake"], "nacht": mode == "nacht"}),
+                                     "hell_nacht": d["bright_night"], "wecken": d["wake"], "nacht": mode == "nacht",
+                                     "schoner": d["saver_min"] if d["saver"] else 0, "schoner_hell": d["saver_bright"]}),
             "kopf": _dumps(self.kopf()),
             "kacheln": _dumps([self.tile(t) for t in d["tiles"]]),
             "hinweis": _dumps(self.hinweis(items) if d["hint"] else None),
@@ -698,6 +827,8 @@ class DisplayHub:
             "klima": _dumps([{"n": r["n"], "t": f"{de(r['t'], 1)}°", "h": f"{round(r['h'])} %" if r["h"] is not None else "", "w": r["w"]} for r in K["rooms"][:8]]),
             "gute_nacht": _dumps({"n": n, "txt": "Alles zu." if not n else f"{n} {'Punkt ist' if n == 1 else 'Punkte sind'} noch offen.",
                                   "p": gn_rows, "mehr": max(0, n - GN_MAX)}),
+            "schoner": _dumps(self.schoner() if d["saver"] else None),
+            "eigene": _dumps([{"n": pg["name"], "i": pg["icon"], "k": [self.custom_tile(t) for t in pg["tiles"]]} for pg in d["custom"]]),
             "haus": _dumps({"modus": mode, "modi": [[k, nm, ic] for k, nm, ic, _f in MODES],
                             "meldungen": [{"l": a.get("level"), "t": a.get("title", "")} for a in self._alerts()[:4]],
                             "geraete": [f"{x} fertig" for x in self._done_appliances()[:3]]}),
@@ -792,15 +923,22 @@ class DisplayHub:
                 key = d["tiles"][int(ziel[7:])]
             except (ValueError, IndexError):
                 return
-            if key.startswith("entity:"):
-                eid = key[7:]
-                if eid.split(".", 1)[0] in ("light", "switch", "fan", "input_boolean", "cover", "lock"):
-                    st = self.hass.states.get(eid)
-                    if eid.startswith("lock."):
-                        svc = ("lock", "lock" if st and st.state != "locked" else "unlock")
-                        await self.hass.services.async_call(*svc, {"entity_id": eid}, blocking=False)
-                    else:
-                        await self.hass.services.async_call("homeassistant", "toggle", {"entity_id": eid}, blocking=False)
+            if key.startswith("entity:") and (svc := tap_service(key[7:], self.hass.states.get(key[7:]))):
+                try:
+                    await self.hass.services.async_call(*svc, {"entity_id": key[7:]}, blocking=False)
+                except Exception as err:  # noqa: BLE001 – ein falscher Tipp soll die Integration nicht stören
+                    _LOGGER.warning("Display %s: %s nicht geschaltet: %s", did, key[7:], err)
+        elif ziel.startswith("eigen:"):
+            try:
+                _p, pi, ki = ziel.split(":")
+                eid = d["custom"][int(pi)]["tiles"][int(ki)]["entity"]
+            except (ValueError, IndexError, KeyError):
+                return
+            if svc := tap_service(eid, self.hass.states.get(eid)):
+                try:
+                    await self.hass.services.async_call(*svc, {"entity_id": eid}, blocking=False)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("Display %s: %s nicht geschaltet: %s", did, eid, err)
         elif ziel == "geraet_ok":
             for r in self.monitor.appliances.snapshot():
                 if r.get("state") == "fertig":
