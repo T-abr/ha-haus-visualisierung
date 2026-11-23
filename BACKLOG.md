@@ -25,6 +25,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 14 | Täglicher bzw. wöchentlicher Push-Bericht | später | M | vorgemerkt |
 | 15 | Intelligentes Laden der Wallbox | später | L | vorgemerkt |
 | 16 | Musik- und Medienseite | später | L | vorgemerkt |
+| 17 | Display-Firmware aus GitHub-Releases statt mitgeliefert | mittel | M | neu |
 
 „Umgesetzt“: seit Version 1.11.0 enthalten. „Neu“: im Backlog, noch nicht
 ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
@@ -83,6 +84,19 @@ Farbe, offene Fenster, Licht an, Bewegung; Tipp auf einen Raum öffnet die Raums
 ### 10. ~~Anwesenheits-Simulation im Urlaub~~ (umgesetzt, siehe CHANGELOG)
 Im Hausmodus „Urlaub“ schalten ausgewählte Lichter und Rollos nach dem Muster der letzten Wochen aus dem Verlauf,
 leicht zufällig verschoben. Läuft im Backend, Protokoll im Panel, endet automatisch bei Rückkehr.
+
+### 17. Display-Firmware aus GitHub-Releases statt mitgeliefert
+Bisher liegt die Firmware der Wanddisplays der Integration bei (`firmware/`), jede neue Firmware braucht also
+ein neues Release der Visualisierung. Stattdessen schaut die Visualisierung selbst in den Releases von
+[ha-haus-display](https://github.com/T-abr/ha-haus-display) nach einer neuen Version: regelmäßig (z. B. alle
+6–12 Stunden) und per Knopf „Nach Firmware suchen“ in Einstellungen → Displays. Eine neue Firmware wird
+heruntergeladen, zwischengespeichert und über die vorhandene Update-Entität je Display per OTA aufgespielt
+(Aufspielen weiter nur auf Tippen bzw. über die Update-Entität). Auch das Flashen im Browser nutzt dann die
+heruntergeladene Datei. Prüfen: Version und Protokoll passen zusammen, Prüfsumme, Fallback auf die zuletzt
+geladene Firmware ohne Internet.
+
+**Offene Entscheidung:** ha-haus-display ist privat. Entweder ein GitHub-Token mit Lesezugriff in den
+Einstellungen hinterlegen oder das Firmware-Repo öffentlich machen (dann ohne Token).
 
 ## Vorgemerkt (früher vorgeschlagen)
 
