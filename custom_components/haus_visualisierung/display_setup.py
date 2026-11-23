@@ -8,6 +8,7 @@ Die Firmware kommt aus dem Repository ha-haus-display (CI, Zweig ``firmware``).
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from pathlib import Path
@@ -17,7 +18,9 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .const import DOMAIN, STATIC_URL, VERSION
 from .display import SERVICE_DATA, device_service
@@ -40,6 +43,46 @@ def firmware_version() -> str | None:
     except OSError:
         pass
     return None
+
+
+def firmware_md5() -> str | None:
+    """MD5 der OTA-Datei (das Gerät prüft damit den Download). Blockierend: im Executor aufrufen."""
+    try:
+        return hashlib.md5((FIRMWARE_DIR / "haus-display.ota.bin").read_bytes()).hexdigest()  # noqa: S324 – Prüfsumme, keine Sicherheit
+    except OSError:
+        return None
+
+
+def vtuple(v: str) -> tuple[int, ...]:
+    """'0.3.0' → (0, 3, 0); Unlesbares → ()"""
+    m = re.match(r"\s*(\d+)\.(\d+)\.(\d+)", v or "")
+    return tuple(int(x) for x in m.groups()) if m else ()
+
+
+UPDATE_ACTION = "haus_update"  # API-Aktion der Firmware ab 0.3.0
+OTA_MIN = (0, 3, 0)
+
+
+def update_service(device: str) -> str:
+    return f"{device.replace('-', '_')}_{UPDATE_ACTION}"
+
+
+async def async_install(hass: HomeAssistant, device: str) -> str:
+    """Mitgelieferte Firmware über das Netz auf das Gerät bringen. Liefert die Version, wirft HomeAssistantError."""
+    fw, md5 = hass.data[DOMAIN].get("firmware"), hass.data[DOMAIN].get("firmware_md5")
+    if not fw or not md5:
+        raise HomeAssistantError("In dieser Version der Integration ist keine Firmware enthalten")
+    if not hass.services.has_service(ESPHOME, update_service(device)):
+        raise HomeAssistantError(f"{device} kann noch kein Update über das Netz (Firmware vor {'.'.join(map(str, OTA_MIN))} "
+                                 "oder offline) – einmal per USB unter Einstellungen → Displays installieren")
+    try:
+        base = get_url(hass, allow_external=False, allow_cloud=False, prefer_external=False)
+    except NoURLAvailableError as err:
+        raise HomeAssistantError("Keine interne Adresse von Home Assistant bekannt (Einstellungen → System → Netzwerk)") from err
+    await hass.services.async_call(ESPHOME, update_service(device),
+                                   {"adresse": f"{base}{FIRMWARE_URL}/haus-display.ota.bin", "pruefsumme": md5}, blocking=True)
+    _LOGGER.info("Firmware %s an %s geschickt", fw, device)
+    return fw
 
 
 def _norm(name: Any) -> str:
@@ -70,11 +113,16 @@ def list_devices(hass: HomeAssistant) -> list[dict]:
         seen.add(name)
         rd = getattr(entry, "runtime_data", None) if entry.state is ConfigEntryState.LOADED else None
         online = bool(getattr(rd, "available", has_service)) if entry.state is ConfigEntryState.LOADED else False
+        ver = _version(hass, entry)
+        fw = hass.data[DOMAIN].get("firmware")
         out.append({
             "name": name, "title": entry.title, "entry_id": entry.entry_id, "flow_id": None,
             "host": entry.data.get("host", ""), "online": online, "allowed": bool(entry.options.get(ALLOW)),
-            "ready": has_service, "version": _version(hass, entry), "display": assigned.get(name), "hello": name in hello,
+            "ready": has_service, "version": ver, "display": assigned.get(name), "hello": name in hello,
             "disabled": entry.disabled_by is not None,
+            # Update: neuere Firmware dabei; über das Netz nur ab 0.3.0 (sonst einmal per USB)
+            "update": bool(fw and ver and vtuple(fw) > vtuple(ver)),
+            "ota": hass.services.has_service(ESPHOME, update_service(name)),
         })
     for flow in hass.config_entries.flow.async_progress_by_handler(ESPHOME):
         ctx = flow.get("context") or {}
@@ -84,7 +132,8 @@ def list_devices(hass: HomeAssistant) -> list[dict]:
         seen.add(name)
         out.append({"name": name, "title": (ctx.get("title_placeholders") or {}).get("name", name), "entry_id": None,
                     "flow_id": flow["flow_id"], "host": "", "online": True, "allowed": False, "ready": False, "version": "",
-                    "display": assigned.get(name), "hello": False, "disabled": False})
+                    "display": assigned.get(name), "hello": False, "disabled": False,
+                    "update": False, "ota": False})
     out.sort(key=lambda d: (d["display"] is None, d["name"]))
     return out
 
@@ -144,6 +193,7 @@ async def adopt(hass: HomeAssistant, flow_id: str | None = None, entry_id: str |
 def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_devices)
     websocket_api.async_register_command(hass, ws_adopt)
+    websocket_api.async_register_command(hass, ws_update)
 
 
 @websocket_api.require_admin
@@ -172,3 +222,16 @@ async def ws_adopt(hass: HomeAssistant, connection: websocket_api.ActiveConnecti
     res = await adopt(hass, msg.get("flow_id"), msg.get("entry_id"), msg.get("host"))
     connection.send_result(msg["id"], res)
 
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/display_update", vol.Required("device"): vol.All(str, vol.Match(r"^[a-z0-9][a-z0-9-]{0,39}$"))})
+@websocket_api.async_response
+async def ws_update(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """„Update installieren“ im Reiter Displays."""
+    try:
+        ver = await async_install(hass, msg["device"])
+    except HomeAssistantError as err:
+        connection.send_result(msg["id"], {"ok": False, "error": str(err)})
+        return
+    connection.send_result(msg["id"], {"ok": True, "version": ver})

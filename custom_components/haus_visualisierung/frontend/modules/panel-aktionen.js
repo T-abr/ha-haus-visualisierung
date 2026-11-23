@@ -11,7 +11,7 @@ import { simAction } from "./anwesenheit.js";
 import { defaultAction } from "./standard.js";
 import { applList } from "./geraete.js";
 import { maintCall, newTask } from "./wartung.js";
-import { adoptDevice, displaysForSave, newDisplay, togglePage } from "./wanddisplay.js";
+import { adoptDevice, displaysForSave, newDisplay, togglePage, updateDevice } from "./wanddisplay.js";
 
 const AktionenMixin = (Base) => class extends Base {
   async _actionExtra(act, t) {
@@ -207,6 +207,7 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-disp-del": D.displays = D.displays.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-disp-page": { const d = D.displays[Number(t.dataset.i)]; if (d) d.pages = togglePage(d, t.dataset.page); break; }
       case "s-disp-adopt": case "s-disp-ip": adoptDevice(this, t); return;
+      case "s-disp-update": updateDevice(this, t); return;
       case "s-link-add": D.links = [...(D.links || []), { title: "", icon: "mdi:link", path: "", embed: true, mode: "theme" }]; break;
       case "s-link-del": D.links = D.links.filter((_, i) => i !== Number(t.dataset.i)); break;
       case "s-tab": {

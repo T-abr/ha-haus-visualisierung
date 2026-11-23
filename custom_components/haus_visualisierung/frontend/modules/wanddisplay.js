@@ -133,11 +133,15 @@ function devicesHTML(ctx, D) {
     const key = x.flow_id ? `flow:${x.flow_id}` : `entry:${x.entry_id}`;
     const adopt = x.flow_id || !x.allowed
       ? `<button class="pbtn sm" data-act="s-disp-adopt" ${x.flow_id ? `data-flow="${esc(x.flow_id)}"` : `data-entry="${esc(x.entry_id)}"`} ${W.busy ? "disabled" : ""}>${W.busy === key ? "Übernehme …" : `${icon("mdi:check")}Übernehmen`}</button>` : "";
+    const fwv = W.firmware && W.firmware.version;
+    const upd = !(x.update && x.entry_id && fwv) ? "" : x.ota && x.online
+      ? `<button class="pbtn sm" data-act="s-disp-update" data-dev="${esc(x.name)}" ${W.busy ? "disabled" : ""}>${W.busy === `upd:${x.name}` ? "Update läuft …" : `${icon("mdi:update")}Update auf ${esc(fwv)}`}</button>`
+      : `<small class="dupd warn">${x.ota ? `Update auf ${esc(fwv)}, sobald das Gerät online ist` : `Firmware ${esc(fwv)} einmal per USB installieren (Schritt 1), danach kommen Updates über das Netz`}</small>`;
     const cur = list.findIndex((d) => d.device === x.name);
     const opts = [`<option value="">– keinem Display –</option>`, ...list.map((d, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${esc(d.name || d.id)}</option>`),
       list.length < 6 ? `<option value="neu">+ neues Display anlegen</option>` : ""].join("");
     return `<div class="ddev"><span class="lbl">${icon("mdi:tablet-dashboard")} <b>${esc(x.name)}</b><small class="${cls}">${txt}${x.host ? ` · ${esc(x.host)}` : ""}</small></span>
-      ${adopt}<select class="inp" data-disp-assign="${esc(x.name)}" title="Display zuordnen">${opts}</select></div>`;
+      ${adopt}${upd}<select class="inp" data-disp-assign="${esc(x.name)}" title="Display zuordnen">${opts}</select></div>`;
   }).join("");
   return rows || `<p class="hint">Noch kein Gerät gefunden. Nach dem Flashen und WLAN dauert es bis zu einer Minute. Steht das Gerät in einem anderen Netz (VLAN), hier seine IP-Adresse eintragen.</p>`;
 }
@@ -217,6 +221,21 @@ async function adoptDevice(ctx, t) {
   refreshWizard(ctx);
 }
 
+/** „Update auf …“: mitgelieferte Firmware über das Netz installieren (Gerät lädt sie von Home Assistant) */
+async function updateDevice(ctx, t) {
+  const W = wiz(ctx), dev = t.dataset.dev;
+  W.busy = `upd:${dev}`;
+  refreshWizard(ctx);
+  try {
+    const r = await ctx._hass.callWS({ type: `${DOMAIN}/display_update`, device: dev });
+    ctx._toast(r.ok ? `Update auf ${r.version} gestartet – das Display zeigt den Fortschritt und startet neu` : `Kein Update: ${r.error}`);
+  } catch (err) {
+    ctx._toast(`Kein Update: ${err && err.message ? err.message : err}`);
+  }
+  // Knopf erst nach dem Neustart wieder freigeben (neue Version kommt mit der nächsten Abfrage)
+  setTimeout(() => { if (W.busy === `upd:${dev}`) { W.busy = ""; W.sig = ""; loadDevices(ctx); } }, 60000);
+}
+
 /** Gerät einem Display zuordnen (oder neues Display dafür anlegen); jedes Gerät gehört zu höchstens einem Display */
 function assignDevice(D, dev, val) {
   const list = (D.displays || []).map((d) => ({ ...d, device: d.device === dev ? "" : (d.device || "") }));
@@ -278,7 +297,7 @@ const DISPLAY_CSS = `
 .dwarn a,.dbody small a{color:var(--hv-accent)}.dflash a.pbtn{text-decoration:none;color:inherit}
 .ddevs{display:flex;flex-direction:column;gap:6px}
 .ddev{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 0}.ddev .lbl{flex:1 1 220px;min-width:0}.ddev select{flex:0 1 220px;min-width:0}
-.ddev .lbl small{display:block;margin-top:2px}.ddev small.ok{color:#4fd18b}.ddev small.warn{color:#ffc457}.ddev small.dim{color:var(--hv-dim)}
+.ddev .lbl small{display:block;margin-top:2px}.ddev .dupd{flex:1 1 100%;order:9}.ddev small.ok{color:#4fd18b}.ddev small.warn{color:#ffc457}.ddev small.dim{color:var(--hv-dim)}
 .dhost .inp{flex:1 1 200px;min-width:0}
 .dcard{padding:6px 0 10px;border-top:1px solid var(--hv-line)}.dcard:first-of-type{border-top:0}
 .dpages{display:flex;flex-wrap:wrap;gap:6px}.dpage.on{background:var(--hv-accent);color:#06142b}.dpage[disabled]{opacity:.8;cursor:default}
@@ -289,4 +308,4 @@ const DISPLAY_CSS = `
 @media (max-width:600px){.dslots{grid-template-columns:1fr}}
 `;
 
-export { adoptDevice, assignDevice, DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };
+export { adoptDevice, assignDevice, updateDevice, DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };

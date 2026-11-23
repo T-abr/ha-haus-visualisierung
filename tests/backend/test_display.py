@@ -245,3 +245,48 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     await store.async_save({**store.data, "displays": [{"name": "Flur"}]})
     await _tick(hass)
     assert (calls[-1].data["bereich"], calls[-1].data["daten"]) == ("protokoll", "")
+
+
+async def test_display_firmware_update(hass: HomeAssistant, hass_ws_client) -> None:
+    """Update über das Netz: Update-Entität je Gerät, „Installieren“ und Websocket schicken Adresse und MD5 ans Gerät."""
+    from homeassistant.exceptions import HomeAssistantError
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    hass.config.internal_url = "http://10.0.0.2:8123"
+    entry = MockConfigEntry(domain="esphome", title="Haus Display a1b2c3", data={"device_name": "haus-display-a1b2c3", "host": "10.0.0.5"})
+    entry.add_to_hass(hass)
+    dr.async_get(hass).async_get_or_create(config_entry_id=entry.entry_id, connections={(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:a1:b2:c3")},
+                                           name="Haus Display a1b2c3", sw_version="0.3.0 (ESPHome 2026.11.0)")
+    await _setup(hass)
+    hass.data[DOMAIN]["firmware"] = "0.4.0"  # unabhängig von der mitgelieferten Version
+    await _tick(hass, 31)
+    eid = er.async_get(hass).async_get_entity_id("update", DOMAIN, "haus_display_firmware_haus-display-a1b2c3")
+    assert eid
+    st = hass.states.get(eid)
+    assert st.state == "on" and st.attributes["installed_version"] == "0.3.0" and st.attributes["latest_version"] == "0.4.0"
+
+    # Gerät ohne Aktion (Firmware vor 0.3.0 bzw. offline) → verständlicher Fehler
+    try:
+        await hass.services.async_call("update", "install", {"entity_id": eid}, blocking=True)
+        raise AssertionError("Fehler erwartet")
+    except HomeAssistantError as err:
+        assert "per USB" in str(err)
+
+    calls = async_mock_service(hass, "esphome", "haus_display_a1b2c3_haus_update")
+    await hass.services.async_call("update", "install", {"entity_id": eid}, blocking=True)
+    assert len(calls) == 1
+    assert calls[0].data["adresse"].startswith("http://10.0.0.2:8123/haus_visualisierung_static/firmware/")
+    assert calls[0].data["adresse"].endswith("/haus-display.ota.bin")
+    assert calls[0].data["pruefsumme"] == hass.data[DOMAIN]["firmware_md5"] and len(calls[0].data["pruefsumme"]) == 32
+    assert hass.states.get(eid).attributes["in_progress"] is True
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": f"{DOMAIN}/display_devices"})
+    dev = (await ws.receive_json())["result"]["devices"][0]
+    assert dev["update"] is True and dev["ota"] is True and dev["version"] == "0.3.0"
+    await ws.send_json({"id": 2, "type": f"{DOMAIN}/display_update", "device": "haus-display-a1b2c3"})
+    assert (await ws.receive_json())["result"] == {"ok": True, "version": "0.4.0"}
+    await ws.send_json({"id": 3, "type": f"{DOMAIN}/display_update", "device": "haus-display-ffffff"})
+    assert (await ws.receive_json())["result"]["ok"] is False
+    assert len(calls) == 2
