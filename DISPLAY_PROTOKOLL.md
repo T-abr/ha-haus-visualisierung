@@ -210,7 +210,7 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
-| 1 (Klingel-Overlay) | nächste Version | nächste Version |
+| 1 (Klingel-Overlay) | ab 1.16.0 | ab 0.5.0 |
 | 1 (eigene Seiten, Bildschirmschoner, farbige Werte, Kacheln antippbar) | ab 1.15.0 | ab 0.4.0 |
 | 1 (Push, Update über das Netz, API-Schlüssel je Gerät) | ab 1.14.0 | ab 0.3.0 |
 | 1 (Push, Einrichten im Panel) | ab 1.13.0 | ab 0.2.0 |
