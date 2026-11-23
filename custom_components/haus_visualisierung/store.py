@@ -278,7 +278,7 @@ def _wallpanel(raw: dict) -> dict:
     out["saver_min"] = _int(raw.get("saver_min"), 0, 240, out["saver_min"])
     out["black_min"] = _int(raw.get("black_min"), 0, 600, out["black_min"])
     out["return_min"] = _int(raw.get("return_min"), 0, 240, out["return_min"])
-    for key in ("fullscreen", "hide_sidebar", "wake_alarm", "night_dim"):
+    for key in ("fullscreen", "hide_sidebar", "wake_alarm", "night_dim", "wander"):
         if isinstance(raw.get(key), bool):
             out[key] = raw[key]
     w = _entity(raw.get("weather"))
