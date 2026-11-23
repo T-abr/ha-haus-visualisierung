@@ -194,6 +194,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_devices)
     websocket_api.async_register_command(hass, ws_adopt)
     websocket_api.async_register_command(hass, ws_update)
+    websocket_api.async_register_command(hass, ws_bell_test)
 
 
 @websocket_api.require_admin
@@ -235,3 +236,16 @@ async def ws_update(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         connection.send_result(msg["id"], {"ok": False, "error": str(err)})
         return
     connection.send_result(msg["id"], {"ok": True, "version": ver})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/display_bell_test"})
+@callback
+def ws_bell_test(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """„Klingel testen“ im Reiter Displays: Overlay auf allen Displays mit eingeschalteter Klingel."""
+    hub = hass.data[DOMAIN].get("displays")
+    if hub is None or not any(d.get("device") and d.get("bell", True) for d in hub.displays):
+        connection.send_result(msg["id"], {"ok": False, "error": "kein zugeordnetes Display mit Klingel (erst speichern)"})
+        return
+    hub.start_ring(test=True)
+    connection.send_result(msg["id"], {"ok": True})

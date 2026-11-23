@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed, async_mock_service
 from test_push import _ent, _setup, _tick
 
 from custom_components.haus_visualisierung.const import DOMAIN
@@ -31,7 +31,7 @@ def test_sanitize() -> None:
     a, b, c = out[:3]
     assert a == {"id": "flur_oben", "name": "Flur Oben", "pages": ["start", "klima", "haus"], "tiles": ["pv_jetzt", "entity:light.flur"],
                  "hint": False, "bright_day": 100, "bright_night": 0, "wake": True, "device": "", "custom": [],
-                 "saver": False, "saver_min": 5, "saver_bright": 20}
+                 "saver": False, "saver_min": 5, "saver_bright": 20, "bell": True}
     assert b["id"] == "flur_oben_2" and b["tiles"] == ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"] and b["pages"] == ["start"]
     wz, leer, b3 = b["custom"]
     assert wz["name"] == "Wohnzimmer mit sehr" and wz["icon"] == "sofa" and len(wz["tiles"]) == 6
@@ -251,9 +251,10 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     assert sent["protokoll"] == str(PROTOCOL) and json.loads(sent["einstellungen"])["name"] == "Flur"
     # leeres Haus ohne Meldungen: ruhige Hinweiszeile statt leerer Fläche
     assert json.loads(sent["hinweis"]) == {"i": "shield-check", "f": "#4fd18b", "n": "Alles in Ordnung", "s": "Keine offenen Meldungen", "knopf": "", "ziel": ""}
-    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "schoner", "eigene", "haus"}
+    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "schoner", "klingel", "eigene", "haus"}
     assert json.loads(sent["schoner"]) is None
     assert json.loads(sent["eigene"]) == []
+    assert json.loads(sent["klingel"]) is None
     n = len(calls)
     await _tick(hass, 31)
     assert len(calls) == n
@@ -264,7 +265,7 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     # „hallo“ nach dem Verbinden → alles neu; Tipp mit Gerätenamen wirkt auf das zugeordnete Display
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "hallo"}, blocking=True)
     await hass.async_block_till_done()
-    assert len(calls) == n + 11
+    assert len(calls) == n + 12
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "modus:abwesend"}, blocking=True)
     await _tick(hass)
     assert monitor.house.mode == "abwesend"
@@ -353,3 +354,77 @@ async def test_display_firmware_update(hass: HomeAssistant, hass_ws_client) -> N
     await ws.send_json({"id": 3, "type": f"{DOMAIN}/display_update", "device": "haus-display-ffffff"})
     assert (await ws.receive_json())["result"]["ok"] is False
     assert len(calls) == 2
+
+
+async def test_display_doorbell(hass: HomeAssistant, hass_ws_client, freezer: FrozenDateTimeFactory) -> None:
+    """Klingel wie im Panel: Overlay mit Kamerabild, „Tür öffnen“ mit Impuls, Schließen nach der Zeit, Test aus dem Reiter."""
+    calls = async_mock_service(hass, "esphome", "haus_display_a1b2c3_haus_daten")
+    on = async_mock_service(hass, "switch", "turn_on")
+    off = async_mock_service(hass, "switch", "turn_off")
+    hass.config.internal_url = "http://10.0.0.2:8123"
+    reg = er.async_get(hass)
+    from homeassistant.helpers import device_registry as dr
+    cfg_entry = MockConfigEntry(domain="unifiprotect")
+    cfg_entry.add_to_hass(hass)
+    dev = dr.async_get(hass).async_get_or_create(config_entry_id=cfg_entry.entry_id, identifiers={("unifiprotect", "g4")})
+    reg.async_get_or_create("event", "unifiprotect", "g4_ring", suggested_object_id="g4_doorbell", device_id=dev.id)
+    reg.async_get_or_create("camera", "unifiprotect", "g4_cam", suggested_object_id="g4_hoch", device_id=dev.id)
+    hass.states.async_set("camera.einfahrt", "idle", {"access_token": "falsch"})
+    hass.states.async_set("camera.g4_hoch", "idle", {"access_token": "abc", "friendly_name": "Haustür"})
+    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:00:00.000+00:00", {"device_class": "doorbell", "event_type": "ring"})
+    hass.states.async_set("switch.tueroeffner", "off")
+    await _setup(hass)
+    store = hass.data[DOMAIN]["store"]
+    await store.async_save({"doorbell": {"lock": "switch.tueroeffner", "timeout": 30, "pulse": 2},
+                            "displays": [{"name": "Flur", "device": "haus-display-a1b2c3"}, {"name": "Küche", "bell": False}]})
+    await _tick(hass)
+    last = lambda: json.loads([c.data["daten"] for c in calls if c.data["bereich"] == "klingel"][-1])  # noqa: E731
+    assert last() is None
+    hub = hass.data[DOMAIN]["displays"]
+    assert hub.bell_entity() == "event.g4_doorbell" and hub.bell_camera() == "camera.g4_hoch"
+
+    # Neues Klingel-Ereignis → Overlay; nur Attribute geändert → nichts
+    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:00:00.000+00:00", {"device_class": "doorbell", "event_type": "ring", "x": 1})
+    await hass.async_block_till_done()
+    assert last() is None
+    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:01:00.000+00:00", {"device_class": "doorbell", "event_type": "ring"})
+    await hass.async_block_till_done()
+    k = last()
+    assert k["t"] == "Es klingelt" and k["s"].startswith("Haustür · ") and k["tuer"] is True and k["offen"] is False
+    assert k["bild"] == "http://10.0.0.2:8123/api/camera_proxy/camera.g4_hoch?token=abc&width=432&height=243"
+    assert json.loads(hub.payloads["kueche"]["klingel"]) is None
+    hass.states.async_set("event.g4_doorbell", "2026-01-01T00:01:10.000+00:00", {"device_class": "doorbell", "event_type": "ring"})
+    await hass.async_block_till_done()
+    assert last()["t"] == "Es klingelt erneut" and last()["n"] == k["n"] + 1
+
+    # „Tür öffnen“ vom Display: Schalter ein, nach dem Impuls aus; Overlay bleibt noch kurz offen
+    await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "klingel:tuer"}, blocking=True)
+    await hass.async_block_till_done()
+    assert [c.data["entity_id"] for c in on] == ["switch.tueroeffner"] and not off and last()["offen"] is True
+    freezer.tick(timedelta(seconds=3))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert [c.data["entity_id"] for c in off] == ["switch.tueroeffner"]
+    freezer.tick(timedelta(seconds=13))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert last() is None
+    # ohne Klingeln tut „Tür öffnen“ nichts
+    await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "klingel:tuer"}, blocking=True)
+    await hass.async_block_till_done()
+    assert len(on) == 1
+
+    # Test aus dem Reiter Displays; schließt nach der eingestellten Zeit
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": f"{DOMAIN}/display_bell_test"})
+    assert (await ws.receive_json())["result"] == {"ok": True}
+    await hass.async_block_till_done()
+    assert last()["t"] == "Test: Es klingelt"
+    freezer.tick(timedelta(seconds=31))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert last() is None
+    await store.async_save({**store.data, "displays": [{"name": "Flur", "device": "haus-display-a1b2c3", "bell": False}]})
+    await _tick(hass)
+    await ws.send_json({"id": 2, "type": f"{DOMAIN}/display_bell_test"})
+    assert (await ws.receive_json())["result"]["ok"] is False

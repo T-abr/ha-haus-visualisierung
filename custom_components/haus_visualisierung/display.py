@@ -27,7 +27,9 @@ from typing import Any
 
 from homeassistant.const import EVENT_SERVICE_REGISTERED, EVENT_STATE_CHANGED
 from homeassistant.core import Event, HomeAssistant, ServiceCall, State, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -96,6 +98,11 @@ BAT_NOT = re.compile(r"(pv|solar|grid|netz|soc|wallbox|evcc|lade)", re.I)
 
 WEATHER_TTL = 30 * 60
 CAL_TTL = 15 * 60
+BELL_RE = re.compile(r"doorbell|klingel", re.I)
+BELL_EVENT_RE = re.compile(r"ring|press|doorbell|klingel", re.I)
+BELL_CAM_RE = re.compile(r"entry|doorbell|klingel|haust", re.I)
+BELL_IMG = (432, 243)  # Kamerabild im Overlay (16:9); die Firmware passt es mit gleichem Seitenverhältnis ein
+BELL_AFTER_DOOR = 15   # Sekunden, die das Overlay nach „Tür öffnen“ noch offen bleibt
 
 
 # ---------- Formatierung (deutsch) ----------
@@ -168,8 +175,8 @@ DISPLAY_ICONS = frozenset({
     "air-conditioner", "airplane", "alarm-light", "alert", "alert-circle", "arrow-left", "battery", "battery-70",
     "bed", "bell", "bell-alert", "biohazard", "blinds", "bottle-wine-outline", "calendar", "calendar-clock", "car",
     "cctv", "ceiling-light", "chart-donut", "check", "check-circle-outline", "circle-outline", "close", "coffee",
-    "currency-eur", "desk-lamp", "door", "door-closed", "door-open", "eye", "fan", "fan-off", "fire", "flash",
-    "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump",
+    "currency-eur", "desk-lamp", "door", "door-closed", "door-open", "doorbell-video", "eye", "fan", "fan-off", "fire",
+    "flash", "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump",
     "help-circle-outline", "home", "home-account", "home-export-outline", "home-lightning-bolt", "home-thermometer",
     "home-variant", "lamp", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on",
     "lightbulb-outline", "lightning-bolt", "lock", "lock-alert", "lock-open", "lock-open-variant", "motion-sensor",
@@ -266,8 +273,21 @@ def sanitize_displays(raw: Any) -> list[dict]:
             "saver": d.get("saver") is True,
             "saver_min": _int("saver_min", 1, 120, 5),
             "saver_bright": _int("saver_bright", 0, 100, 20),
+            "bell": d.get("bell", True) is not False,
         })
     return out
+
+
+def is_ring(old: State | None, new: State | None) -> bool:
+    """Klingelt es? Wie im Panel (aktualisierer.js isRing): neues Ereignis bzw. Binärsensor wird „an“."""
+    if old is None or new is None or old.state in UNAV or new.state in UNAV:
+        return False
+    if new.domain == "event":
+        if new.state == old.state:
+            return False
+        et = new.attributes.get("event_type")
+        return not et or bool(BELL_EVENT_RE.search(str(et)))
+    return new.state == "on" and old.state != "on"
 
 
 def _dumps(v: Any) -> str:
@@ -293,6 +313,11 @@ class DisplayHub:
         # Push an die Geräte: zuletzt geschickter Stand je Gerät und Bereich; „hallo“ je Gerät (für den Assistenten)
         self._sent: dict[str, dict[str, str]] = {}
         self.hello: dict[str, float] = {}
+        # Klingel: läuft gerade (n zählt jedes Klingeln, bis = Zeitpunkt des Schließens)
+        self.ring: dict[str, Any] | None = None
+        self._ring_n = 0
+        self._ring_timer: Callable[[], None] | None = None
+        self._bell_eid: str | None = None
 
     # ---------- Lebenszyklus ----------
     async def async_start(self) -> None:
@@ -315,6 +340,9 @@ class DisplayHub:
         if self._pending:
             self._pending()
             self._pending = None
+        if self._ring_timer:
+            self._ring_timer()
+            self._ring_timer = None
         self._store.async_delay_save(self._day_data, 0)
 
     @callback
@@ -341,6 +369,9 @@ class DisplayHub:
         eid = event.data.get("entity_id", "")
         if eid.startswith("sensor.haus_display_"):
             return
+        if eid == self._bell_eid and is_ring(event.data.get("old_state"), event.data.get("new_state")):
+            self.start_ring()
+            return
         if eid in self._watch() or eid.startswith(("weather.", "calendar.")):
             self.schedule()
 
@@ -366,6 +397,101 @@ class DisplayHub:
     def _on_tick(self, _now: Any) -> None:
         self._integrate()
         self.update()
+
+    # ---------- Klingel (Einstellungen → Klingel, wie das Overlay im Panel) ----------
+    def bell_entity(self) -> str | None:
+        cfg = self.layout.get("doorbell") or {}
+        if not any(d.get("bell", True) and d.get("device") for d in self.displays):
+            return None
+        if cfg.get("entity"):
+            return cfg["entity"] if self.hass.states.get(cfg["entity"]) else None
+        states = self.hass.states.async_all(("event", "binary_sensor"))
+        pick = next((st for st in states if st.domain == "event" and st.attributes.get("device_class") == "doorbell"), None) \
+            or next((st for st in states if BELL_RE.search(st.entity_id)), None)
+        return pick.entity_id if pick else None
+
+    def bell_camera(self) -> str | None:
+        cfg = self.layout.get("doorbell") or {}
+        if cfg.get("camera") and self.hass.states.get(cfg["camera"]):
+            return cfg["camera"]
+        cams = self.hass.states.async_entity_ids("camera")
+        pref = lambda lst: next((e for e in lst if not re.search(r"paket|package", e, re.I)), lst[0] if lst else None)  # noqa: E731
+        bell = self.bell_entity()
+        reg = er.async_get(self.hass)
+        dev = (ent := reg.async_get(bell)) and ent.device_id if bell else None
+        if dev:
+            same = [e for e in cams if (c := reg.async_get(e)) and c.device_id == dev]
+            if same:
+                return pref(same)
+        return pref([e for e in cams if BELL_CAM_RE.search(e)]) or (cams[0] if cams else None)
+
+    @callback
+    def start_ring(self, test: bool = False) -> None:
+        cfg = self.layout.get("doorbell") or {}
+        again = self.ring is not None
+        self._ring_n += 1
+        self.ring = {"n": self._ring_n, "again": again, "test": test, "at": dt_util.now().strftime("%H:%M"),
+                     "cam": self.bell_camera(), "offen": False}
+        self._ring_until(int(cfg.get("timeout") or 60))
+        self.update()
+
+    def _ring_until(self, secs: int) -> None:
+        if self._ring_timer:
+            self._ring_timer()
+
+        @callback
+        def _end(_now: Any) -> None:
+            self._ring_timer = None
+            self.ring = None
+            self.update()
+
+        self.ring["bis"] = int(time.time()) + secs
+        self._ring_timer = async_call_later(self.hass, secs, _end)
+
+    def klingel(self) -> dict | None:
+        """Klingel-Overlay: Titel, Kamera und Zeit, Adresse eines verkleinerten Kamerabilds, Türöffner ja/nein."""
+        r = self.ring
+        if not r:
+            return None
+        cfg = self.layout.get("doorbell") or {}
+        cam = r["cam"]
+        st = self.hass.states.get(cam) if cam else None
+        bild = ""
+        if st and st.attributes.get("access_token"):
+            try:
+                base = get_url(self.hass, allow_external=False, allow_cloud=False, prefer_external=False)
+                bild = f"{base}/api/camera_proxy/{cam}?token={st.attributes['access_token']}&width={BELL_IMG[0]}&height={BELL_IMG[1]}"
+            except NoURLAvailableError:
+                pass
+        name = (st.name if st else "") or "Haustür"
+        titel = "Test: Es klingelt" if r["test"] else "Es klingelt erneut" if r["again"] else "Es klingelt"
+        lock = cfg.get("lock") or ""
+        return {"n": r["n"], "t": titel, "s": f"{name} · {r['at']}", "bild": bild,
+                "tuer": bool(lock and self.hass.states.get(lock)), "offen": r["offen"], "bis": r["bis"]}
+
+    async def _open_door(self) -> None:
+        """Türöffner wie „Tür öffnen“ im Panel (panel-klingel.js _openDoor)."""
+        cfg = self.layout.get("doorbell") or {}
+        eid = cfg.get("lock") or ""
+        st = self.hass.states.get(eid)
+        if not st:
+            return
+        d = st.domain
+        if d == "lock":
+            await self.hass.services.async_call("lock", "open" if int(st.attributes.get("supported_features") or 0) & 1 else "unlock",
+                                                {"entity_id": eid}, blocking=True)
+        elif d in ("button", "input_button"):
+            await self.hass.services.async_call(d, "press", {"entity_id": eid}, blocking=True)
+        elif d in ("script", "scene"):
+            await self.hass.services.async_call(d, "turn_on", {"entity_id": eid}, blocking=True)
+        else:
+            svc = d if d in ("switch", "input_boolean", "light") else "homeassistant"
+            await self.hass.services.async_call(svc, "turn_on", {"entity_id": eid}, blocking=True)
+            pulse = cfg.get("pulse", 2)
+            if isinstance(pulse, (int, float)) and pulse > 0:
+                async def _off(_now: Any) -> None:
+                    await self.hass.services.async_call(svc, "turn_off", {"entity_id": eid}, blocking=False)
+                async_call_later(self.hass, pulse, _off)
 
     @callback
     def schedule(self, delay: float = 1.0) -> None:
@@ -828,6 +954,7 @@ class DisplayHub:
             "gute_nacht": _dumps({"n": n, "txt": "Alles zu." if not n else f"{n} {'Punkt ist' if n == 1 else 'Punkte sind'} noch offen.",
                                   "p": gn_rows, "mehr": max(0, n - GN_MAX)}),
             "schoner": _dumps(self.schoner() if d["saver"] else None),
+            "klingel": _dumps(self.klingel() if d["bell"] else None),
             "eigene": _dumps([{"n": pg["name"], "i": pg["icon"], "k": [self.custom_tile(t) for t in pg["tiles"]]} for pg in d["custom"]]),
             "haus": _dumps({"modus": mode, "modi": [[k, nm, ic] for k, nm, ic, _f in MODES],
                             "meldungen": [{"l": a.get("level"), "t": a.get("title", "")} for a in self._alerts()[:4]],
@@ -843,6 +970,7 @@ class DisplayHub:
             self._push()
             return
         self._ensure_async()
+        self._bell_eid = self.bell_entity()
         new = {}
         for d in self.displays:
             try:
@@ -939,6 +1067,16 @@ class DisplayHub:
                     await self.hass.services.async_call(*svc, {"entity_id": eid}, blocking=False)
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Display %s: %s nicht geschaltet: %s", did, eid, err)
+        elif ziel == "klingel:tuer" and self.ring:
+            try:
+                await self._open_door()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Display %s: Tür öffnen fehlgeschlagen: %s", did, err)
+                return
+            self.ring["offen"] = True
+            self._ring_until(BELL_AFTER_DOOR)
+            self.update()
+            return
         elif ziel == "geraet_ok":
             for r in self.monitor.appliances.snapshot():
                 if r.get("state") == "fertig":

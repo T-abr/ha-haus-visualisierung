@@ -82,6 +82,24 @@ Inhalt des Bildschirmschoners (nur wenn eingeschaltet, sonst `null`), wie am Wan
  "status": {"i": "shield-check", "f": "#4fd18b", "t": "Alles in Ordnung"}}
 ```
 
+### `klingel`
+
+Klingel-Overlay wie im Panel (Einstellungen → Klingel; je Display unter Displays → „Klingel“ abschaltbar). `null`,
+solange es nicht klingelt; die Integration schickt `null` nach der Zeit aus „Automatisch schließen nach“ bzw. 15 s nach
+„Tür öffnen“.
+
+```json
+{"n": 3, "t": "Es klingelt", "s": "Haustür · 14:32", "tuer": true, "offen": false, "bis": 1795449180,
+ "bild": "http://192.168.1.2:8123/api/camera_proxy/camera.g4_hoch?token=…&width=432&height=243"}
+```
+
+`n` zählt jedes Klingeln: Ein neues `n` zeigt das Overlay (auch wenn es vorher am Display geschlossen wurde) und weckt
+das Display. `t` ist „Es klingelt“, „Es klingelt erneut“ oder „Test: Es klingelt“. `bild` ist ein von Home Assistant
+verkleinertes JPEG-Standbild der Kamera (leer ohne Kamera oder ohne interne Adresse); die Firmware lädt es, solange das
+Overlay offen ist, alle paar Sekunden neu. `tuer`: Türöffner eingerichtet, Knopf „Tür öffnen“ zeigen (muss zweimal
+getippt werden, dann Ziel `klingel:tuer`); `offen`: Türöffner wurde ausgelöst. `bis`: Unix-Zeit, zu der das Overlay
+schließt (für die Anzeige „schließt in … s“ und als Sicherung ohne Verbindung).
+
 ### `eigene`
 
 Bis zu drei eigene Seiten (Einstellungen → Displays → „Eigene Seiten“), je bis zu sechs Entitäten. Die Firmware zeigt
@@ -179,6 +197,7 @@ data: {display: haus-display-a1b2c3, ziel: "gn:light.kueche"}
 | `modus:<zuhause\|nacht\|abwesend\|urlaub>` | Hausmodus setzen (die Firmware zeigt vorher den Gute-Nacht-Check, wenn `gute_nacht.n > 0`) |
 | `kachel:<0–3>` | Kachel angetippt: `entity:`-Kacheln schalten (Licht, Schalter, Lüfter, Abdeckung, Schloss, Helfer umschalten; Szene, Skript, Taster auslösen). Ab Firmware 0.4.0 öffnen Energie-, Klima-, Meldungs- und Geräte-Kacheln stattdessen ihre Seite, wenn sie eingeschaltet ist, und melden nichts. |
 | `eigen:<seite>:<kachel>` | Kachel einer eigenen Seite angetippt (Seite 0–2, Kachel 0–5): schaltet wie eine `entity:`-Kachel |
+| `klingel:tuer` | „Tür öffnen“ im Klingel-Overlay (nur während es klingelt): Türöffner aus Einstellungen → Klingel auslösen wie im Panel (Schloss öffnen, Schalter mit Impuls, Taste, Skript) |
 | `geraet_ok` | fertige Haushaltsgeräte quittieren |
 | `hallo` | Gerät ist (neu) verbunden: alle Bereiche neu schicken; nicht zugeordnetes Gerät bekommt `protokoll` = `""` |
 
@@ -191,6 +210,7 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
+| 1 (Klingel-Overlay) | ab 1.16.0 | ab 0.5.0 |
 | 1 (eigene Seiten, Bildschirmschoner, farbige Werte, Kacheln antippbar) | ab 1.15.0 | ab 0.4.0 |
 | 1 (Push, Update über das Netz, API-Schlüssel je Gerät) | ab 1.14.0 | ab 0.3.0 |
 | 1 (Push, Einrichten im Panel) | ab 1.13.0 | ab 0.2.0 |

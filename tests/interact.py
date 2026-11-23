@@ -2062,6 +2062,7 @@ def displays():
     smin = pg.locator(f"{P} [data-set='displays.0.saver_min']")
     check("WD: Bildschirmschoner einschaltbar, Wartezeit erscheint", smin.count() == 1)
     smin.fill("10"); smin.dispatch_event("change")
+    pg.locator(f"{P} .tgl:has([data-set='displays.0.bell'])").click(); pg.wait_for_timeout(100)
     # Eigene Seite: anlegen, zwei Entitäten (eine leer bleibt weg), Symbol, Reihenfolge
     pg.locator(f"{P} [data-act=s-disp-cust][data-op=page-add]").click(); pg.wait_for_timeout(150)
     check("WD: eigene Seite angelegt", pg.locator(f"{P} .dcp").count() == 1)
@@ -2090,6 +2091,7 @@ def displays():
     check("WD: gespeichert mit Kennung aus dem Namen, Seiten, Kacheln ohne Lücke", len(saved) == 1 and d["id"] == "kueche_oben" and d["name"] == "Küche Oben"
           and d["pages"] == ["start", "energie", "haus"] and d["tiles"] == ["pv_jetzt", "klima_mittel", "entity:light.kueche"] and d["bright_night"] == 0)
     check("WD: Bildschirmschoner gespeichert", d.get("saver") is True and d.get("saver_min") == 10 and d.get("saver_bright") == 20)
+    check("WD: Klingel ausgeschaltet gespeichert", d.get("bell") is False)
     check("WD: eigene Seite gespeichert, leere Entität weggelassen", d.get("custom") == [{"name": "Wohnzimmer", "icon": "sofa", "tiles": [
         {"entity": "scene.abend", "name": "Abend", "icon": "palette"}, {"entity": "light.kueche", "name": "", "icon": ""}]}])
     check("WD: Kennung und Entität angezeigt", "sensor.haus_display_kueche_oben" in pg.locator(f"{P} .dcard").inner_text())
@@ -2130,6 +2132,10 @@ def displays_einrichten():
     saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.displays)")
     check("WE: neues Display mit Gerät gespeichert", len(saved) == 1 and saved[0]["device"] == "haus-display-a1b2c3")
     check("WE: Karte zeigt das Gerät", "Gerät haus-display-a1b2c3" in pg.locator(f"{P} .dcard").inner_text())
+    bell = pg.locator(f"{P} [data-act=s-disp-bell]")
+    check("WE: Klingel standardmäßig an, Knopf „Klingel testen“", saved[0].get("bell") is not False and bell.count() == 1)
+    bell.click(); pg.wait_for_timeout(300)
+    check("WE: Klingel-Test an die Displays geschickt", pg.evaluate("window.__api.log.some(l => l[1] === 'display_bell_test')"))
     pg.locator(f"{P} [data-disp-assign='haus-display-a1b2c3']").select_option(""); pg.wait_for_timeout(400)
     saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.displays)")
     check("WE: Zuordnung aufgehoben", len(saved) == 1 and saved[0]["device"] == "")
