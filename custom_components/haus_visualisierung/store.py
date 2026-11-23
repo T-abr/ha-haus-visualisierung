@@ -473,6 +473,13 @@ def sanitize(raw: Any) -> dict:
         result["alarm_actions"] = _actions(raw["alarm_actions"])
     if isinstance(raw.get("house_mode"), dict):
         result["house_mode"] = _house_mode(raw["house_mode"])
+    if isinstance(raw.get("pin"), dict):
+        pn = raw["pin"]
+        for key in ("door", "disarm", "arm"):
+            if isinstance(pn.get(key), bool):
+                result["pin"][key] = pn[key]
+        if pn.get("scope") in ("wall", "all"):
+            result["pin"]["scope"] = pn["scope"]
     if isinstance(raw.get("presence_sim"), dict):
         result["presence_sim"] = _presence_sim(raw["presence_sim"])
     if isinstance(raw.get("doorbell"), dict):

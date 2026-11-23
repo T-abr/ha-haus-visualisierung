@@ -124,6 +124,12 @@ class MaintenanceBook:
         return True
 
     @callback
+    def replace(self, data: dict) -> None:
+        """Ganzen Stand ersetzen (Wiederherstellen einer Sicherung)."""
+        self.data = copy.deepcopy(data)
+        self._changed()
+
+    @callback
     def prune(self, ids: set[str]) -> None:
         """Einträge gelöschter Aufgaben verwerfen."""
         gone = [k for k in self.data if k not in ids]

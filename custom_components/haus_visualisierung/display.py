@@ -34,12 +34,16 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .alerts import UNAV, is_on, num
+from .pin import KIND_TXT as PIN_TXT
+from .pin import mode_kind
+from .pin import needs as pin_needs
 
 _LOGGER = logging.getLogger(__name__)
 
 PROTOCOL = 1
 SERVICE_TAP = "display_tap"
 SERVICE_DATA = "haus_daten"  # API-Aktion der Firmware (ab 0.2.0)
+LOCKED_NOTE_S = 8            # so lange zeigt ein Display „Mit PIN geschützt“ nach einem gesperrten Tipp
 DEVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 # Kacheln der Startseite (Schlüssel im Layout → Name in den Einstellungen)
@@ -325,6 +329,8 @@ class DisplayHub:
         self._ring_n = 0
         self._ring_timer: Callable[[], None] | None = None
         self._bell_eid: str | None = None
+        # gesperrte Tipps (PIN): Display → (bis, Aktion) für den Hinweis
+        self._locked: dict[str, tuple[float, str]] = {}
 
     # ---------- Lebenszyklus ----------
     async def async_start(self) -> None:
@@ -955,7 +961,7 @@ class DisplayHub:
                                      "schoner": d["saver_min"] if d["saver"] else 0, "schoner_hell": d["saver_bright"]}),
             "kopf": _dumps(self.kopf()),
             "kacheln": _dumps([self.tile(t) for t in d["tiles"]]),
-            "hinweis": _dumps(self.hinweis(items) if d["hint"] else None),
+            "hinweis": _dumps(self.locked_note(d["id"]) or (self.hinweis(items) if d["hint"] else None)),
             "energie": _dumps(self.energie()),
             "klima": _dumps([{"n": r["n"], "t": f"{de(r['t'], 1)}°", "h": f"{round(r['h'])} %" if r["h"] is not None else "", "w": r["w"]} for r in K["rooms"][:8]]),
             "gute_nacht": _dumps({"n": n, "txt": "Alles zu." if not n else f"{n} {'Punkt ist' if n == 1 else 'Punkte sind'} noch offen.",
@@ -1025,6 +1031,35 @@ class DisplayHub:
         for cb in list(self._listeners):
             cb()
 
+    # ---------- PIN ----------
+    def _pin_kind(self, d: dict, ziel: str) -> str | None:
+        """Schutzart eines Tipps: Tür öffnen, Alarm aus, Abwesend/Urlaub (pin.py)."""
+        if ziel == "klingel:tuer":
+            return "door"
+        if ziel.startswith("modus:"):
+            return mode_kind(self._mode(), ziel[6:])
+        eid = ""
+        try:
+            if ziel.startswith("kachel:"):
+                key = d["tiles"][int(ziel[7:])]
+                eid = key[7:] if key.startswith("entity:") else ""
+            elif ziel.startswith("eigen:"):
+                _p, pi, ki = ziel.split(":")
+                eid = d["custom"][int(pi)]["tiles"][int(ki)]["entity"]
+        except (ValueError, IndexError, KeyError):
+            return None
+        if eid.startswith("lock.") and (st := self.hass.states.get(eid)) is not None and st.state == "locked":
+            return "door"
+        return None
+
+    def locked_note(self, did: str) -> dict | None:
+        until, what = self._locked.get(did, (0.0, ""))
+        if until <= time.time():
+            self._locked.pop(did, None)
+            return None
+        return {"i": "lock", "f": C_WARM, "n": f"{what}: mit PIN geschützt", "s": "Am Wandpanel oder Handy mit PIN freigeben",
+                "knopf": "", "ziel": ""}
+
     # ---------- Tippen ----------
     async def async_tap(self, call: ServiceCall) -> None:
         did, ziel = str(call.data.get("display", "")), str(call.data.get("ziel", ""))
@@ -1040,6 +1075,13 @@ class DisplayHub:
             return
         if d is None:
             _LOGGER.warning("Display %s ist nicht eingerichtet", did)
+            return
+        if (kind := self._pin_kind(d, ziel)) and pin_needs(self.layout.get("pin") or {}, kind, True) and self.monitor.book.pin.get("hash"):
+            # Mit PIN geschützt: am Display gibt es (noch) kein Tastenfeld → nicht ausführen, kurz Hinweis zeigen
+            self._locked[d["id"]] = (time.time() + LOCKED_NOTE_S, PIN_TXT.get(kind, "Aktion"))
+            _LOGGER.info("Display %s: %s ist mit PIN geschützt", did, ziel)
+            self.update()
+            async_call_later(self.hass, LOCKED_NOTE_S + 0.5, callback(lambda _now: self.update()))
             return
         if ziel.startswith("gn:") or ziel == "gn_alle":
             items = self.check_items("nacht")

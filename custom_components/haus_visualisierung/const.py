@@ -113,6 +113,12 @@ DEFAULT_LAYOUT: dict = {
         "check_devices": [],           # weitere Geräte, die der Check prüft (z. B. Bügeleisen-Steckdose)
         "arm": {"zuhause": "disarm", "nacht": "arm_night", "abwesend": "arm_away", "urlaub": "arm_vacation"},
     },
+    "pin": {                       # PIN für heikle Aktionen (pin.py); die PIN selbst liegt nur im Backend
+        "door": True,                  # Tür öffnen (Klingel-Türöffner, Schloss entriegeln)
+        "disarm": True,                # Alarm aus: aus Nacht/Abwesend/Urlaub zurück auf Zuhause
+        "arm": False,                  # Abwesend bzw. Urlaub einschalten
+        "scope": "wall",               # wall = nur Wandpanels und Wanddisplays | all = alle Geräte
+    },
     "presence_sim": {              # Anwesenheits-Simulation (presence.py)
         "enabled": False,
         "modes": ["urlaub"],           # läuft in diesen Hausmodi …
