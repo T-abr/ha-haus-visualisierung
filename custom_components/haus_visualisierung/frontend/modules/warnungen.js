@@ -2,6 +2,7 @@
 
 import { BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtState, HOUSE_MODES, icon, isOn, isUnav, MODE_NAME, NF0, NF1, num, relTime, setIcon, setText, UNAV } from "./grundlagen.js";
 import { dewPoint, humRooms, MOLD_HYST, outdoorClim, ventAdvice } from "./klima.js";
+import { applAlerts, GERAETE } from "./geraete.js";
 
 const CHIPS = {
   lights: (h, m) => { const n = m.agg.lights.filter((e) => isOn(h.states[e])).length; return m.agg.lights.length ? { t: n ? `${n} ${n === 1 ? "Licht" : "Lichter"} an` : "Alle Lichter aus", c: n ? "warm" : "calm", i: n ? "mdi:lightbulb-on" : "mdi:lightbulb-outline" } : null; },
@@ -49,7 +50,7 @@ function alertWatch(m, L) {
   const pres = m.visibleAreas.flatMap((a) => a.presence);
   // Schimmelrisiko: nur die Raumfeuchte. Temperatur und außen ändern bloß den Text; den frischt der 30-s-Takt auf.
   const hum = (L.alerts && L.alerts.builtin && L.alerts.builtin.mold === false) ? [] : m.visibleAreas.map((a) => a.humId);
-  return [...m.agg.contacts, ...m.agg.safety, ...m.agg.climates, ...m.agg.batteries, ...m.agg.unavailable, ...garages, ...locks, ...pres, ...hum, ...(m._panelIds || []), ...r.map((x) => x.entity).filter(Boolean)].filter(Boolean);
+  return [...m.agg.contacts, ...m.agg.safety, ...m.agg.climates, ...m.agg.batteries, ...m.agg.unavailable, ...garages, ...locks, ...pres, ...hum, ...(m._panelIds || []), ...r.map((x) => x.entity).filter(Boolean), GERAETE].filter(Boolean);
 }
 /* Alarmmanager: Zustände aus dem Backend (neu, quittiert, stumm) und jüngstes Protokoll */
 let ALARMS = null;
@@ -133,6 +134,7 @@ function evalAlertsRaw(h, m, L) {
   }
   if (B.mold) out.push(...moldAlerts(h, m, L, c));
   else MOLD.clear();
+  if (B.appliances) out.push(...applAlerts(h, L));
   (c.rules || []).forEach((r, i) => {
     if (r.enabled === false || !r.entity) return;
     if (r.modes && r.modes.length && !r.modes.includes(mode)) return;

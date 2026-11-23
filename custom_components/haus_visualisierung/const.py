@@ -81,6 +81,7 @@ DEFAULT_LAYOUT: dict = {
             "presence_away": True,     # Bewegung/Präsenz, während niemand zu Hause ist
             "alarm_panel": True,       # Alarmanlage (z. B. Alarmo) ausgelöst
             "mold": True,              # Schimmelrisiko: Raumfeuchte zu hoch – jetzt lüften
+            "appliances": True,        # Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)
         },
         "modes": {},                   # {feste Regel: [Hausmodi]} – fehlt = Standard (BUILTIN_MODES)
         "contacts_min": 0,             # Fenster erst nach … Minuten melden
@@ -149,6 +150,11 @@ DEFAULT_LAYOUT: dict = {
         "days": 7,                     # so viele Tage im Voraus lesen
         "evening": 17,                 # Abfuhr morgen ab dieser Stunde hervorheben
         "cals": {},                    # {calendar_id: "waste"|"event"|"-"}, fehlt = Müllabfuhr, wenn der Name passt
+    },
+    "appliances": {                # Haushaltsgeräte: „läuft“/„fertig“, Energie und Kosten je Durchgang (appliances.py)
+        "enabled": True,
+        "auto": True,                  # ohne Einträge: Leistungssensoren nach Namen (Waschmaschine, Trockner, Spülmaschine)
+        "items": [],                   # [{id, name, kind, power, energy, status, door, remaining, start_w, stop_w, stop_min}]
     },
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",

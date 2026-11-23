@@ -10,6 +10,7 @@ import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 import { solarCfg } from "./prognose.js";
 import { simSettingsHTML } from "./anwesenheit.js";
 import { calKind } from "./termine.js";
+import { applList } from "./geraete.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
@@ -17,7 +18,7 @@ const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
   alarme: ["house_mode", "presence_sim", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
-  technik: ["heating", "wallbox", "shading"],
+  technik: ["heating", "wallbox", "shading", "appliances"],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
@@ -97,6 +98,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setActions(D)}`;
     else if (tab === "technik") body = `${dlAll}
       ${this._setTech(D)}
+      ${this._setAppl(D)}
       ${this._setShade(D)}`;
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
@@ -289,6 +291,30 @@ const EinstellungenMixin = (Base) => class extends Base {
   }
 
   /* Beschattung: Hinweise nach Wettervorhersage, Sonnenstand und Ausrichtung der Rollos */
+  /* Haushaltsgeräte: Erkennung über Leistung oder Status, Tür zum Quittieren, Restzeit */
+  _setAppl(D) {
+    const A = D.appliances || { enabled: true, auto: true, items: [] }, h = this._hass;
+    const found = applList(h, { appliances: { enabled: true } });
+    const auto = found.filter((a) => a.auto);
+    const kinds = [["", "Automatisch (Name)"], ["wash", "Waschmaschine"], ["dry", "Trockner"], ["dish", "Spülmaschine"], ["other", "Anderes Gerät"]];
+    const ent = (i, key, ph, title) => `<input class="inp" style="flex:1 1 200px" list="dl-all" data-set="appliances.items.${i}.${key}" value="${esc(A.items[i][key] || "")}" placeholder="${ph}" title="${title}">`;
+    const nm = (i, key, unit, min, max, title) => `<input class="inp xs" type="number" min="${min}" max="${max}" step="1" data-set="appliances.items.${i}.${key}" data-num="1" value="${esc(String(A.items[i][key] ?? ""))}" title="${title}"><span class="rl">${unit}</span>`;
+    const rows = A.items.map((it, i) => `<div class="actcard">
+      <div class="actrow"><input class="inp" style="flex:1 1 160px" data-set="appliances.items.${i}.name" value="${esc(it.name || "")}" placeholder="Name, z. B. Waschmaschine">
+        <select class="inp" data-set="appliances.items.${i}.kind">${kinds.map(([k, t]) => `<option value="${k}" ${(it.kind || "") === k ? "selected" : ""}>${t}</option>`).join("")}</select>
+        <button class="sbtn danger" data-act="s-appl-del" data-i="${i}" title="Entfernen">${icon("mdi:delete-outline")}</button></div>
+      <div class="actrow sub">${ent(i, "power", "Leistung: sensor.…_power", "Leistung in W (Steckdose mit Messung)")}${ent(i, "status", "Programmstatus (optional)", "z. B. Home Connect, Miele: läuft/fertig")}</div>
+      <div class="actrow sub">${ent(i, "energy", "Energiezähler in kWh (optional)", "genauer als die aufsummierte Leistung")}${ent(i, "door", "Tür (optional): binary_sensor.…", "Tür auf quittiert „fertig“")}${ent(i, "remaining", "Restzeit (optional)", "Zeitpunkt oder Minuten")}</div>
+      <div class="actrow sub"><span class="rl">läuft ab</span>${nm(i, "start_w", "W", 1, 2000, "Startgrenze: so viel Leistung mindestens 1 Minute lang")}<span class="rl">fertig unter</span>${nm(i, "stop_w", "W", 1, 2000, "Stoppgrenze")}<span class="rl">für</span>${nm(i, "stop_min", "min", 1, 60, "so lange unter der Stoppgrenze (Spülmaschine trocknet oft lange ohne Strom: eher 10–20 min)")}</div></div>`).join("");
+    return `<div class="set glass" data-sec="appliances"><h2>${icon("mdi:washing-machine")}Haushaltsgeräte</h2>
+      <p class="hint">Karte „Geräte“ auf der Übersicht: läuft seit, Restzeit, „fertig seit …“, Energie und Kosten je Durchgang (Strompreis aus Darstellung → Strompreis; eigener PV-Strom zählt nicht). Bei „fertig“ kommt eine Meldung (Hinweis, auch als Push), bis jemand quittiert, die Tür öffnet oder das Gerät neu startet. Dazu ein Tipp, wann sich das Starten lohnt (PV-Überschuss, günstiges Zeitfenster, Solarprognose).</p>
+      <div class="srow"><span class="lbl">Haushaltsgeräte auswerten</span><label class="tgl"><input type="checkbox" data-set="appliances.enabled" data-bool="1" ${A.enabled !== false ? "checked" : ""}><span></span></label></div>
+      <div class="srow"><span class="lbl">Automatisch erkennen<small>ohne eigene Einträge: Leistungssensoren mit Waschmaschine, Trockner oder Spülmaschine im Namen${auto.length ? ` – erkannt: ${esc(auto.map((a) => `${a.name} (${a.power})`).join(", "))}` : " – zurzeit keine erkannt"}</small></span><label class="tgl"><input type="checkbox" data-set="appliances.auto" data-bool="1" ${A.auto !== false ? "checked" : ""}><span></span></label></div>
+      ${rows ? `<div class="appllist">${rows}</div>` : ""}
+      <div class="srow"><button class="pbtn" data-act="s-appl-add">${icon("mdi:plus")}Gerät hinzufügen</button>${auto.length && !A.items.length ? `<button class="pbtn" data-act="s-appl-add" data-auto="1">${icon("mdi:auto-fix")}Erkannte übernehmen und anpassen</button>` : ""}</div>
+    </div>`;
+  }
+
   _setShade(D) {
     const h = this._hass, m = buildModel(h, { ...D, hidden_areas: [] }), S = D.shading || {};
     const F = S.facing || {}, loc = homeLoc(h), wid = weatherIdOf(h, D);
@@ -401,7 +427,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const types = [["knx", "KNX-Telegramm"], ["switch", "Schalter / Licht"], ["siren", "Sirene"], ["tts", "Durchsage (z. B. Sonos)"], ["script", "Skript"]];
     const whens = [["neu", "sofort bei neuer Meldung"], ["eskalation", "bei Eskalation"]];
     const bi = [["contacts", "Fenster oder Tür offen"], ["window_heating", "Fenster beim Heizen"], ["safety", "Melder ausgelöst"], ["alarm_panel", "Alarmanlage ausgelöst"],
-      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"], ["mold", "Schimmelrisiko"]];
+      ["presence_away", "Bewegung bei Abwesenheit"], ["locks", "Schloss entriegelt"], ["garage", "Garagentor offen"], ["battery", "Batterien kritisch"], ["offline", "Geräte nicht erreichbar"], ["mold", "Schimmelrisiko"], ["appliances", "Haushaltsgerät fertig"]];
     const scopes = [["alarm", "alle Alarme"], ["warn", "Alarme und Warnungen"], ["all", "alle Meldungen"], ...bi.map(([k, t]) => [`b:${k}`, `Regel: ${t}`]),
       ...D.alerts.rules.map((r, i) => [`r:${i}`, `Eigene Regel: ${r.title || r.entity || i + 1}`])];
     const sel = (path, opts, cur, cls = "") => `<select class="inp ${cls}" data-set="${path}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${cur === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
@@ -457,7 +483,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const bi = [["contacts", "Fenster oder Tür offen", "Warnung"], ["window_heating", "Fenster offen, während der Raum heizt", "Warnung"], ["safety", "Melder ausgelöst (Rauch, Wasser, Gas …)", "Alarm"],
       ["locks", "Schloss entriegelt", "Warnung"], ["garage", "Garagentor oder Tor offen", "Warnung"], ["battery", "Batterien kritisch", "Warnung"], ["offline", "Geräte nicht erreichbar", "Hinweis"],
       ["presence_away", "Bewegung erkannt, während niemand zu Hause ist", "Alarm"], ["alarm_panel", "Alarmanlage ausgelöst (z. B. Alarmo)", "Alarm"],
-      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"]];
+      ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"], ["appliances", "Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)", "Hinweis"]];
     const allM = HOUSE_MODES.map((x) => x[0]);
     const mchips = (path, cur) => `<span class="mchips" title="gilt in diesen Hausmodi">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
     const bmodes = (k) => (A.modes && A.modes[k] && A.modes[k].length ? A.modes[k] : BUILTIN_MODES[k] || allM);

@@ -24,6 +24,18 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - **Kosten** je Stunde: Netzbezug × Stundenmittel des Preissensors (mit Aufschlag), ohne Preissensor mit dem festen Preis; Bilanz = Kosten minus Einspeisevergütung.
 - **Rekorde des Jahres:** bester PV-Tag und -Monat, höchster Tagesverbrauch, wärmster und kältester Tag.
 - Daten aus der Langzeitstatistik des Recorders (drei Abfragen der Stundenmittel, eine der Tagesmittel), nur beim Öffnen und Blättern; Zeiträume mit Lücken werden grau markiert.
+### Neu – „Fertig“-Meldungen für Haushaltsgeräte
+- **Karte „Geräte“** auf der Übersicht (Cockpit rechte Spalte, Aktiv-Fokus, Etagen-Spalten, Hausschnitt): je Gerät „läuft seit 42 min · noch ca. 58 min · 1,9 kW“, „fertig seit 12 min · Dauer 2:28 h · 1,05 kWh · 0,21 € (35 % eigener Strom)“ bzw. der letzte Durchgang mit Schnitt. „Erledigt“ quittiert.
+- **Erkennung im Backend** (`appliances.py`), auch ohne offenes Panel: über die Leistung (Steckdose mit Messung; läuft ab 10 W für 1 min, fertig unter 5 W für 5 min, je Gerät einstellbar) oder einen Programmstatus (z. B. Home Connect, Miele). Durchgänge unter 5 min zählen nicht. Restzeit aus einer Entität oder geschätzt aus den letzten zehn Durchgängen.
+- **Energie und Kosten je Durchgang:** Energiezähler oder aufsummierte Leistung, Preis aus den Strompreis-Einstellungen (Preissensor bzw. fester Preis); was gerade aus eigenem PV-Strom kommt, kostet nichts (Netz-Sensor der Kopfzeile).
+- **Meldung „Waschmaschine fertig“** als Hinweis im Alarmmanager und per Push (mit „Quittieren“). Sie verschwindet beim Quittieren, wenn die Tür aufgeht (optional) oder das Gerät neu startet, spätestens nach 12 Stunden. Feste Regel „Haushaltsgerät fertig“ unter Alarme abschaltbar.
+- **Tipp zum Starten:** „Jetzt starten: 2,9 kW PV-Überschuss“, sonst das günstige Zeitfenster eines dynamischen Tarifs oder die Solarprognose („Heute kommen noch 6,2 kWh PV: bis Mittag starten“).
+- **Bildschirmschoner:** „Trockner fertig seit 10 min“ bzw. „Spülmaschine noch ca. 20 min“.
+- **Einstellungen → Technik → Haushaltsgeräte:** ohne Einträge automatisch erkannt (Leistungssensoren mit Waschmaschine, Trockner, Spülmaschine im Namen); eigene Geräte mit Leistung, Status, Energiezähler, Tür, Restzeit und Grenzen.
+- Neuer Sensor **`sensor.haus_geraete`** (Anzahl fertiger Geräte, Einzelheiten im Attribut `geraete`, nicht im Recorder) für eigene Automationen; Websocket-Befehl `haus_visualisierung/appliance_ack`.
+
+### Tests
+- Neue Gruppe `geraete` (Bedienprüfungen): Karte, Texte, PV-Tipp, Meldung, Quittieren, Handybreite, Einstellungen, Schoner. Backend `test_appliances.py`: Erkennung über Leistung mit Pausen und Netzanteil, Status und Tür, Quittieren über Alarmmanager und Websocket, Einstellungen.
 
 ### Geändert – Bildschirmschoner bleibt mittig
 - Uhr und Infos im Bildschirmschoner stehen jetzt **standardmäßig fest in der Mitte** statt jede Minute zu wandern.

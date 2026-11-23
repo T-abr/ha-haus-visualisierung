@@ -32,6 +32,7 @@ from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
 from .actions import ActionRunner
+from .appliances import ApplianceTracker
 from .alarms import ACKED, MUTED, AlarmBook
 from .const import BUILTIN_MODES, HOUSE_MODES, PANEL_URL_PATH
 from .mode import HouseMode
@@ -225,11 +226,13 @@ class AlertMonitor:
         self.house = HouseMode(hass, self)
         self.runner = ActionRunner(hass, self)
         self.sim = PresenceSimulator(hass, self)
+        self.appliances = ApplianceTracker(hass, lambda: self.layout, self._schedule)
 
     # ---------- Lebenszyklus ----------
     async def async_start(self) -> None:
         hass = self.hass
         await self.book.async_load()
+        await self.appliances.async_load()
         self.book.mode_info = self.house.status
         self.house.async_start()
         self.sim.async_start()
@@ -262,6 +265,7 @@ class AlertMonitor:
         # Nach dem Start: bestehende Warnungen still übernehmen (keine Push-Flut nach Neustart),
         # Alarme aber trotzdem melden.
         self._rebuild()
+        self.appliances.update()
         current = {a.key: a for a in self.evaluate()}
         self.book.sync(current, silent_new=True)
         for alert in current.values():
@@ -338,8 +342,9 @@ class AlertMonitor:
         self._all = {e for r in self._rooms for lst in r.groups.values() for e in lst}
         rules = layout.get("alerts", {}).get("rules", [])
         self._panels = hass.states.async_entity_ids("alarm_control_panel")
+        self.appliances.rebuild()
         self._watch = (self._all | set(batteries) | set(self._panels) | set(self._outdoor.values())
-                       | {r.get("entity") for r in rules if r.get("entity")})
+                       | {r.get("entity") for r in rules if r.get("entity")} | self.appliances.watch)
 
     def _room_climate(self, room: _Room, area: Any) -> tuple[str | None, str | None]:
         """Temperatur- und Feuchtefühler des Raums – wie im Panel: Vorgabe des Bereichs, sonst der erste passende."""
@@ -530,6 +535,8 @@ class AlertMonitor:
             out.extend(self._mold_alerts(cfg, now))
         else:
             self._mold.clear()
+        if b.get("appliances", True) and mode_ok("appliances"):
+            out.extend(Alert(key, "info", title, detail, "") for key, title, detail, _icon in self.appliances.alerts())
         for i, rule in enumerate(cfg.get("rules", [])):
             ent = rule.get("entity")
             if rule.get("enabled") is False or not ent:
@@ -548,7 +555,10 @@ class AlertMonitor:
     # ---------- Ereignisse ----------
     @callback
     def _on_state(self, event: Event) -> None:
-        if event.data.get("entity_id") in self._watch:
+        eid = event.data.get("entity_id")
+        if eid in self._watch:
+            if eid in self.appliances.watch and self._baseline_done:
+                self.appliances.update()
             self._schedule()
 
     @callback
@@ -565,6 +575,8 @@ class AlertMonitor:
                 self._notify_new(self._active[key])
                 self.runner.on_new(self._active[key])
         self.runner.check_escalation()
+        if self._baseline_done:
+            self.appliances.update()
         self._schedule(0)
 
     @callback
@@ -692,6 +704,9 @@ class AlertMonitor:
             for k in [k for k, a in self.book.alarms.items() if a["status"] not in (ACKED, MUTED)]:
                 done = self.async_action(k, "ack", user)
             return done or {}
+        if action == "ack" and key.startswith("appliance:"):
+            # Gerät quittiert: zurück auf „aus“, die Meldung verschwindet mit der nächsten Auswertung
+            self.appliances.ack(key.split(":", 1)[1])
         a = self.book.action(key, action, user, minutes, until)
         if a is None:
             return None

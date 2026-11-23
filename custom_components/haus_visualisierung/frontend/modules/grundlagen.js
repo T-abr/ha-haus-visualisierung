@@ -22,11 +22,12 @@ const DEFAULT_LAYOUT = {
   shading: { enabled: true, hot: 26, facing: {} },
   forecast: { enabled: true, solar: true, solar_today: "", solar_tomorrow: "" },
   termine: { enabled: true, header: true, saver: true, days: 7, evening: 17, cals: {} },
+  appliances: { enabled: true, auto: true, items: [] },
   wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
   alerts: {
-    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true, mold: true },
+    builtin: { contacts: true, window_heating: true, safety: true, locks: true, garage: true, battery: false, offline: false, presence_away: true, alarm_panel: true, mold: true, appliances: true },
     modes: {}, contacts_min: 0, mold_hum: 65, mold_min: 30, rules: [],
   },
   escalation: { enabled: true, minutes: 5, levels: ["alarm"], push_critical: true },
@@ -58,6 +59,7 @@ const withDefaults = (l) => {
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
     forecast: { ...DEFAULT_LAYOUT.forecast, ...((l && l.forecast) || {}) },
     termine: { ...DEFAULT_LAYOUT.termine, ...((l && l.termine) || {}), cals: { ...((l && l.termine && l.termine.cals) || {}) } },
+    appliances: { ...DEFAULT_LAYOUT.appliances, ...((l && l.appliances) || {}), items: Array.isArray(l && l.appliances && l.appliances.items) ? l.appliances.items : [] },
     shading: { ...DEFAULT_LAYOUT.shading, ...((l && l.shading) || {}), facing: { ...((l && l.shading && l.shading.facing) || {}) } },
     push: { ...structuredClone(DEFAULT_LAYOUT.push), ...((l && l.push) || {}), levels: { ...DEFAULT_LAYOUT.push.levels, ...((l && l.push && l.push.levels) || {}) } },
   };

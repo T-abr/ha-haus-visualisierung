@@ -25,6 +25,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_alarm_code)
     websocket_api.async_register_command(hass, ws_action_test)
     websocket_api.async_register_command(hass, ws_presence_sim)
+    websocket_api.async_register_command(hass, ws_appliance_ack)
 
 
 def _payload(hass: HomeAssistant) -> dict[str, Any]:
@@ -220,3 +221,20 @@ def ws_presence_sim(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         connection.send_result(msg["id"], {"active": False, "source": None, "note": "", "next": [], "planned": 0, "log": []})
         return
     connection.send_result(msg["id"], monitor.sim.status())
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/appliance_ack", vol.Required("appliance"): str})
+@callback
+def ws_appliance_ack(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Haushaltsgerät quittieren („fertig“ → „aus“), z. B. nach dem Ausräumen."""
+    monitor = _monitor(hass)
+    if monitor is None:
+        connection.send_error(msg["id"], "not_ready", "Alarmmanager nicht geladen")
+        return
+    key = f"appliance:{msg['appliance']}"
+    if key in monitor.book.alarms:
+        monitor.async_action(key, "ack", connection.user.name if connection.user else None)
+    elif not monitor.appliances.ack(msg["appliance"]):
+        connection.send_error(msg["id"], "not_found", "Gerät ist nicht fertig")
+        return
+    connection.send_result(msg["id"], {"ok": True})
