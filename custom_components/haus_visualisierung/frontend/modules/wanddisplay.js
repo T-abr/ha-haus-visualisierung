@@ -15,6 +15,9 @@ const DISPLAY_TILES = [["pv_jetzt", "PV jetzt"], ["energie_heute", "Energie heut
 const DISPLAY_PAGES = [["start", "Start"], ["energie", "Energie"], ["klima", "Klima"], ["haus", "Haus"]];
 const DEFAULT_TILES = ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"];
 const FIRMWARE_URL = "https://github.com/T-abr/ha-haus-display";
+/* Eigene Seiten: Grenzen wie display.py (CUSTOM_PAGES, CUSTOM_TILES); Symbole nur aus der Firmware (DISPLAY_ICONS) */
+const CUSTOM_PAGES = 3, CUSTOM_TILES = 6;
+const CUSTOM_ICONS = ["air-conditioner", "airplane", "battery", "battery-70", "bed", "bell", "blinds", "car", "cctv", "ceiling-light", "coffee", "desk-lamp", "door", "door-closed", "door-open", "eye", "fan", "fan-off", "fire", "flash", "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump", "home", "home-lightning-bolt", "home-thermometer", "home-variant", "lamp", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on", "lightbulb-outline", "lightning-bolt", "lock", "lock-open", "lock-open-variant", "motion-sensor", "music", "palette", "pool", "power", "power-plug", "power-plug-outline", "power-socket-eu", "radiator", "robot-vacuum", "script-text", "shield-check", "shield-home", "shield-lock", "shower", "silverware-fork-knife", "snowflake", "sofa", "sofa-outline", "solar-power-variant", "speaker", "speaker-play", "sprinkler", "star", "string-lights", "television", "thermometer", "thermostat", "toggle-switch", "toggle-switch-off-outline", "view-dashboard", "washing-machine", "water", "water-percent", "window-closed", "window-open-variant", "window-shutter", "window-shutter-open"];
 
 const slug = (s) => String(s || "").toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
   .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 20);
@@ -25,7 +28,7 @@ function newDisplay(list) {
   let id = "flur", n = 2;
   while (ids.has(id)) id = `flur_${n++}`;
   return { id, name: n > 2 ? `Flur ${n - 1}` : "Flur", pages: ["start", "energie", "klima", "haus"], tiles: [...DEFAULT_TILES],
-    hint: true, bright_day: 80, bright_night: 10, wake: true, device: "" };
+    hint: true, bright_day: 80, bright_night: 10, wake: true, device: "", custom: [] };
 }
 
 /** Seite ein- bzw. ausschalten (Start bleibt immer), Reihenfolge wie DISPLAY_PAGES */
@@ -58,6 +61,28 @@ function displaySettingsHTML(ctx, D) {
     return `<div class="dslot"><span class="dsn">${k + 1}</span><select class="inp" data-disp-tile="${i}.${k}">${opts}</select>
       ${isEnt ? `<input class="inp w" list="dl-all" data-disp-ent="${i}.${k}" value="${esc(v.slice(7))}" placeholder="light.flur">` : ""}</div>`;
   };
+  const iconSel = (key, v, auto) => `<span class="dico">${icon(`mdi:${v || auto}`)}</span><select class="inp s" data-set="${key}" title="Symbol">
+      ${auto ? `<option value="" ${!v ? "selected" : ""}>automatisch</option>` : ""}${CUSTOM_ICONS.map((n) => `<option value="${n}" ${n === v ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+  const customHTML = (d, i) => {
+    const pages = (d.custom || []).map((pg, p) => {
+      const base = `displays.${i}.custom.${p}`;
+      const tiles = (pg.tiles || []).map((t, k) => `<div class="dct">
+          <input class="inp w" list="dl-all" data-set="${base}.tiles.${k}.entity" value="${esc(t.entity || "")}" placeholder="light.wohnzimmer">
+          <input class="inp" data-set="${base}.tiles.${k}.name" value="${esc(t.name || "")}" placeholder="${esc(t.entity && h.states[t.entity] ? entName(h, t.entity) : "Name (optional)")}">
+          ${iconSel(`${base}.tiles.${k}.icon`, t.icon, "circle-outline")}
+          <button class="sbtn" data-act="s-disp-cust" data-op="tile-up" data-i="${i}" data-p="${p}" data-k="${k}" ${k ? "" : "disabled"} title="Nach vorn">${icon("mdi:arrow-up")}</button>
+          <button class="sbtn danger" data-act="s-disp-cust" data-op="tile-del" data-i="${i}" data-p="${p}" data-k="${k}" title="Entfernen">${icon("mdi:close")}</button></div>`).join("");
+      return `<div class="dcp"><div class="dcph"><span class="dsn">${p + 1}</span>
+          <input class="inp" data-set="${base}.name" value="${esc(pg.name || "")}" placeholder="Wohnzimmer" maxlength="20">
+          ${iconSel(`${base}.icon`, pg.icon || "view-dashboard", "")}
+          <button class="sbtn" data-act="s-disp-cust" data-op="page-up" data-i="${i}" data-p="${p}" ${p ? "" : "disabled"} title="Im Dock nach vorn">${icon("mdi:arrow-left")}</button>
+          <button class="sbtn danger" data-act="s-disp-cust" data-op="page-del" data-i="${i}" data-p="${p}" title="Seite entfernen">${icon("mdi:delete-outline")}</button></div>
+        ${tiles}
+        <button class="pbtn sm" data-act="s-disp-cust" data-op="tile-add" data-i="${i}" data-p="${p}" ${(pg.tiles || []).length >= CUSTOM_TILES ? "disabled" : ""}>${icon("mdi:plus")}Entität</button></div>`;
+    }).join("");
+    return `<div class="srow dcust"><span class="lbl">Eigene Seiten<small>bis zu ${CUSTOM_PAGES} Seiten mit je ${CUSTOM_TILES} Entitäten, im Dock nach den festen Seiten. Antippen schaltet Licht, Schalter, Lüfter, Rollo, Klima und Schloss bzw. löst Szene, Skript oder Taster aus; Sensoren zeigen ihren Wert. Neue Symbole brauchen eine neue Firmware.</small></span>
+      <div class="dcps">${pages}<button class="pbtn sm" data-act="s-disp-cust" data-op="page-add" data-i="${i}" ${(d.custom || []).length >= CUSTOM_PAGES ? "disabled" : ""}>${icon("mdi:plus")}Seite hinzufügen</button></div></div>`;
+  };
   const rows = list.map((d, i) => {
     const eid = `sensor.haus_display_${d.id}`, st = h.states[eid];
     const status = (!saved.has(d.id) ? "noch nicht gespeichert" : st ? `${eid} · Protokoll ${esc(st.state)}` : `${eid} fehlt`)
@@ -70,6 +95,7 @@ function displaySettingsHTML(ctx, D) {
       <div class="srow"><span class="lbl">Seiten<small>Start ist immer dabei; unten im Dock in dieser Reihenfolge</small></span><span class="dpages">${pages}</span></div>
       <div class="srow dtiles"><span class="lbl">Kacheln auf „Start“<small>bis zu vier; „Entität“ zeigt den Zustand und schaltet Licht, Schalter, Rollo oder Schloss</small></span>
         <div class="dslots">${[0, 1, 2, 3].map((k) => tileSel(d, i, k)).join("")}</div></div>
+      ${customHTML(d, i)}
       <div class="srow"><span class="lbl">Hinweiszeile<small>Alarm, abends „Gute Nacht – … offen“, sonst wichtigste Meldung oder fertiges Gerät</small></span>
         <label class="tgl"><input type="checkbox" data-set="displays.${i}.hint" data-bool="1" ${d.hint !== false ? "checked" : ""}><span></span></label></div>
       <div class="srow"><span class="lbl">Helligkeit Tag / Nacht<small>in %; Nacht gilt im Hausmodus „Nacht“ (0 = aus bis zur Berührung)</small></span>
@@ -79,7 +105,7 @@ function displaySettingsHTML(ctx, D) {
         <label class="tgl"><input type="checkbox" data-set="displays.${i}.wake" data-bool="1" ${d.wake !== false ? "checked" : ""}><span></span></label></div>
     </div>`;
   }).join("");
-  const ents = Object.keys(h.states).filter((e) => /^(light|switch|cover|lock|fan|input_boolean|sensor|binary_sensor)\./.test(e)).sort();
+  const ents = Object.keys(h.states).filter((e) => /^(light|switch|cover|lock|fan|input_boolean|sensor|binary_sensor|scene|script|button|input_button|climate|media_player)\./.test(e)).sort();
   return `<style>${DISPLAY_CSS}</style><datalist id="dl-all">${ents.map((e) => `<option value="${esc(e)}">${esc(entName(h, e))}</option>`).join("")}</datalist>
     ${wizardHTML(ctx, D)}
     <div class="set glass"><h2>${icon("mdi:tablet-dashboard")}Wanddisplays</h2>
@@ -283,9 +309,29 @@ function displayInput(D, t, saved) {
   return false;
 }
 
+/** Eigene Seiten bearbeiten (Knöpfe data-act="s-disp-cust", data-op …) */
+function customAction(D, t) {
+  const d = (D.displays || [])[Number(t.dataset.i)];
+  if (!d) return;
+  const pages = d.custom = [...(d.custom || [])];
+  const p = Number(t.dataset.p), k = Number(t.dataset.k);
+  const pg = pages[p] && (pages[p] = { ...pages[p], tiles: [...(pages[p].tiles || [])] });
+  const up = (arr, n) => { if (n > 0) [arr[n - 1], arr[n]] = [arr[n], arr[n - 1]]; };
+  switch (t.dataset.op) {
+    case "page-add": if (pages.length < CUSTOM_PAGES) pages.push({ name: `Seite ${pages.length + 1}`, icon: "view-dashboard", tiles: [] }); break;
+    case "page-del": pages.splice(p, 1); break;
+    case "page-up": up(pages, p); break;
+    case "tile-add": if (pg && pg.tiles.length < CUSTOM_TILES) pg.tiles.push({ entity: "", name: "", icon: "" }); break;
+    case "tile-del": if (pg) pg.tiles.splice(k, 1); break;
+    case "tile-up": if (pg) up(pg.tiles, k); break;
+    default: break;
+  }
+}
+
 /** Vor dem Speichern: leere Kacheln und unvollständige Entitäten weglassen */
 function displaysForSave(list) {
-  return (list || []).map((d) => ({ ...d, tiles: (d.tiles || []).filter((x) => x && x !== "entity:") }));
+  return (list || []).map((d) => ({ ...d, tiles: (d.tiles || []).filter((x) => x && x !== "entity:"),
+    custom: (d.custom || []).map((pg) => ({ ...pg, tiles: (pg.tiles || []).filter((x) => x && String(x.entity || "").trim()) })) }));
 }
 
 const DISPLAY_CSS = `
@@ -304,8 +350,13 @@ const DISPLAY_CSS = `
 .dtiles{align-items:flex-start}.dslots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:6px;flex:1 1 320px}
 .set .hint a{color:var(--hv-accent)}
 .dslot{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.dslot select{flex:1;min-width:0}.dslot .inp.w{flex:1 1 100%}
+.dcust{align-items:flex-start}.dcps{display:flex;flex-direction:column;gap:10px;flex:1 1 320px;min-width:0;align-items:flex-start}
+.dcp{display:flex;flex-direction:column;gap:6px;width:100%;padding:8px;border:1px solid var(--hv-line);border-radius:12px}
+.dcph,.dct{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.dcph .inp:not(.s){flex:1 1 140px;min-width:0}
+.dct .inp.w{flex:2 1 180px;min-width:0}.dct .inp:not(.w):not(.s){flex:1 1 120px;min-width:0}.dct .inp.s,.dcph .inp.s{flex:0 1 150px;min-width:0}
+.dico{display:inline-grid;place-items:center;width:22px;color:var(--hv-dim)}
 .dsn{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:var(--hv-surface-2);font-size:12px;color:var(--hv-dim);flex:none}
 @media (max-width:600px){.dslots{grid-template-columns:1fr}}
 `;
 
-export { adoptDevice, assignDevice, updateDevice, DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };
+export { adoptDevice, assignDevice, customAction, updateDevice, DISPLAY_CSS, DISPLAY_PAGES, DISPLAY_PROTOCOL, DISPLAY_TILES, displayInput, displaySettingsHTML, displaysForSave, newDisplay, togglePage };

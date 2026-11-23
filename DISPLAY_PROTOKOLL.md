@@ -67,6 +67,19 @@ Palette der Visualisierung.
 
 `wetter` fehlt ohne Wetter-Entität. Die Uhrzeit nimmt die Firmware von Home Assistant (Zeitquelle).
 
+### `eigene`
+
+Bis zu drei eigene Seiten (Einstellungen → Displays → „Eigene Seiten“), je bis zu sechs Entitäten. Die Firmware zeigt
+jede Seite im Dock nach den festen Seiten; `[]` blendet alle aus.
+
+```json
+[{"n": "Wohnzimmer", "i": "sofa",
+  "k": [{"i": "lightbulb-on", "f": "#ffc457", "n": "Decke", "v": "an", "vf": "", "s": "Wohnzimmer"}]}]
+```
+
+`i` ist immer ein Symbol, das die Firmware kennt (`tools/icons.txt` im Firmware-Repository, `DISPLAY_ICONS` in
+`display.py`); sonst nimmt die Integration eines passend zur Domäne. Felder der Kacheln wie bei `kacheln`.
+
 ### `kacheln`
 
 Liste mit 1–4 Kacheln für die Startseite, in der eingestellten Reihenfolge:
@@ -148,7 +161,8 @@ data: {display: haus-display-a1b2c3, ziel: "gn:light.kueche"}
 | `gn:<entity_id>` | diesen Gute-Nacht-Punkt schließen bzw. ausschalten (nur wenn er gerade offen ist) |
 | `gn_alle` | alle offenen Punkte mit Aktion schließen |
 | `modus:<zuhause\|nacht\|abwesend\|urlaub>` | Hausmodus setzen (die Firmware zeigt vorher den Gute-Nacht-Check, wenn `gute_nacht.n > 0`) |
-| `kachel:<0–3>` | Kachel angetippt: `entity:`-Kacheln schalten (Licht, Schalter, Lüfter, Abdeckung, Schloss, Helfer umschalten; Szene, Skript, Taster auslösen). Ab Firmware 0.3.1 öffnen Energie-, Klima-, Meldungs- und Geräte-Kacheln stattdessen ihre Seite, wenn sie eingeschaltet ist, und melden nichts. |
+| `kachel:<0–3>` | Kachel angetippt: `entity:`-Kacheln schalten (Licht, Schalter, Lüfter, Abdeckung, Schloss, Helfer umschalten; Szene, Skript, Taster auslösen). Ab der nächsten Firmware öffnen Energie-, Klima-, Meldungs- und Geräte-Kacheln stattdessen ihre Seite, wenn sie eingeschaltet ist, und melden nichts. |
+| `eigen:<seite>:<kachel>` | Kachel einer eigenen Seite angetippt (Seite 0–2, Kachel 0–5): schaltet wie eine `entity:`-Kachel |
 | `geraet_ok` | fertige Haushaltsgeräte quittieren |
 | `hallo` | Gerät ist (neu) verbunden: alle Bereiche neu schicken; nicht zugeordnetes Gerät bekommt `protokoll` = `""` |
 

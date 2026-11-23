@@ -155,6 +155,66 @@ def tap_service(eid: str, st: State | None) -> tuple[str, str] | None:
     return None
 
 
+# Symbole, die die Firmware kennt (tools/icons.txt im Repository ha-haus-display); andere zeigt sie als „?“
+DISPLAY_ICONS = frozenset({
+    "air-conditioner", "airplane", "alarm-light", "alert", "alert-circle", "arrow-left", "battery", "battery-70",
+    "bed", "bell", "bell-alert", "biohazard", "blinds", "bottle-wine-outline", "calendar", "calendar-clock", "car",
+    "cctv", "ceiling-light", "chart-donut", "check", "check-circle-outline", "circle-outline", "close", "coffee",
+    "currency-eur", "desk-lamp", "door", "door-closed", "door-open", "eye", "fan", "fan-off", "fire", "flash",
+    "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump",
+    "help-circle-outline", "home", "home-account", "home-export-outline", "home-lightning-bolt", "home-thermometer",
+    "home-variant", "lamp", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on",
+    "lightbulb-outline", "lightning-bolt", "lock", "lock-alert", "lock-open", "lock-open-variant", "motion-sensor",
+    "music", "newspaper-variant-outline", "palette", "pool", "power", "power-plug", "power-plug-outline",
+    "power-socket-eu", "radiator", "recycle", "robot-vacuum", "script-text", "shield-check", "shield-home",
+    "shield-lock", "shower", "silverware-fork-knife", "snowflake", "sofa", "sofa-outline", "solar-power-variant",
+    "speaker", "speaker-play", "sprinkler", "star", "string-lights", "television", "thermometer", "thermostat",
+    "toggle-switch", "toggle-switch-off-outline", "transmission-tower", "trash-can-outline", "tree-outline",
+    "update", "view-dashboard", "washing-machine", "water", "water-percent", "weather-cloudy", "weather-fog",
+    "weather-hail", "weather-lightning", "weather-lightning-rainy", "weather-night", "weather-partly-cloudy",
+    "weather-pouring", "weather-rainy", "weather-snowy", "weather-snowy-rainy", "weather-sunny", "weather-windy",
+    "weather-windy-variant", "window-closed", "window-open-variant", "window-shutter", "window-shutter-open",
+})
+DOMAIN_ICON = {"light": "lightbulb", "switch": "toggle-switch", "fan": "fan", "cover": "window-shutter", "lock": "lock",
+               "climate": "thermostat", "media_player": "television", "scene": "palette", "script": "script-text",
+               "button": "gesture-tap-button", "input_button": "gesture-tap-button", "input_boolean": "toggle-switch",
+               "binary_sensor": "eye", "sensor": "gauge", "siren": "bell", "humidifier": "water-percent"}
+CUSTOM_PAGES, CUSTOM_TILES = 3, 6
+ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+
+
+def display_icon(want: Any, eid: str, st: State | None) -> str:
+    """Symbol für das Display: gewünschtes bzw. das der Entität, sonst passend zur Domäne (nur DISPLAY_ICONS)."""
+    for cand in (want, st.attributes.get("icon") if st else None):
+        name = str(cand or "").removeprefix("mdi:")
+        if name in DISPLAY_ICONS:
+            return name
+    domain = eid.split(".", 1)[0]
+    if domain == "light" and st is not None and is_on(st):
+        return "lightbulb-on"
+    if domain == "lock" and st is not None and st.state == "unlocked":
+        return "lock-open"
+    return DOMAIN_ICON.get(domain, "circle-outline")
+
+
+def sanitize_custom(raw: Any) -> list[dict]:
+    """Eigene Seiten eines Displays: bis zu drei, je bis zu sechs Entitäten mit eigenem Namen und Symbol."""
+    out = []
+    for pg in raw[:20] if isinstance(raw, list) else []:
+        if not isinstance(pg, dict) or len(out) >= CUSTOM_PAGES:
+            continue
+        tiles = []
+        for t in pg.get("tiles", [])[:30] if isinstance(pg.get("tiles"), list) else []:
+            if len(tiles) < CUSTOM_TILES and isinstance(t, dict) and isinstance(t.get("entity"), str) and ENTITY_RE.match(t["entity"]):
+                ic = str(t.get("icon") or "").removeprefix("mdi:")
+                tiles.append({"entity": t["entity"], "name": str(t.get("name") or "")[:30],
+                              "icon": ic if ic in DISPLAY_ICONS else ""})
+        ic = str(pg.get("icon") or "").removeprefix("mdi:")
+        out.append({"name": str(pg.get("name") or f"Seite {len(out) + 1}")[:20].strip(),
+                    "icon": ic if ic in DISPLAY_ICONS else "view-dashboard", "tiles": tiles})
+    return out
+
+
 def sanitize_displays(raw: Any) -> list[dict]:
     """Einstellungen je Display prüfen (für store.sanitize)."""
     out, ids, devices = [], set(), set()
@@ -194,6 +254,7 @@ def sanitize_displays(raw: Any) -> list[dict]:
             "bright_night": _int("bright_night", 0, 100, 10),
             "wake": d.get("wake", True) is not False,
             "device": dev,
+            "custom": sanitize_custom(d.get("custom")),
         })
     return out
 
@@ -287,6 +348,7 @@ class DisplayHub:
         ents = {v for v in (c or {}).values() if isinstance(v, str) and "." in v}
         ents |= set(self.monitor._all)
         ents |= {e for d in self.displays for t in d["tiles"] if t.startswith("entity:") for e in [t[7:]]}
+        ents |= {t["entity"] for d in self.displays for pg in d.get("custom", []) for t in pg["tiles"]}
         return ents
 
     @callback
@@ -652,7 +714,7 @@ class DisplayHub:
             eid = key[7:]
             st = get(eid)
             name, room = self._short(eid)
-            base.update(n=name, s=room, i=str((st.attributes.get("icon") if st else None) or "").removeprefix("mdi:") or "circle-outline")
+            base.update(n=name, s=room, i=display_icon(None, eid, st))
             if st is not None:
                 v = num(st)
                 unit = st.attributes.get("unit_of_measurement")
@@ -660,6 +722,13 @@ class DisplayHub:
                     {"on": "an", "off": "aus", "open": "offen", "closed": "zu", "unavailable": "nicht erreichbar"}.get(st.state, st.state)
                 base["f"] = C_WARM if is_on(st) else C_DIM
         return base
+
+    def custom_tile(self, t: dict) -> dict:
+        """Kachel einer eigenen Seite: wie eine entity:-Kachel, mit eigenem Namen und Symbol."""
+        x = self.tile(f"entity:{t['entity']}")
+        out = {"i": display_icon(t["icon"], t["entity"], self.hass.states.get(t["entity"])), "f": x["f"],
+               "n": t["name"] or x["n"], "v": x["v"], "vf": x["vf"], "s": x["s"]}
+        return out
 
     def hinweis(self, items: list[dict]) -> dict | None:
         al = self._alerts()
@@ -715,6 +784,7 @@ class DisplayHub:
             "klima": _dumps([{"n": r["n"], "t": f"{de(r['t'], 1)}°", "h": f"{round(r['h'])} %" if r["h"] is not None else "", "w": r["w"]} for r in K["rooms"][:8]]),
             "gute_nacht": _dumps({"n": n, "txt": "Alles zu." if not n else f"{n} {'Punkt ist' if n == 1 else 'Punkte sind'} noch offen.",
                                   "p": gn_rows, "mehr": max(0, n - GN_MAX)}),
+            "eigene": _dumps([{"n": pg["name"], "i": pg["icon"], "k": [self.custom_tile(t) for t in pg["tiles"]]} for pg in d["custom"]]),
             "haus": _dumps({"modus": mode, "modi": [[k, nm, ic] for k, nm, ic, _f in MODES],
                             "meldungen": [{"l": a.get("level"), "t": a.get("title", "")} for a in self._alerts()[:4]],
                             "geraete": [f"{x} fertig" for x in self._done_appliances()[:3]]}),
@@ -814,6 +884,17 @@ class DisplayHub:
                     await self.hass.services.async_call(*svc, {"entity_id": key[7:]}, blocking=False)
                 except Exception as err:  # noqa: BLE001 – ein falscher Tipp soll die Integration nicht stören
                     _LOGGER.warning("Display %s: %s nicht geschaltet: %s", did, key[7:], err)
+        elif ziel.startswith("eigen:"):
+            try:
+                _p, pi, ki = ziel.split(":")
+                eid = d["custom"][int(pi)]["tiles"][int(ki)]["entity"]
+            except (ValueError, IndexError, KeyError):
+                return
+            if svc := tap_service(eid, self.hass.states.get(eid)):
+                try:
+                    await self.hass.services.async_call(*svc, {"entity_id": eid}, blocking=False)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("Display %s: %s nicht geschaltet: %s", did, eid, err)
         elif ziel == "geraet_ok":
             for r in self.monitor.appliances.snapshot():
                 if r.get("state") == "fertig":

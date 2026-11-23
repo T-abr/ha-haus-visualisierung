@@ -4,11 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu – Wanddisplay: eigene Seiten
+- **Einstellungen → Displays → „Eigene Seiten“**: je Display bis zu drei Seiten mit Name und Symbol, auf jeder bis zu sechs Entitäten (Licht, Schalter, Szenen, Skripte, Sensoren …) mit eigenem Namen, Symbol und Reihenfolge. Die Seiten erscheinen im Dock nach den festen Seiten; ein Tipp auf eine Kachel schaltet bzw. löst aus, Sensoren zeigen ihren Wert. Wirkt nach dem Speichern sofort.
+- Symbole nur aus dem Vorrat der Firmware (jetzt 120, u. a. Lampen, Rollos, Steckdosen, Klima, Medien); Entitäts-Symbole, die das Display nicht kennt, ersetzt die Integration durch eines passend zur Domäne statt „?“.
+- Braucht die nächste Firmware (Bereich `eigene`, Ziel `eigen:<seite>:<kachel>`, kein neues Protokoll); ältere Firmware ignoriert die Seiten.
+
 ### Behoben – Wanddisplay
 - **Kacheln lassen sich bedienen**: Ein Tipp auf eine Entitäts-Kachel schaltet jetzt (Licht, Schalter, Lüfter, Abdeckung, Schloss, Klima, Mediaplayer umschalten; Szene, Skript, Taster auslösen). Die Firmware meldete den Tipp bisher nicht; das kommt mit der nächsten Firmware. Energie-, Klima-, Meldungs- und Geräte-Kacheln öffnen dann ihre Seite.
 
 ### Tests
-- `test_display.py`: Tipp auf Kacheln (`kachel:N`) und `tap_service`.
+- `test_display.py`: Tipp auf Kacheln (`kachel:N`), `tap_service`, eigene Seiten (Prüfen, Push, Tipp).
+- Bedienprüfung „displays“: eigene Seite anlegen, Entitäten, Symbol, Reihenfolge, Speichern.
 
 ## 1.14.0 – 2026-11-23
 

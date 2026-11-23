@@ -22,12 +22,20 @@ def test_sanitize() -> None:
     out = sanitize({"displays": [
         {"name": "Flur Oben", "pages": ["klima", "haus", "unsinn", "klima"], "tiles": ["pv_jetzt", "x", "entity:light.flur", "entity:<b>"],
          "bright_day": 500, "bright_night": -3, "hint": False},
-        {"name": "Flur Oben"}, "kaputt", {"id": "!!"},
+        {"name": "Flur Oben", "custom": [
+            {"name": "Wohnzimmer mit sehr langem Namen", "icon": "mdi:sofa", "tiles": [
+                {"entity": "light.decke", "name": "Decke", "icon": "mdi:ceiling-light"}, {"entity": "<b>"}, "x",
+                {"entity": "scene.abend", "icon": "mdi:gibtsnicht"}] + [{"entity": f"light.l{i}"} for i in range(8)]},
+            {}, "kaputt", {"name": "B"}, {"name": "C"}, {"name": "D"}]}, "kaputt", {"id": "!!"},
     ] + [{"name": f"d{i}"} for i in range(9)]})["displays"]
     a, b, c = out[:3]
     assert a == {"id": "flur_oben", "name": "Flur Oben", "pages": ["start", "klima", "haus"], "tiles": ["pv_jetzt", "entity:light.flur"],
-                 "hint": False, "bright_day": 100, "bright_night": 0, "wake": True, "device": ""}
+                 "hint": False, "bright_day": 100, "bright_night": 0, "wake": True, "device": "", "custom": []}
     assert b["id"] == "flur_oben_2" and b["tiles"] == ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"] and b["pages"] == ["start"]
+    wz, leer, b3 = b["custom"]
+    assert wz["name"] == "Wohnzimmer mit sehr" and wz["icon"] == "sofa" and len(wz["tiles"]) == 6
+    assert wz["tiles"][:2] == [{"entity": "light.decke", "name": "Decke", "icon": "ceiling-light"}, {"entity": "scene.abend", "name": "", "icon": ""}]
+    assert leer == {"name": "Seite 2", "icon": "view-dashboard", "tiles": []} and b3["name"] == "B"
     assert c["id"] == "display"
     assert len(out) == 6
 
@@ -232,7 +240,8 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     assert sent["protokoll"] == str(PROTOCOL) and json.loads(sent["einstellungen"])["name"] == "Flur"
     # leeres Haus ohne Meldungen: ruhige Hinweiszeile statt leerer Fläche
     assert json.loads(sent["hinweis"]) == {"i": "shield-check", "f": "#4fd18b", "n": "Alles in Ordnung", "s": "Keine offenen Meldungen", "knopf": "", "ziel": ""}
-    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "haus"}
+    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "eigene", "haus"}
+    assert json.loads(sent["eigene"]) == []
     n = len(calls)
     await _tick(hass, 31)
     assert len(calls) == n
@@ -243,7 +252,7 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     # „hallo“ nach dem Verbinden → alles neu; Tipp mit Gerätenamen wirkt auf das zugeordnete Display
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "hallo"}, blocking=True)
     await hass.async_block_till_done()
-    assert len(calls) == n + 9
+    assert len(calls) == n + 10
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "modus:abwesend"}, blocking=True)
     await _tick(hass)
     assert monitor.house.mode == "abwesend"
@@ -260,6 +269,25 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
         await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": ziel}, blocking=True)
     await hass.async_block_till_done()
     assert [c.data["entity_id"] for c in toggles] == ["light.flur"] and [c.data["entity_id"] for c in scenes] == ["scene.abend"]
+
+    # Eigene Seite: Kacheln mit eigenem Namen/Symbol, Zustand der Entität, Tipp schaltet
+    hass.states.async_set("light.decke", "on", {"friendly_name": "Decke Wohnzimmer", "icon": "mdi:unbekannt"})
+    await store.async_save({**store.data, "displays": [{"name": "Flur", "device": "haus-display-a1b2c3", "custom": [
+        {"name": "Wohnzimmer", "icon": "sofa", "tiles": [{"entity": "light.decke"}, {"entity": "light.flur", "name": "Gang", "icon": "lamp"}]}]}]})
+    await _tick(hass)
+    eigene = json.loads([c.data["daten"] for c in calls if c.data["bereich"] == "eigene"][-1])
+    assert eigene[0]["n"] == "Wohnzimmer" and eigene[0]["i"] == "sofa"
+    assert eigene[0]["k"][0]["i"] == "lightbulb-on" and eigene[0]["k"][0]["n"] == "Decke Wohnzimmer" and eigene[0]["k"][0]["v"] == "an"
+    assert eigene[0]["k"][1]["n"] == "Gang" and eigene[0]["k"][1]["i"] == "lamp" and eigene[0]["k"][1]["v"] == "aus"
+    for ziel in ("eigen:0:1", "eigen:0:5", "eigen:2:0", "eigen:x"):
+        await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": ziel}, blocking=True)
+    await hass.async_block_till_done()
+    assert [c.data["entity_id"] for c in toggles] == ["light.flur", "light.flur"]
+    # Zustand ändert sich → nur der Bereich „eigene“ (und was davon abhängt) geht neu ans Gerät
+    m = len(calls)
+    hass.states.async_set("light.decke", "off", {"friendly_name": "Decke Wohnzimmer"})
+    await _tick(hass)
+    assert "eigene" in [c.data["bereich"] for c in calls[m:]]
 
     # Fremdes Gerät meldet sich → „nicht zugeordnet“; Zuordnung entfernen → Gerät zeigt das wieder
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-ffffff", "ziel": "hallo"}, blocking=True)
