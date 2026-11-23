@@ -4,6 +4,21 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.13.0 – 2026-11-23
+
+### Neu – Wanddisplays einrichten ohne Handarbeit
+- **Einstellungen → Displays → „Neues Gerät einrichten“**: Assistent in drei Schritten. **Firmware aus dem Browser flashen** (ESP Web Tools 10.4.0, mitgeliefert unter `frontend/vendor/`), **WLAN per Improv** direkt im Flash-Dialog, dann **„Übernehmen“** und **einem Display zuordnen** (oder daraus ein neues anlegen) – Zuordnen speichert sofort, die Inhalte erscheinen gleich auf dem Gerät. Nichts mehr in YAML, `secrets.yaml` oder den ESPHome-Optionen.
+- Die fertige Firmware 0.2.0 (Guition ESP32-S3-4848S040) liegt der Integration bei (`firmware/`, ausgeliefert unter `/haus_visualisierung_static/firmware/<version>/`), damit das private Firmware-Repository nicht erreichbar sein muss. Sie ist für alle Displays gleich (Name mit MAC-Endung).
+- **Grenzen**: Flashen aus dem Browser geht nur in **Chrome oder Edge am Computer** und nur, wenn Home Assistant über **HTTPS** geöffnet ist (Web Serial). Sonst zeigt der Assistent den Grund und bietet die Firmware zum Herunterladen an (flashen z. B. mit ESPHome Web). Steht das Gerät in einem anderen Netz (mDNS kommt nicht an), lässt es sich **per IP** hinzufügen.
+- „Übernehmen“ bestätigt die ESPHome-Erkennung und setzt beim Gerät „Darf Home-Assistant-Aktionen ausführen“ (Websocket `haus_visualisierung/display_adopt`); gefundene und übernommene Geräte mit Status und Firmware-Version liefert `haus_visualisierung/display_devices`.
+- **Push statt Abo**: Ein Display hat jetzt ein Gerät (`device`); die Integration schickt geänderte Bereiche über die ESPHome-Aktion `esphome.<gerät>_haus_daten` und nach `hallo` vom Gerät alles. `display_tap` nimmt auch den Gerätenamen. Firmware 0.1.x (feste Kennung) läuft unverändert weiter; Protokoll bleibt 1.
+
+### Performance
+- Großes Testhaus (`tests/perf/measure.py`): Aufbau 5,5–34,1 ms je Seite (Übersicht 13,9–19,4 ms), 0 Neuaufbauten, hass-Setter Ø 22–28 µs – unverändert, der Assistent wird nur im Reiter „Displays“ gebaut. Er fragt die Geräte nur alle 5 s ab, solange der Reiter offen ist, und ersetzt dann nur seine Geräteliste (kein Neuaufbau). ESP Web Tools (536 KB) lädt erst, wenn der Browser flashen kann. Im Backend gehen an die Geräte nur geänderte Bereiche.
+
+### Tests
+- `test_display.py`: Feld `device`, Firmware-Auslieferung (Manifest und Abbild), Geräte finden und übernehmen (Erkennung und vorhandener Eintrag), Push nur bei Änderungen, `hallo`, Tipp mit Gerätenamen, Zuordnung aufheben. Bedienprüfung „displays_einrichten“ (Assistent, ESP Web Tools geladen, Übernehmen, Zuordnen mit neuem Display, Fehler per IP, Handy).
+
 ## 1.12.0 – 2026-11-23
 
 ### Neu – Wanddisplays (ESP32-S3 mit ESPHome)

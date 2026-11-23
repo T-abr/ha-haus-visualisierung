@@ -5,6 +5,11 @@ Das Display ist ein Client der Visualisierung: Seiten, Kacheln und Helligkeit st
 die Attribute sind kurze JSON-Texte, die die Firmware nur noch anzeigt (Texte, Farben, Icons schon formatiert).
 Tippen meldet das Display über den Dienst ``haus_visualisierung.display_tap``.
 
+Ab Firmware 0.2 kennt das Gerät seine Kennung nicht mehr: Ein Display hat in den Einstellungen ein Gerät (``device``,
+ESPHome-Name wie ``haus-display-a1b2c3``), und die Inhalte gehen per API-Aktion ``esphome.<gerät>_haus_daten``
+ans Gerät (nur geänderte Bereiche; nach „hallo“ vom Gerät oder neuer Verbindung alles). Einrichten und Übernehmen
+der Geräte: ``display_setup.py``.
+
 Die Schnittstelle ist versioniert (``PROTOCOL``) und in ``DISPLAY_PROTOKOLL.md`` beschrieben; die Firmware liegt im
 Repository ha-haus-display. Neue Felder dürfen hinzukommen, ohne die Version zu erhöhen; Umbenennen oder Entfernen
 erhöht sie.
@@ -20,7 +25,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.const import EVENT_SERVICE_REGISTERED, EVENT_STATE_CHANGED
 from homeassistant.core import Event, HomeAssistant, ServiceCall, State, callback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -32,6 +37,8 @@ _LOGGER = logging.getLogger(__name__)
 
 PROTOCOL = 1
 SERVICE_TAP = "display_tap"
+SERVICE_DATA = "haus_daten"  # API-Aktion der Firmware (ab 0.2.0)
+DEVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 # Kacheln der Startseite (Schlüssel im Layout → Name in den Einstellungen)
 TILES = {
@@ -126,9 +133,14 @@ def slug(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "_", s).strip("_")[:20]
 
 
+def device_service(device: str) -> str:
+    """Name des ESPHome-Dienstes, über den das Gerät seine Inhalte bekommt (wie ESPHome ihn bildet)."""
+    return f"{device.replace('-', '_')}_{SERVICE_DATA}"
+
+
 def sanitize_displays(raw: Any) -> list[dict]:
     """Einstellungen je Display prüfen (für store.sanitize)."""
-    out, ids = [], set()
+    out, ids, devices = [], set(), set()
     for d in raw[:20] if isinstance(raw, list) else []:
         if not isinstance(d, dict) or len(out) >= 6:
             continue
@@ -145,6 +157,12 @@ def sanitize_displays(raw: Any) -> list[dict]:
                 tiles.append(t)
         tiles = (tiles or list(DEFAULT_TILES))[:4]
 
+        dev = d.get("device") if isinstance(d.get("device"), str) and DEVICE_RE.match(d.get("device")) else ""
+        if dev in devices:
+            dev = ""
+        if dev:
+            devices.add(dev)
+
         def _int(key: str, lo: int, hi: int, default: int) -> int:
             v = d.get(key)
             return int(min(max(v, lo), hi)) if isinstance(v, (int, float)) and not isinstance(v, bool) else default
@@ -158,6 +176,7 @@ def sanitize_displays(raw: Any) -> list[dict]:
             "bright_day": _int("bright_day", 10, 100, 80),
             "bright_night": _int("bright_night", 0, 100, 10),
             "wake": d.get("wake", True) is not False,
+            "device": dev,
         })
     return out
 
@@ -182,6 +201,9 @@ class DisplayHub:
         # Energie heute: selbst integriert (Wh seit Mitternacht), überlebt Neustarts
         self._day: dict[str, Any] = {"date": "", "pv": 0.0, "imp": 0.0, "exp": 0.0, "use": 0.0, "last": None}
         self._store: Store[dict] = Store(hass, 1, "haus_visualisierung.display")
+        # Push an die Geräte: zuletzt geschickter Stand je Gerät und Bereich; „hallo“ je Gerät (für den Assistenten)
+        self._sent: dict[str, dict[str, str]] = {}
+        self.hello: dict[str, float] = {}
 
     # ---------- Lebenszyklus ----------
     async def async_start(self) -> None:
@@ -193,6 +215,7 @@ class DisplayHub:
         self._unsubs.append(self.monitor.store.async_add_listener(lambda _l: self.schedule(0)))
         self._unsubs.append(self.monitor.book.async_add_listener(lambda _s: self.schedule()))
         self._unsubs.append(self.monitor.appliances.async_add_listener(lambda: self.schedule()))
+        self._unsubs.append(self.hass.bus.async_listen(EVENT_SERVICE_REGISTERED, self._on_service))
         self.update()
 
     @callback
@@ -231,6 +254,16 @@ class DisplayHub:
             return
         if eid in self._watch() or eid.startswith(("weather.", "calendar.")):
             self.schedule()
+
+    @callback
+    def _on_service(self, event: Event) -> None:
+        """Gerät neu verbunden bzw. übernommen: ESPHome meldet seinen Dienst an → alles neu schicken."""
+        if event.data.get("domain") != "esphome" or not str(event.data.get("service", "")).endswith(f"_{SERVICE_DATA}"):
+            return
+        for d in self.displays:
+            if d.get("device") and device_service(d["device"]) == event.data["service"]:
+                self._sent.pop(d["device"], None)
+                self.schedule(0.5)
 
     def _watch(self) -> set[str]:
         c = self.energy_cfg()
@@ -675,6 +708,7 @@ class DisplayHub:
             if self.payloads:
                 self.payloads = {}
                 self._notify()
+            self._push()
             return
         self._ensure_async()
         new = {}
@@ -686,6 +720,39 @@ class DisplayHub:
         if new != self.payloads:
             self.payloads = new
             self._notify()
+        self._push()
+
+    # ---------- Push an die Geräte (Firmware ab 0.2.0) ----------
+    @callback
+    def _push(self) -> None:
+        """Geänderte Bereiche an die zugeordneten Geräte schicken; abgemeldete Geräte zeigen wieder „nicht zugeordnet“."""
+        assigned = {d["device"]: d["id"] for d in self.displays if d.get("device")}
+        for dev in [x for x in self._sent if x not in assigned]:
+            del self._sent[dev]
+            self._send(dev, {"protokoll": ""})
+        for dev, did in assigned.items():
+            payload = self.payloads.get(did)
+            if not payload or not self.hass.services.has_service("esphome", device_service(dev)):
+                continue
+            sent = self._sent.setdefault(dev, {})
+            out = {k: str(v) for k, v in payload.items() if sent.get(k) != str(v)}
+            if out:
+                sent.update(out)
+                self._send(dev, out)
+
+    @callback
+    def _send(self, dev: str, items: dict[str, str]) -> None:
+        if self.hass.services.has_service("esphome", device_service(dev)):
+            self.hass.async_create_background_task(self._async_send(dev, items), f"haus_display_{dev}")
+
+    async def _async_send(self, dev: str, items: dict[str, str]) -> None:
+        for k, v in items.items():
+            try:
+                await self.hass.services.async_call("esphome", device_service(dev), {"bereich": k, "daten": v}, blocking=True)
+            except Exception as err:  # noqa: BLE001 – Gerät offline: beim nächsten Verbinden kommt alles neu
+                _LOGGER.debug("Display-Gerät %s nicht erreichbar: %s", dev, err)
+                self._sent.pop(dev, None)
+                return
 
     def _notify(self) -> None:
         for cb in list(self._listeners):
@@ -694,7 +761,16 @@ class DisplayHub:
     # ---------- Tippen ----------
     async def async_tap(self, call: ServiceCall) -> None:
         did, ziel = str(call.data.get("display", "")), str(call.data.get("ziel", ""))
-        d = next((x for x in self.displays if x["id"] == did), None)
+        # Firmware ab 0.2 meldet ihren Gerätenamen, 0.1 die Kennung
+        d = next((x for x in self.displays if x["id"] == did), None) or next((x for x in self.displays if did and x.get("device") == did), None)
+        if ziel == "hallo":
+            self.hello[did] = time.time()
+            if d is not None and d.get("device") == did:
+                self._sent.pop(did, None)
+                self._push()
+            elif d is None and DEVICE_RE.match(did):
+                self._send(did, {"protokoll": ""})
+            return
         if d is None:
             _LOGGER.warning("Display %s ist nicht eingerichtet", did)
             return

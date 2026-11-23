@@ -31,6 +31,7 @@ from .const import (
     VERSION,
 )
 from .display import SERVICE_TAP, DisplayHub
+from .display_setup import FIRMWARE_DIR, FIRMWARE_URL, firmware_version
 from .maintenance import MaintenanceBook
 from .store import LayoutStore
 from .websocket import async_register_websocket
@@ -62,6 +63,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     # Die Karten (haus-raum-card, haus-hausschnitt-card) lädt derselbe Einstiegspunkt.
     frontend.add_extra_js_url(hass, MODULE_URL)
+
+    # Wanddisplays: mitgelieferte Firmware zum Flashen aus dem Browser (ESP Web Tools lädt Manifest und Bin von hier)
+    data["firmware"] = await hass.async_add_executor_job(firmware_version)
+    if data["firmware"]:
+        await hass.http.async_register_static_paths([StaticPathConfig(FIRMWARE_URL, str(FIRMWARE_DIR), True)])
 
     async_register_websocket(hass)
     _LOGGER.info("Haus Visualisierung v%s geladen", VERSION)
@@ -101,7 +107,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await monitor.async_start()
     hass.data[DOMAIN]["monitor"] = monitor
     entry.async_on_unload(monitor.async_stop)
-    # Wanddisplays (ESPHome): Inhalte je Display als sensor.haus_display_<id>, Tippen über den Dienst
+    # Wanddisplays (ESPHome): Inhalte je Display als sensor.haus_display_<id> und per Push ans Gerät, Tippen über den Dienst
     hub = DisplayHub(hass, monitor)
     await hub.async_start()
     hass.data[DOMAIN]["displays"] = hub

@@ -12,7 +12,7 @@ import { simSettingsHTML } from "./anwesenheit.js";
 import { calKind } from "./termine.js";
 import { applList } from "./geraete.js";
 import { maintSettingsHTML } from "./wartung.js";
-import { displayInput, displaySettingsHTML } from "./wanddisplay.js";
+import { assignDevice, displayInput, displaySettingsHTML } from "./wanddisplay.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
@@ -688,6 +688,11 @@ const EinstellungenMixin = (Base) => class extends Base {
       return;
     }
     if (t.dataset && t.dataset.dispName && e.type === "change" && this._draft) displayInput(this._draft, t, this._layout.displays);
+    if (t.dataset && t.dataset.dispAssign && e.type === "change" && this._draft) {
+      // Zuordnen wirkt sofort: Entwurf (mit allen offenen Änderungen) speichern, dann bekommt das Gerät seine Inhalte
+      if (assignDevice(this._draft, t.dataset.dispAssign, t.value)) this._actionExtra("s-save", t);
+      return;
+    }
     if (t.dataset && t.dataset.shadeFace && e.type === "change" && this._draft) {
       const S = this._draft.shading = { ...(this._draft.shading || {}) }, F = S.facing = { ...(S.facing || {}) };
       if (t.value) F[t.dataset.shadeFace] = t.value; else delete F[t.dataset.shadeFace];

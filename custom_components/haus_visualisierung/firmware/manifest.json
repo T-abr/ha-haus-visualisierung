@@ -1,0 +1,20 @@
+{
+  "name": "Haus Display",
+  "version": "0.2.0",
+  "home_assistant_domain": "esphome",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "ota": {
+        "path": "haus-display.ota.bin"
+      },
+      "parts": [
+        {
+          "path": "haus-display.factory.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
