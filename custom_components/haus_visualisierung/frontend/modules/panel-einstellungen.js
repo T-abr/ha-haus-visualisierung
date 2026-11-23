@@ -7,6 +7,7 @@ import { buildModel, linkMode, PRESENCE_DC } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
 import { techCfg } from "./technik.js";
 import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
+import { solarCfg } from "./prognose.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["darstellung", "Darstellung", "mdi:tune-variant"]];
@@ -124,6 +125,7 @@ const EinstellungenMixin = (Base) => class extends Base {
         <div class="srow"><span class="lbl">Netz: Vorzeichen umkehren<small>wenn dein Zähler Einspeisung positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.grid_invert" data-bool="1" ${D.energy.grid_invert ? "checked" : ""}><span></span></label></div>
         <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
         <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
+      ${this._setForecast(D)}
       ${this._setPrice(D)}
       <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
         <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
@@ -138,6 +140,22 @@ const EinstellungenMixin = (Base) => class extends Base {
   }
 
   /** Strompreis: Preissensor (automatisch erkannt oder gewählt) und feste Preise in ct/kWh. */
+  /* Karte „Vorhersage“ auf der Übersicht: Wetter und Solarprognose */
+  _setForecast(D) {
+    const h = this._hass, F = D.forecast || {}, wid = weatherIdOf(h, D);
+    const auto = solarCfg(h, { forecast: { solar: true } });
+    const found = auto ? `${auto.src}: ${[...auto.today, ...auto.tomorrow].join(", ")}` : "keine Forecast.Solar- oder Solcast-Sensoren gefunden";
+    const inp = (key, label, hint) => `<div class="srow"><span class="lbl">${label}<small>${hint}</small></span>
+      <input class="inp w" list="dl-sensor" data-set="forecast.${key}" value="${esc(F[key] || "")}" placeholder="automatisch"></div>`;
+    return `<div class="set glass"><h2>${icon("mdi:weather-partly-cloudy")}Vorhersage auf der Übersicht</h2>
+      <p class="hint">Kompakte Karte mit dem Wetter der nächsten Tage${wid ? ` (${esc(wid)}, wie im Wandpanel eingestellt)` : ""}, dem erwarteten PV-Ertrag und dem wichtigsten Beschattungshinweis. Die Solarprognose kommt automatisch aus Forecast.Solar oder Solcast (${esc(found)}); eigene Sensoren in kWh oder Wh hier eintragen.</p>
+      <div class="srow"><span class="lbl">Karte „Vorhersage“ zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.enabled" data-bool="1" ${F.enabled !== false ? "checked" : ""}><span></span></label></div>
+      <div class="srow"><span class="lbl">Solarprognose zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.solar" data-bool="1" ${F.solar !== false ? "checked" : ""}><span></span></label></div>
+      ${inp("solar_today", "PV-Prognose heute", "Energie in kWh; leer = automatisch")}
+      ${inp("solar_tomorrow", "PV-Prognose morgen", "Energie in kWh; leer = automatisch")}
+    </div>`;
+  }
+
   _setPrice(D) {
     const P = D.price || {}, pc = this._model && this._model.price;
     const auto = pc && pc.auto && pc.sensor ? `erkannt: ${esc(pc.sensor)}` : "keiner erkannt";

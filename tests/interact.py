@@ -1432,6 +1432,65 @@ def wetter():
     saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.shading)")
     check("WE: Ausrichtung gespeichert", saved and saved["facing"].get("cover.buro_rollo") == "O" and saved["hot"] == 26)
 
+@gruppe("prognose")
+def prognose():
+    # ---------- Übersicht: Karte „Vorhersage“ mit Wetter und Solarprognose ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?ov=cockpit"); pg.wait_for_timeout(600)
+    card = pg.locator(f"{P} .cside .fcast")
+    check("PR: Cockpit – Karte in der rechten Spalte", card.count() == 1)
+    check("PR: jetzt (Temperatur und Lage)", "7°" in card.locator(".fcnow").inner_text() and "Teils bewölkt" in card.locator(".fcnow").inner_text())
+    check("PR: 5 Tage aus der Vorhersage", card.locator(".fc").count() == 5 and "Heute" in card.locator(".fcs").inner_text() and "Morgen" in card.locator(".fcs").inner_text())
+    check("PR: ohne Solarsensoren keine PV-Zeile", card.locator(".fcpv").inner_text().strip() == "" and card.locator(".fpv").count() == 0)
+    subs = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "subscribe_forecast"]
+    check("PR: ein Abo für Kopf und Karte", len(subs) == 1)
+    # Forecast.Solar: zwei Dachflächen (heute/morgen/verbleibend), Wh wird umgerechnet
+    pg.evaluate("""(() => { const a = window.__api, E = { unit_of_measurement: 'kWh', device_class: 'energy' };
+      a.set('sensor.energy_production_today', '12.4', E); a.set('sensor.energy_production_today_2', '6100', { ...E, unit_of_measurement: 'Wh' });
+      a.set('sensor.energy_production_tomorrow', '20', E); a.set('sensor.energy_production_tomorrow_2', '4.5', E);
+      a.set('sensor.energy_production_today_remaining', '3.2', E); a.set('sensor.energy_production_today_remaining_2', '1.1', E);
+      const p = document.querySelector('haus-visualisierung-panel'); p._dirty = true; p._schedule(); })()"""); pg.wait_for_timeout(300)
+    pv = card.locator(".fcpv").inner_text()
+    check("PR: Forecast.Solar – Dachflächen zusammengezählt, Wh umgerechnet", "heute 18,5 kWh" in pv and "noch 4,3" in pv and "morgen 24,5 kWh" in pv)
+    fpv = card.locator(".fpv")
+    check("PR: PV-Ertrag an Heute und Morgen", fpv.count() == 2 and fpv.nth(0).inner_text().strip() == "18,5" and fpv.nth(1).inner_text().strip() == "24,5")
+    check("PR: ertragreichster Tag hervorgehoben", "hi" in fpv.nth(1).get_attribute("class") and "hi" not in fpv.nth(0).get_attribute("class"))
+    pg.evaluate("window.__api.set('sensor.energy_production_tomorrow', '30', { unit_of_measurement: 'kWh' })"); pg.wait_for_timeout(200)
+    check("PR: neue Werte frischen die Karte auf", "morgen 34,5 kWh" in card.locator(".fcpv").inner_text())
+    # eingestellter Sensor geht vor
+    pg.evaluate("""(() => { const a = window.__api; a.set('sensor.pv_prognose_heute', '9.9', { unit_of_measurement: 'kWh' });
+      const p = document.querySelector('haus-visualisierung-panel'); p._layout = { ...p._layout, forecast: { ...p._layout.forecast, solar_today: 'sensor.pv_prognose_heute' } }; p._dirty = true; p._schedule(); })()"""); pg.wait_for_timeout(300)
+    pv = card.locator(".fcpv").inner_text()
+    check("PR: eingestellter Sensor statt automatisch", "heute 9,9 kWh" in pv and "noch" not in pv)
+    # heißer Tag morgen → Beschattungshinweis, Tipp führt zur Seite Beschattung
+    pg.evaluate("window.__api.fcSet([[12, 5, 'sunny'], [31, 17, 'sunny'], [29, 16, 'partlycloudy'], [22, 12, 'rainy', 4], [20, 10, 'cloudy']])"); pg.wait_for_timeout(200)
+    hb = card.locator(".fchb")
+    check("PR: Beschattungshinweis in der Karte", hb.count() == 1 and "Morgen 31 °C" in hb.inner_text())
+    hb.click(); pg.wait_for_timeout(300)
+    check("PR: Tipp auf den Hinweis öffnet Beschattung", pg.locator(f"{P} .shade").count() == 1)
+    # Aktiv-Fokus (Handy) und Hausschnitt
+    pg.set_viewport_size({"width": 390, "height": 844})
+    pg.goto(dense + "?ov=fokus"); pg.wait_for_timeout(600)
+    c2 = pg.locator(f"{P} .fcast")
+    check("PR: Aktiv-Fokus – Karte unter der Energieleiste", c2.count() == 1 and c2.locator(".fc").count() == 5)
+    over = pg.evaluate(f"(() => {{ const c = {R}.querySelector('.fcast'); return c.scrollWidth - c.clientWidth; }})()")
+    check("PR: Handy – nichts ragt aus der Karte", over <= 1)
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?ov=haus"); pg.wait_for_timeout(500)
+    check("PR: Hausschnitt – Karte da", pg.locator(f"{P} .fcast").count() == 1)
+    pg.goto(base); pg.wait_for_timeout(500)
+    check("PR: Komfort – Karte da", pg.locator(f"{P} .fcast").count() == 1)
+    # abschalten (Einstellungen → Darstellung)
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500); stab(pg, "darstellung")
+    tg = pg.locator(f'{P} [data-set="forecast.enabled"]')
+    check("PR: Einstellungen – Schalter und Sensoren", tg.count() == 1 and pg.locator(f'{P} [data-set="forecast.solar_today"]').count() == 1 and pg.locator(f'{P} [data-set="forecast.solar_tomorrow"]').count() == 1)
+    tg.evaluate("e => { e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); }"); pg.wait_for_timeout(100)
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.forecast)")
+    check("PR: Abschalten gespeichert", saved and saved["enabled"] is False)
+    pg.locator(f'{P} .nav[data-to=""]').click(); pg.wait_for_timeout(300)
+    check("PR: abgeschaltet – keine Karte", pg.locator(f"{P} .fcast").count() == 0)
+
 @gruppe("energie")
 def energie_zeitraum():
     # ---------- Energie-Seite: Woche, Monat, Jahr als Energie je Tag bzw. Monat (1.9.0) ----------

@@ -17,3 +17,9 @@ def test_werte_geprueft() -> None:
     assert sh["enabled"] is True and sh["hot"] == 40 and "evil" not in sh
     assert sh["facing"] == {"cover.wohnzimmer": "S", "cover.buero": "SW", "cover.garage": "-"}
     assert sanitize({"shading": {"enabled": False, "hot": 10, "facing": "x"}})["shading"] == {"enabled": False, "hot": 18, "facing": {}}
+
+
+def test_vorhersage() -> None:
+    assert sanitize({})["forecast"] == {"enabled": True, "solar": True, "solar_today": "", "solar_tomorrow": ""}
+    fc = sanitize({"forecast": {"enabled": False, "solar": "ja", "solar_today": "sensor.pv_heute", "solar_tomorrow": "light.x", "evil": 1}})["forecast"]
+    assert fc == {"enabled": False, "solar": True, "solar_today": "sensor.pv_heute", "solar_tomorrow": ""}

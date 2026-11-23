@@ -246,6 +246,18 @@ def _shading(raw: dict) -> dict:
     return out
 
 
+def _forecast(raw: dict) -> dict:
+    """Karte „Vorhersage“: Schalter und Sensoren der Solarprognose (Energie)."""
+    out = copy.deepcopy(DEFAULT_LAYOUT["forecast"])
+    for key in ("enabled", "solar"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    for key in ("solar_today", "solar_tomorrow"):
+        e = _entity(raw.get(key))
+        out[key] = e if e.startswith("sensor.") else ""
+    return out
+
+
 def _price(raw: dict) -> dict:
     """Strompreis: Sensor, Schalter und Preise in ct/kWh."""
     out = copy.deepcopy(DEFAULT_LAYOUT["price"])
@@ -370,6 +382,8 @@ def sanitize(raw: Any) -> dict:
         result["shading"] = _shading(raw["shading"])
     if isinstance(raw.get("energy"), dict):
         result["energy"] = _energy(raw["energy"])
+    if isinstance(raw.get("forecast"), dict):
+        result["forecast"] = _forecast(raw["forecast"])
     if isinstance(raw.get("price"), dict):
         result["price"] = _price(raw["price"])
     if isinstance(raw.get("confirm_quick"), bool):

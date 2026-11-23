@@ -282,7 +282,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     },
     set(eid, state, attrs) {
       const old = hass.states[eid];
-      const st = { ...old, state: String(state), attributes: { ...old.attributes, ...(attrs || {}) }, last_changed: new Date().toISOString() };
+      const st = { entity_id: eid, ...old, state: String(state), attributes: { ...((old && old.attributes) || {}), ...(attrs || {}) }, last_changed: new Date().toISOString() };
       hass.states = { ...hass.states, [eid]: st };
       api.hass = hass; listeners.forEach((l) => l({ ...hass }));
     },

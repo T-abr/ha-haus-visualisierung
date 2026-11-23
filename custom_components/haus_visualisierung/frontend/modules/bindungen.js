@@ -7,6 +7,7 @@ import { updateTrend } from "./verlauf.js";
 import { techWatch, updateHeat, updateWallbox } from "./technik.js";
 import { climRooms, humRooms, outdoorTempId, updateClimTrend, updateSpark } from "./klima.js";
 import { shadeWatch, updateShade } from "./wetter.js";
+import { fcastWatch, updateFcast } from "./prognose.js";
 import { energyIds, energyWatch, updateEnDay, updateEnergy, updateEnPriceCard, updateEnTrend } from "./energie.js";
 import { priceWatch, updateWbPrice } from "./strompreis.js";
 
@@ -28,6 +29,7 @@ Object.assign(UPD, {
   roof: { watch: (el, c) => Object.values(c._layout.header).filter(Boolean), run: updateRoof },
   weather: { watch: (el) => [el.dataset.eid], run: updateWeather },
   shade: { watch: shadeWatch, run: updateShade },
+  fcast: { watch: fcastWatch, run: updateFcast },
   person: { watch: (el) => [el.dataset.eid], run: updatePerson },
   gcount: { watch: (el) => (el._eids = (el.dataset.eids || "").split(",").filter(Boolean)), run: updateGroupCount },
   heat: { watch: (el, c) => techWatch(c._model.tech && c._model.tech.heat), run: updateHeat },

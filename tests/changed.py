@@ -32,7 +32,8 @@ GRUPPEN_FUER = {
     "modules/panel-alarmseite.js": {"alarme"},
     "modules/panel-klingel.js": {"klingel"},
     "modules/panel-wandpanel.js": {"wandpanel", "wetter"},
-    "modules/wetter.js": {"wetter", "wandpanel", "kopfzeile"},
+    "modules/wetter.js": {"wetter", "wandpanel", "kopfzeile", "prognose"},
+    "modules/prognose.js": {"prognose"},
     "modules/karten.js": set(),  # Karten für eigene Dashboards: keine Bedienprüfung, nur pytest (Importe)
     # alle Gruppen: grundlagen, modell, basis, bausteine, aktualisierer, bindungen, hausschnitt, stile,
     # warnungen, version, panel.js, panel-ansichten, panel-aktionen, panel-einstellungen, panel-kompakt
