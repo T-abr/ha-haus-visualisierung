@@ -88,14 +88,14 @@ Kachelarten: `pv_jetzt`, `energie_heute`, `klima_mittel`, `morgen` (Müll und Te
 
 ### `hinweis`
 
-Eine Zeile unter den Kacheln oder `null`:
+Eine Zeile unter den Kacheln oder `null` (Hinweiszeile in den Einstellungen aus):
 
 ```json
 {"i": "weather-night", "f": "#ffc457", "n": "Gute Nacht", "s": "3 Punkte offen", "knopf": "Prüfen", "ziel": "seite:gute_nacht"}
 ```
 
 Vorrang: Alarm, abends (ab 20 Uhr bis zum Nachtende) Gute-Nacht-Check mit offenen Punkten, sonst die wichtigste
-Meldung, sonst ein fertiges Haushaltsgerät. `ziel` beginnt mit `seite:` → Seite auf dem Display öffnen, sonst an den
+Meldung, sonst ein fertiges Haushaltsgerät, sonst „Alles in Ordnung“ (ab 1.13.1). `ziel` beginnt mit `seite:` → Seite auf dem Display öffnen, sonst an den
 Dienst schicken (siehe unten); leer = kein Knopf.
 
 ### `energie`

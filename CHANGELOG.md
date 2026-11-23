@@ -4,6 +4,15 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.13.1 – 2026-11-23
+
+### Behoben – Wanddisplay am echten Gerät
+- Mitgelieferte Firmware **0.2.1**: Touch funktioniert (das Bild des Guition 4848S040 ist 180° gespiegelt, der Touch war es nicht), keine Scrollbalken mehr in Kacheln und Seiten, Kachelinhalt passt in die Kachel, Wetter- und Modus-Chip wie im Entwurf, einfarbiger Hintergrund ohne Streifen, aktive Seite im Dock hervorgehoben. Update: im Assistenten erneut „Firmware installieren“ oder über ESPHome.
+- Hinweiszeile: ohne Meldungen und offene Punkte steht „Alles in Ordnung“ statt einer leeren Fläche unter den Kacheln.
+
+### Performance
+- Unverändert gegenüber 1.13.0 (nur Backend-Text und Firmware-Dateien); das Panel baut nichts zusätzlich.
+
 ## 1.13.0 – 2026-11-23
 
 ### Neu – Wanddisplays einrichten ohne Handarbeit
