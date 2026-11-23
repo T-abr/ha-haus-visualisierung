@@ -10,8 +10,8 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | # | Idee | Priorität | Aufwand | Status |
 |---|------|-----------|---------|--------|
 | 1 | ~~Gute-Nacht- und Verlassen-Check~~ | hoch | S | umgesetzt |
-| 2 | Müll und Termine im Kopf und im Schoner | hoch | S | neu |
-| 3 | „Fertig“-Meldungen für Haushaltsgeräte | hoch | M | neu |
+| 2 | Müll und Termine im Kopf und im Schoner | hoch | S | in Umsetzung |
+| 3 | „Fertig“-Meldungen für Haushaltsgeräte | hoch | M | in Umsetzung |
 | 4 | Wasser und Gas mit Leck-Erkennung | hoch | M | neu |
 | 5 | Heizung je Raum: Sollwert und Wochenplan | mittel | M | neu |
 | 6 | Garten und Bewässerung mit Regenvorhersage | mittel | M | neu |
