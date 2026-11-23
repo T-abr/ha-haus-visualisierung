@@ -34,6 +34,10 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 23 | Szenen je Raum (auch als Display-Kachel) | mittel | M | neu |
 | 24 | Display: Alarm-Vollbild mit Quittieren | mittel | M | neu |
 | 25 | Display: Relais als Lichtschalter | niedrig | M | neu |
+| 26 | Display: Wecken über Bewegungsmelder im Raum | mittel | S | neu |
+| 27 | Display: kurze Meldungen als Popup | mittel | S–M | neu |
+| 28 | Display: Raumbezug je Display | mittel | M | neu |
+| 29 | Display: Wetter-/PV-Seite mit Stundenverlauf | niedrig | M | neu |
 
 „Umgesetzt“: seit Version 1.11.0 (1–10) bzw. 1.17.0 (18–21) enthalten. „Neu“: im Backlog, noch nicht
 ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
@@ -127,6 +131,21 @@ Zeit), dazu „Quittieren“ und „1 h stumm“ direkt am Gerät. Braucht neue 
 ### 25. Display: Relais als Lichtschalter
 Die Guition-Variante mit Relais macht das Display zum echten Wandschalter: Relais je Kanal einer Kachel zuordnen,
 schaltet auch ohne WLAN bzw. ohne Home Assistant. Braucht neue Firmware und die Relais-Hardware.
+
+### 26. Display: Wecken über Bewegungsmelder im Raum
+Je Display einen Bewegungsmelder wählen: erkennt er Bewegung, wird das Display hell bzw. verlässt den
+Bildschirmschoner, wie das Wandpanel. Läuft fast ganz über die Integration (Wecken wie bei neuem Alarm).
+
+### 27. Display: kurze Meldungen als Popup
+Ereignisse wie „Waschmaschine fertig“ oder „Fenster Bad offen, es regnet“ erscheinen als kleines Popup mit „OK“
+statt nur in der Hinweiszeile. Braucht neue Firmware.
+
+### 28. Display: Raumbezug je Display
+Ein Display bekommt einen Bereich (Raum): eine Seite zeigt Temperatur, Feuchte, Licht und Rollos dieses Raums
+automatisch, ohne Kacheln von Hand einzurichten. Firmware nur, wenn die Seite eigene Darstellung braucht.
+
+### 29. Display: Wetter-/PV-Seite mit Stundenverlauf
+Temperatur, Regen und erwartete PV-Leistung der nächsten Stunden als kleine Kurven. Braucht neue Firmware.
 
 ## Vorgemerkt (früher vorgeschlagen)
 

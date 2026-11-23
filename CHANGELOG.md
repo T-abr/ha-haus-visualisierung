@@ -4,6 +4,23 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.18.0 – 2026-11-23
+
+Mitgelieferte Firmware **0.6.0** – Update im Reiter Displays über „Update auf 0.6.0“.
+
+### Neu – Wanddisplay: Bedienung
+- **Dimmen und Rollo-Position per langem Tippen**: Ein langer Druck auf eine Kachel mit dimmbarem Licht oder einem Rollo mit Position öffnet einen Regler; beim Loslassen stellt die Integration Helligkeit (0 = aus) bzw. Position. Gilt für die Kacheln auf Start und auf eigenen Seiten.
+- **Sofortige Rückmeldung**: Nach einem Tipp auf eine schaltbare Kachel zeigt sie gleich „…“, bis der neue Zustand da ist (höchstens 4 s).
+- **Wischen** nach links bzw. rechts wechselt zur nächsten bzw. vorigen Seite im Dock; ausgeblendete Seiten werden übersprungen.
+- **Verbindungsanzeige**: Ist Home Assistant nicht erreichbar, steht oben „Offline“, statt still veraltete Werte zu zeigen.
+- Backlog: Wecken über Bewegungsmelder, Popups, Raumbezug und Wetter-/PV-Seite fürs Display (Nr. 26–29).
+
+### Performance
+- Panel unverändert gegenüber 1.17.0 (kein Frontend-Code geändert). Im Backend bekommen Entitäts-Kacheln drei kleine Felder; gerechnet wird nur, wenn sich Kacheln ohnehin ändern. Auf dem Display schickt der Regler nur beim Loslassen, nicht bei jedem Zwischenwert.
+
+### Tests
+- `test_display.py`: Felder `a`/`w`/`wa` (dimmbares Licht, Licht nur an/aus, Rollo mit Position, Sensor, eigene Seite), `wert:`-Tipps (Helligkeit, aus, Position begrenzt auf 100, ungültige Ziele).
+
 ## 1.17.0 – 2026-11-23
 
 ### Neu – Wetterwarnungen

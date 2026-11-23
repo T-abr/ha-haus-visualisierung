@@ -110,6 +110,7 @@ jede Seite im Dock nach den festen Seiten; `[]` blendet alle aus.
   "k": [{"i": "lightbulb-on", "f": "#ffc457", "n": "Decke", "v": "an", "vf": "", "s": "Wohnzimmer"}]}]
 ```
 
+Kacheln eigener Seiten haben auch `a`, `w` und `wa` wie bei `kacheln`.
 `i` ist immer ein Symbol, das die Firmware kennt (`tools/icons.txt` im Firmware-Repository, `DISPLAY_ICONS` in
 `display.py`); sonst nimmt die Integration eines passend zur Domäne. Felder der Kacheln wie bei `kacheln`.
 
@@ -133,6 +134,8 @@ Liste mit 1–4 Kacheln für die Startseite, in der eingestellten Reihenfolge:
 | `b`, `bf` | Balken 0–100 und Farbe; `-1` = kein Balken |
 | `u` | unterste Zeile (klein) |
 | `hot` | hervorheben (gelber Rahmen, z. B. Mülltonne am Vorabend) |
+| `a` | `true`: ein Tipp schaltet bzw. löst aus (`entity:`-Kacheln); die Firmware zeigt sofort „…“, bis der neue Zustand kommt (höchstens 4 s) |
+| `w`, `wa` | per langem Tippen stellbar: aktueller Wert 0–100 und Art (`hell` = Helligkeit eines dimmbaren Lichts, `pos` = Position eines Rollos); fehlt `w`, ist die Kachel nicht stellbar. Der Regler schickt beim Loslassen `wert:<ziel>:<0–100>` |
 
 Kachelarten: `pv_jetzt`, `energie_heute`, `klima_mittel`, `morgen` (Müll und Termine), `wetter`, `meldungen`,
 `geraete`, `strompreis`, `entity:<entity_id>` (Zustand einer Entität; Tippen schaltet Licht, Schalter, Rollo, Schloss).
@@ -197,6 +200,7 @@ data: {display: haus-display-a1b2c3, ziel: "gn:light.kueche"}
 | `modus:<zuhause\|nacht\|abwesend\|urlaub>` | Hausmodus setzen (die Firmware zeigt vorher den Gute-Nacht-Check, wenn `gute_nacht.n > 0`) |
 | `kachel:<0–3>` | Kachel angetippt: `entity:`-Kacheln schalten (Licht, Schalter, Lüfter, Abdeckung, Schloss, Helfer umschalten; Szene, Skript, Taster auslösen). Ab Firmware 0.4.0 öffnen Energie-, Klima-, Meldungs- und Geräte-Kacheln stattdessen ihre Seite, wenn sie eingeschaltet ist, und melden nichts. |
 | `eigen:<seite>:<kachel>` | Kachel einer eigenen Seite angetippt (Seite 0–2, Kachel 0–5): schaltet wie eine `entity:`-Kachel |
+| `wert:<kachel:N\|eigen:p:k>:<0–100>` | Regler nach langem Druck auf eine stellbare Kachel: Licht auf diese Helligkeit (0 = aus), Rollo auf diese Position |
 | `klingel:tuer` | „Tür öffnen“ im Klingel-Overlay (nur während es klingelt): Türöffner aus Einstellungen → Klingel auslösen wie im Panel (Schloss öffnen, Schalter mit Impuls, Taste, Skript) |
 | `geraet_ok` | fertige Haushaltsgeräte quittieren |
 | `hallo` | Gerät ist (neu) verbunden: alle Bereiche neu schicken; nicht zugeordnetes Gerät bekommt `protokoll` = `""` |
@@ -210,6 +214,7 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
+| 1 (Stellen per langem Tippen, Rückmeldung beim Tippen, Wischen, Verbindungsanzeige) | ab 1.18.0 | ab 0.6.0 |
 | 1 (Klingel-Overlay) | ab 1.16.0 | ab 0.5.0 |
 | 1 (eigene Seiten, Bildschirmschoner, farbige Werte, Kacheln antippbar) | ab 1.15.0 | ab 0.4.0 |
 | 1 (Push, Update über das Netz, API-Schlüssel je Gerät) | ab 1.14.0 | ab 0.3.0 |

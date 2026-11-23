@@ -175,6 +175,22 @@ def tap_service(eid: str, st: State | None) -> tuple[str, str] | None:
 
 
 # Symbole, die die Firmware kennt (tools/icons.txt im Repository ha-haus-display); andere zeigt sie als „?“
+def stell_info(st: State | None) -> tuple[int, str] | None:
+    """Stellbar per langem Tippen am Display? (Wert 0–100, "hell" für dimmbares Licht bzw. "pos" für Rollos mit Position)."""
+    if st is None or st.state in UNAV:
+        return None
+    if st.domain == "light":
+        modes = st.attributes.get("supported_color_modes") or []
+        if not any(m != "onoff" for m in modes) and st.attributes.get("brightness") is None:
+            return None
+        b = st.attributes.get("brightness")
+        return (round(b / 255 * 100) if st.state == "on" and isinstance(b, (int, float)) else 0), "hell"
+    if st.domain == "cover" and int(st.attributes.get("supported_features") or 0) & 4:  # SET_POSITION
+        pos = st.attributes.get("current_position")
+        return (int(pos) if isinstance(pos, (int, float)) else (0 if st.state == "closed" else 100)), "pos"
+    return None
+
+
 DISPLAY_ICONS = frozenset({
     "air-conditioner", "airplane", "alarm-light", "alert", "alert-circle", "arrow-left", "battery", "battery-70",
     "bed", "bell", "bell-alert", "biohazard", "blinds", "bottle-wine-outline", "calendar", "calendar-clock", "car",
@@ -182,7 +198,7 @@ DISPLAY_ICONS = frozenset({
     "currency-eur", "desk-lamp", "door", "door-closed", "door-open", "doorbell-video", "eye", "fan", "fan-off", "fire",
     "flash", "floor-lamp", "flower", "garage", "garage-open-variant", "gate", "gauge", "gesture-tap-button", "heat-pump",
     "help-circle-outline", "home", "home-account", "home-export-outline", "home-lightning-bolt", "home-thermometer",
-    "home-variant", "lamp", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on",
+    "home-variant", "lamp", "lan-disconnect", "leaf", "led-strip-variant", "lightbulb", "lightbulb-group", "lightbulb-on",
     "lightbulb-outline", "lightning-bolt", "lock", "lock-alert", "lock-open", "lock-open-variant", "motion-sensor",
     "music", "newspaper-variant-outline", "palette", "pool", "power", "power-plug", "power-plug-outline",
     "power-socket-eu", "radiator", "recycle", "robot-vacuum", "script-text", "shield-check", "shield-home",
@@ -874,6 +890,11 @@ class DisplayHub:
                 base["v"] = (de(v, 1).removesuffix(",0") + (f" {unit}" if unit else "")) if v is not None else \
                     {"on": "an", "off": "aus", "open": "offen", "closed": "zu", "unavailable": "nicht erreichbar"}.get(st.state, st.state)
                 base["f"] = C_WARM if is_on(st) else C_DIM
+            # Bedienung am Display: a = Tipp schaltet (sofort „…“ als Rückmeldung), w/wa = per langem Tippen stellbar
+            if tap_service(eid, st):
+                base["a"] = True
+            if info := stell_info(st):
+                base["w"], base["wa"] = info
         return base
 
     def schoner(self) -> dict:
@@ -909,6 +930,7 @@ class DisplayHub:
         x = self.tile(f"entity:{t['entity']}")
         out = {"i": display_icon(t["icon"], t["entity"], self.hass.states.get(t["entity"])), "f": x["f"],
                "n": t["name"] or x["n"], "v": x["v"], "vf": x["vf"], "s": x["s"]}
+        out.update({k: x[k] for k in ("a", "w", "wa") if k in x})
         return out
 
     def hinweis(self, items: list[dict]) -> dict | None:
@@ -1036,6 +1058,8 @@ class DisplayHub:
         """Schutzart eines Tipps: Tür öffnen, Alarm aus, Abwesend/Urlaub (pin.py)."""
         if ziel == "klingel:tuer":
             return "door"
+        if ziel.startswith("wert:"):
+            return self._pin_kind(d, ziel[5:].rsplit(":", 1)[0])
         if ziel.startswith("modus:"):
             return mode_kind(self._mode(), ziel[6:])
         eid = ""
@@ -1116,6 +1140,30 @@ class DisplayHub:
                     await self.hass.services.async_call(*svc, {"entity_id": eid}, blocking=False)
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Display %s: %s nicht geschaltet: %s", did, eid, err)
+        elif ziel.startswith("wert:"):
+            # Helligkeit bzw. Rollo-Position vom Regler (langer Druck auf eine Kachel): wert:<kachel:N|eigen:p:k>:<0–100>
+            try:
+                inner, raw = ziel[5:].rsplit(":", 1)
+                v = max(0, min(100, int(raw)))
+                if inner.startswith("kachel:"):
+                    key = d["tiles"][int(inner[7:])]
+                    eid = key[7:] if key.startswith("entity:") else ""
+                else:
+                    _p, pi, ki = inner.split(":")
+                    eid = d["custom"][int(pi)]["tiles"][int(ki)]["entity"]
+            except (ValueError, IndexError, KeyError):
+                return
+            info = stell_info(self.hass.states.get(eid))
+            if info is None:
+                return
+            if info[1] == "hell":
+                call = ("light", "turn_on", {"entity_id": eid, "brightness_pct": v}) if v > 0 else ("light", "turn_off", {"entity_id": eid})
+            else:
+                call = ("cover", "set_cover_position", {"entity_id": eid, "position": v})
+            try:
+                await self.hass.services.async_call(*call, blocking=False)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Display %s: %s nicht gestellt: %s", did, eid, err)
         elif ziel == "klingel:tuer" and self.ring:
             try:
                 await self._open_door()
