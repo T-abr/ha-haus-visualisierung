@@ -284,7 +284,9 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
           for (let t = t0; t < Date.now(); t += 180000) {
             // Bad-Feuchte: zwei Stunden nicht erreichbar (Lücke im Verlauf)
             const gap = e === "sensor.bad_feuchte" && t > Date.now() - 10 * 3600000 && t < Date.now() - 8 * 3600000;
-            out[e].push({ s: gap ? "unavailable" : api.curve(e, base, t).toFixed(1), lu: t / 1000 });
+            // Bad-Feuchte: vor drei bis vier Stunden geduscht (über der Schimmelgrenze, unabhängig von der Tageszeit)
+            const shower = e === "sensor.bad_feuchte" && t > Date.now() - 4 * 3600000 && t < Date.now() - 3 * 3600000;
+            out[e].push({ s: gap ? "unavailable" : shower ? "78.0" : api.curve(e, base, t).toFixed(1), lu: t / 1000 });
           }
         }
         return out;

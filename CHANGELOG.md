@@ -19,6 +19,7 @@ Mitgelieferte Firmware **0.5.0** – Update im Reiter Displays über „Update a
 ### Tests
 - `test_display.py`: Klingel (Erkennung, Kamera am selben Gerät, Overlay, „erneut“, Tür öffnen mit Impuls, Schließen, Test).
 - Bedienprüfung „displays“: Klingel je Display abschaltbar, „Klingel testen“.
+- Testdaten: Bad-Feuchte mit festem Duschpeak im Verlauf, damit „Rot über der Grenze“ nicht von der Tageszeit abhängt (scheiterte nachmittags auch auf main).
 
 ## 1.15.0 – 2026-11-23
 
