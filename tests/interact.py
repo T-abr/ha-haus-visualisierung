@@ -1031,6 +1031,38 @@ def technik_einstellungen():
             if wide or ov: print("     ", wide[:3], ov[:3])
     ctx.close()
 
+@gruppe("standard")
+def standard_dashboard():
+    # ---------- Als Standard-Dashboard von Home Assistant (Reiter „Darstellung“) ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=einstellungen/darstellung"); pg.wait_for_timeout(700)
+    pg.evaluate("localStorage.removeItem('defaultPanel')")
+    sec = pg.locator(f"{P} .set[data-sec=default-panel]")
+    btn = lambda a: sec.locator(f"[data-act=s-std-{a}]")
+    ws = lambda: [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1].startswith("frontend/set_")]
+    check("SD: Abschnitt mit „Für mich“, „Für alle“ und „Nur dieses Gerät“", sec.count() == 1 and btn("user").count() == 1 and btn("system").count() == 1 and btn("device").count() == 1
+          and "Übersicht" in sec.inner_text())
+    btn("user").click(); pg.wait_for_timeout(200)
+    m = ws()
+    check("SD: Für mich → frontend/set_user_data core.default_panel", m and m[-1]["type"] == "frontend/set_user_data" and m[-1]["key"] == "core"
+          and m[-1]["value"].get("default_panel") == "haus-visualisierung")
+    check("SD: Knopf zeigt „Ist Standard“, Gerät öffnet die Visualisierung", "Ist Standard" in btn("user").inner_text() and "öffnet Home Assistant" in sec.inner_text()
+          and "die Haus Visualisierung" in sec.inner_text() and not pg.evaluate(f"document.querySelector('{P}')._dirtySettings"))
+    btn("user").click(); pg.wait_for_timeout(200)
+    check("SD: erneut tippen nimmt es zurück", "default_panel" not in ws()[-1]["value"] and "Als Standard" in btn("user").inner_text())
+    pg.evaluate(f"document.querySelector('{P}')._hass.userData = {{ showAdvanced: true, default_panel: 'map' }}"); btn("system").click(); pg.wait_for_timeout(200)
+    m = ws()[-1]
+    check("SD: Für alle → frontend/set_system_data; fremde Wahl des Benutzers bleibt und wird genannt", m["type"] == "frontend/set_system_data" and m["value"]["default_panel"] == "haus-visualisierung"
+          and "bisher: Karte" in sec.inner_text() and "Karte" in sec.locator(".srow").first.inner_text())
+    btn("device").click(); pg.wait_for_timeout(150)
+    check("SD: Nur dieses Gerät → localStorage defaultPanel", pg.evaluate("localStorage.getItem('defaultPanel')") == '"haus-visualisierung"')
+    btn("device").click(); pg.wait_for_timeout(150)
+    check("SD: und wieder weg", pg.evaluate("localStorage.getItem('defaultPanel')") is None)
+    # Ältere Home-Assistant-Version ohne Speicherung am Server: nur „dieses Gerät“
+    pg.evaluate(f"(() => {{ const h = {{ ...window.__api.hass }}; delete h.systemData; delete h.userData; const p = document.querySelector('{P}'); p.hass = h; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
+    check("SD: alte HA-Version → nur „Nur dieses Gerät“", btn("user").count() == 0 and btn("system").count() == 0 and btn("device").count() == 1)
+    pg.evaluate("localStorage.removeItem('defaultPanel')")
+
 @gruppe("wandpanel")
 def wandpanel():
     # ---------- Wandpanel (1.3.0) ----------

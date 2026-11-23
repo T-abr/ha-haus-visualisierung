@@ -173,7 +173,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       "map": { component_name: "map", url_path: "map", title: "Karte", config: null },
     },
     config: { latitude: 50.1, longitude: 8.7, time_zone: "Europe/Berlin", unit_system: { temperature: "°C" } },
-    user: { is_admin: true, name: "Tobias" }, language: "de", themes: { darkMode: true, themes: {} },
+    user: { is_admin: true, name: "Tobias" }, userData: {}, systemData: {}, language: "de", themes: { darkMode: true, themes: {} },
     formatEntityState: fmt,
     callService: async (d, svc, data) => { api.log.push([d, svc, data]); api.applyService(d, svc, data); },
     // Kalender-API: GET calendars/<entity>?start=…&end=… → Termine aus api.calEvents (Tests setzen sie)
@@ -187,6 +187,12 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       throw new Error(`unbekannt: ${method} ${path}`);
     },
     callWS: async (msg) => {
+      // Standard-Dashboard: Home Assistant speichert es je Benutzer bzw. für alle (Schlüssel „core“)
+      if (msg.type === "frontend/set_user_data" || msg.type === "frontend/set_system_data") {
+        api.log.push(["ws", msg.type, msg]);
+        if (msg.type.endsWith("system_data") && !hass.user.is_admin) { const e = new Error("Unauthorized"); e.code = "unauthorized"; throw e; }
+        return null;
+      }
       if (msg.type.endsWith("/alarm_action")) { api.log.push(["ws", "alarm_action", msg]); return api.alarmAction(msg); }
       if (msg.type.endsWith("/set_mode")) {
         api.log.push(["ws", "set_mode", msg]);
