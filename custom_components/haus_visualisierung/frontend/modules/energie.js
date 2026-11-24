@@ -11,6 +11,9 @@ import { enPriceHTML, priceInfo, unitFactor, updateEnPrice } from "./strompreis.
    Farben (dunkle Fläche): PV #ffc457, Verbrauch #63c7ff, Netz #b39cff. */
 const EN_PV = "#ffc457", EN_USE = "#63c7ff", EN_GRID = "#b39cff";
 const BAT_RE = /(akku|batter|battery|hausspeicher|stromspeicher)/i;
+/* Nicht die Speicher-Leistung: andere Größen und reine Lade- bzw. Entladesensoren (immer ≥ 0, z. B. Growatt
+   „Battery Charge/Discharge Power“). Würde einer davon gewählt, fehlte die Gegenrichtung im Fluss. */
+const BAT_NOT = /(pv|solar|grid|netz|soc|wallbox|evcc|lade|charg)/i;
 const EN_POS = { pv: [50, 14], grid: [12, 50], bat: [88, 50], wb: [50, 86] };
 
 /** Welche Sensoren die Energie-Seite nutzt; null = keine Energiedaten. */
@@ -22,7 +25,7 @@ function energyCfg(h, L, tech, price) {
   const wb = (tech && tech.wb && tech.wb.power) || "";
   const lbl = (e) => `${e} ${h.states[e].attributes.friendly_name || ""}`;
   const bat = S(E.battery_power) || Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "power" && ![pv, grid, house, wb].includes(e)
-    && BAT_RE.test(lbl(e)) && !/(pv|solar|grid|netz|soc|wallbox|evcc|lade)/i.test(lbl(e))) || "";
+    && BAT_RE.test(lbl(e)) && !BAT_NOT.test(lbl(e))) || "";
   if (!pv && !grid && !house && !bat) return null;
   return { pv, grid, house, soc, bat, wb, wbOn: (tech && tech.wb && tech.wb.charging) || "", gridInv: !!E.grid_invert, batInv: !!E.battery_invert, price: (price && price.sensor) || "" };
 }

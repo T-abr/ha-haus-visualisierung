@@ -1469,6 +1469,17 @@ def energie():
     check("EN: Vorzeichen umkehren (Netz und Speicher)", "Bezug" in nd("grid") and "lädt 400 W" in nd("bat"))
     pg.locator(f"{P} .enode.pv").click(); pg.wait_for_timeout(100)
     check("EN: Tipp auf PV öffnet Details", pg.evaluate("window.__moreInfo") == "sensor.growatt_modbus_pv_power")
+    # Growatt & Co. melden zusätzlich reine Lade-/Entladeleistung (immer ≥ 0); stehen sie vorn, darf trotzdem nur der
+    # vorzeichenbehaftete Sensor erkannt werden, sonst fehlt „entlädt“ im Fluss
+    pg.evaluate(f"""(() => {{ const a = window.__api, h = a.hass, W = {{ device_class: 'power', unit_of_measurement: 'W', state_class: 'measurement' }};
+      const st = (e, v, n) => ({{ entity_id: e, state: v, attributes: {{ ...W, friendly_name: n }}, last_changed: new Date().toISOString() }});
+      h.states = {{ 'sensor.growatt_modbus_charge_power': st('sensor.growatt_modbus_charge_power', '0', 'Battery Charge Power'),
+        'sensor.growatt_modbus_discharge_power': st('sensor.growatt_modbus_discharge_power', '400', 'Battery Discharge Power'), ...h.states }};
+      a.set('sensor.growatt_modbus_battery_power', '-400');
+      const p = {PP}; p._layout = {{ ...p._layout, energy: {{ ...p._layout.energy, grid_invert: false, battery_invert: false }} }}; p._dirty = true; p._flush(); }})()""")
+    pg.wait_for_timeout(300)
+    dots = pg.evaluate(f"Object.fromEntries([...{R}.querySelectorAll('.efd')].map(d => [d.classList[1], [!d.classList.contains('off'), d.classList.contains('rev')]]))")
+    check("EN: reine Lade-/Entladesensoren nicht als Speicher-Leistung – Entladen fließt zum Haus", "entlädt 400 W" in nd("bat") and dots.get("bat") == [True, False])
     pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, energy: {{ ...p._layout.energy, enabled: false }} }}; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
     check("EN: abschaltbar – nicht in der Navigation", pg.locator(f"{P} .nav[data-to=energie]").count() == 0 and "Keine Energiedaten" in pg.locator(f"{P} .main").inner_text())
     pg.goto(dense + "?view=energie&norec"); pg.wait_for_timeout(700)
