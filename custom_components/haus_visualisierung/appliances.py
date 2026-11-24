@@ -378,14 +378,15 @@ class ApplianceTracker:
         return True
 
     # ---------- Ausgabe ----------
-    def alerts(self) -> list[tuple[str, str, str, str]]:
-        """Fertige Geräte als (Schlüssel, Titel, Detail, Symbol)."""
+    def alerts(self) -> list[tuple[str, str, str, str, str, float]]:
+        """Fertige Geräte als (Schlüssel, Titel, Detail, Symbol, Leistungs-Entität, fertig seit)."""
         out = []
         for it in self.items:
             d = self.data.get(it["id"]) or {}
             if d.get("state") != FERTIG:
                 continue
-            out.append((f"appliance:{it['id']}", f"{it['name']} fertig", self.detail(d), KINDS[it["kind"]][1]))
+            out.append((f"appliance:{it['id']}", f"{it['name']} fertig", self.detail(d), KINDS[it["kind"]][1],
+                        it.get("power") or "", d.get("end") or d.get("since") or 0))
         return out
 
     @staticmethod

@@ -16,6 +16,11 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Bedienprüfung `karten`: ohne Karte lädt nur der Lader, mit Karte kommt `karten.js`, aber nicht das Panel; Karten zeigen Raum bzw. Hausschnitt und bekommen Zustandsänderungen.
 - `test_frontend.py`: Lader statt Panel als zusätzliches Modul auf jeder Seite, Lader bleibt klein, veraltete `.gz` werden entfernt.
 
+### Intern – Warnregeln nur noch im Backend
+- Jede Warnregel stand bisher doppelt: in `alerts.py` (Push) und in `warnungen.js` (Panel). Jetzt wertet nur noch das Backend aus; Panel, Wandpanel, Kopfzeile, Aktiv-Fokus und Alarmmanager zeigen die Meldungen aus dem Alarmmanager-Abo an. Neue oder geänderte Regeln wirken damit überall gleich, und das Panel rechnet bei Zustandsänderungen weniger.
+- Der Schnappschuss des Alarmmanagers bringt dafür je Meldung Symbol, Entität, Ziel im Panel und die Art des Untertitels mit (Zustand bzw. „seit …“ bildet das Panel weiterhin live) sowie die Reihenfolge der Auswertung (`active`). Ändert sich nur der Text einer Meldung, bekommen die Panels den neuen Stand, ohne dass gespeichert oder protokolliert wird.
+- Kleine Unterschiede zur alten Panel-Auswertung: Meldungen erscheinen nach rund 1 s (Sammelzeit des Backends) statt sofort; fertige Geräte zeigen „seit … · Dauer · kWh · €“ wie in der Push-Nachricht.
+
 ## 1.18.1 – 2026-11-24
 
 Mitgelieferte Firmware **0.6.1** – Update im Reiter Displays über „Update auf 0.6.1“.

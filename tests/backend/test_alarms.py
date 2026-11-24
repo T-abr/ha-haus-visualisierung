@@ -150,3 +150,47 @@ def test_next_morning() -> None:
     morning = datetime(2026, 11, 19, 6, 30, tzinfo=tz)
     assert datetime.fromtimestamp(next_morning(evening), tz) == datetime(2026, 11, 20, 7, 0, tzinfo=tz)
     assert datetime.fromtimestamp(next_morning(morning), tz) == datetime(2026, 11, 19, 7, 0, tzinfo=tz)
+
+
+async def test_snapshot_for_panel(hass: HomeAssistant, hass_ws_client) -> None:
+    """Das Panel rechnet keine Regeln: der Schnappschuss bringt Reihenfolge, Symbol, Entität, Ziel und Textart mit."""
+    async_mock_service(hass, "notify", "mobile_app_handy")
+    ids = await _house(hass)
+    monitor = await _setup(hass)
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "haus_visualisierung/save", "layout": {
+        "alerts": {"builtin": {"battery": True}, "rules": [{"title": "Kamin sehr heiß", "entity": ids["kamin"], "op": "gt", "value": "85"}]}}})
+    await client.receive_json()
+    await hass.async_block_till_done()
+    hass.states.async_set(ids["fenster"], "on", W)
+    hass.states.async_set(ids["rauch"], "on", S)
+    hass.states.async_set(ids["badheiz"], "heat", {"hvac_action": "heating"})
+    hass.states.async_set(ids["badfenster"], "on", {"device_class": "window", "friendly_name": "Bad Fenster"})
+    hass.states.async_set(ids["kamin"], "90", {"device_class": "temperature", "unit_of_measurement": "°C"})
+    await _tick(hass)
+    snap = monitor.book.snapshot()
+    al = snap["alarms"]
+    assert snap["active"][0] == f"safety:{ids['rauch']}"  # Alarme zuerst, wie die Auswertung
+    assert set(snap["active"]) == set(al)
+    c = al[f"contact:{ids['fenster']}"]
+    assert c["eid"] == ids["fenster"] and c["fmt"] == "since" and "icon" not in c and "to" not in c
+    assert al[f"safety:{ids['rauch']}"]["fmt"] == "state"
+    heat = next(a for k, a in al.items() if k.startswith("heat:"))
+    assert heat["icon"] == "mdi:radiator-disabled" and heat["to"].startswith("raum/") and "eid" not in heat
+    rule = next(a for k, a in al.items() if k.startswith("rule:"))
+    assert rule["eid"] == ids["kamin"] and rule["fmt"] == "state" and rule["detail"] == "90 °C"
+
+    # Neuer Messwert einer aktiven Regel: das Panel zeigt den Zustand selbst → kein neuer Schnappschuss
+    snaps = []
+    monitor.book.async_add_listener(snaps.append)
+    hass.states.async_set(ids["kamin"], "91", {"device_class": "temperature", "unit_of_measurement": "°C"})
+    await _tick(hass)
+    assert snaps == [] and monitor.book.alarms[rule["key"]]["detail"] == "91 °C"
+    # Geänderter Text (Batterie fast leer, ohne Live-Zustand) → Panels bekommen den neuen Stand, ohne Protokolleintrag
+    hass.states.async_set(ids["batt"], "5", {"device_class": "battery", "unit_of_measurement": "%"})
+    await _tick(hass)
+    n_log = len(monitor.book.log)
+    snaps.clear()
+    hass.states.async_set(ids["batt"], "4", {"device_class": "battery", "unit_of_measurement": "%"})
+    await _tick(hass)
+    assert snaps and snaps[-1]["alarms"]["battery"]["detail"] == "4 %" and len(monitor.book.log) == n_log
