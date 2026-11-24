@@ -240,6 +240,11 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex;align-items:center;justify-cont
 .stab{flex:none;padding:8px 15px;font-size:13.5px;position:relative}
 .stab i{display:none;width:7px;height:7px;border-radius:50%;background:var(--hv-warm);margin-left:2px}
 .stab.dirty i{display:inline-block}
+.sjump{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 14px}
+.sjump .altab{flex:none}
+.sjumpsel{display:none;width:100%;margin:-4px 0 14px}
+.narrow .sjump{display:none}.narrow .sjumpsel{display:block}
+.set[data-jump]{scroll-margin-top:12px}
 .drag{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:32px;margin:0 -2px 0 -6px;border-radius:8px;color:var(--hv-faint);cursor:grab;touch-action:none}
 .drag:hover,.drag:focus-visible{color:var(--hv-text);background:var(--hv-surface)}
 .drag ha-icon{--mdc-icon-size:20px}

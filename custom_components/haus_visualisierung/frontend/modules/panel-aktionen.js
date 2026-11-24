@@ -237,6 +237,12 @@ const AktionenMixin = (Base) => class extends Base {
         if (mn) mn.scrollTop = 0;
         return;
       }
+      case "s-jump": {
+        // Sprungleiste: zum Abschnitt im aktuellen Reiter
+        const sec = this.shadowRoot.querySelector(`.set[data-jump="${t.dataset.jumpTo}"]`);
+        if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
       case "s-reset": this._draft = null; this._dirtySettings = false; this._dirty = true; this._flush(); return;
       case "s-save": {
         try {

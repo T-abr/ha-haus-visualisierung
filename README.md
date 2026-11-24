@@ -29,7 +29,7 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
 - **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
   Fälligkeit auf der Seite „Wartung“, „Erledigt“ für alle Benutzer, fällige Aufgaben als Hinweis in den Meldungen.
 - **Wanddisplays** (z. B. 4-Zoll-ESP32-S3 mit ESPHome): das Display ist ein Client der Visualisierung, Seiten und
-  Kacheln stehen in Einstellungen → Displays. **Einrichten ohne Handarbeit** im selben Reiter: Firmware aus dem
+  Kacheln stehen in Einstellungen → Wandpanel & Displays. **Einrichten ohne Handarbeit** im selben Reiter: Firmware aus dem
   Browser flashen (Chrome/Edge über HTTPS, Firmware liegt der Integration bei), WLAN per Improv, Gerät übernehmen
   und zuordnen, **Firmware-Updates über das Netz** (Update-Entität je Display). Die Inhalte kommen fertig gerechnet per Push ans Gerät (und als `sensor.haus_display_<kennung>`),
   Tipps über den Dienst `haus_visualisierung.display_tap`. Firmware: [ha-haus-display](https://github.com/T-abr/ha-haus-display),
@@ -38,7 +38,7 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Wetter, Hausmodus und Meldungen, automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
 - **Als Standard-Dashboard** (Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“): Home Assistant öffnet
   statt der Übersicht die Visualisierung, für den eigenen Benutzer, für alle oder nur auf diesem Gerät.
-- **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Technik, Displays, Darstellung, Prüfen & Sichern) und Sortieren per Ziehen.
+- **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Energie, Technik, Wandpanel & Displays, Darstellung, Prüfen & Sichern) mit Sprungleiste und Sortieren per Ziehen.
 - **Prüfen & Sichern**: Einrichtungs-Check (gelöschte Entitäten, Räume ohne Fühler, Rollos ohne Ausrichtung …) und
   Sicherungen der Einstellungen – automatisch vor Updates und täglich vor dem Speichern, wiederherstellen, als Datei
   herunterladen und einspielen.

@@ -19,13 +19,14 @@ import { wxSettingsHTML } from "./wetterwarnung.js";
 import { problems, systemFile, systemSettingsHTML } from "./system.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
-const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"], ["system", "Prüfen & Sichern", "mdi:clipboard-check-outline"]];
+const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["energie", "Energie", "mdi:solar-power-variant"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Wandpanel & Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"], ["system", "Prüfen & Sichern", "mdi:clipboard-check-outline"]];
 const SET_TAB_KEYS = {
   raeume: ["area_order", "hidden_areas", "floor_order", "outdoor_floors", "pins", "favorites"],
   alarme: ["house_mode", "pin", "presence_sim", "alerts", "escalation", "alarm_actions"],
   meldungen: ["push", "doorbell"],
-  technik: ["heating", "wallbox", "shading", "weather_alerts", "appliances", "maintenance"],
-  displays: ["displays"],
+  energie: ["header", "energy", "forecast", "price", "wallbox"],
+  technik: ["heating", "shading", "weather_alerts", "appliances", "maintenance"],
+  displays: ["displays", "wallpanel"],
   system: [],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
@@ -48,8 +49,8 @@ const EinstellungenMixin = (Base) => class extends Base {
     const allIds = Object.keys(h.states).sort();
     const opt = (e) => `<option value="${esc(e)}">${esc(h.states[e].attributes.friendly_name || "")}</option>`;
     const tab0 = this._settingsTab();
-    const dlAll = tab0 === "raeume" || tab0 === "alarme" || tab0 === "technik" ? `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>` : "";
-    const dlSensor = tab0 === "darstellung" ? `<datalist id="dl-sensor">${allIds.filter((e) => e.startsWith("sensor.")).map(opt).join("")}</datalist>` : "";
+    const dlAll = tab0 === "raeume" || tab0 === "alarme" || tab0 === "technik" || tab0 === "energie" ? `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>` : "";
+    const dlSensor = tab0 === "energie" ? `<datalist id="dl-sensor">${allIds.filter((e) => e.startsWith("sensor.")).map(opt).join("")}</datalist>` : "";
     const chip = (e, del) => `<span class="pin sitem" data-sort-id="${esc(e)}" data-drag title="Ziehen zum Sortieren">${esc(h.states[e] ? entName(h, e) : e)}<button ${del} data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`;
     const pinChips = (list, area) => list.map((e) => chip(e, `data-act="s-pin-del" data-area="${esc(area)}"`)).join("");
 
@@ -112,19 +113,34 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setAlerts(D)}
       ${this._setActions(D)}`;
     else if (tab === "technik") body = `${dlAll}
-      ${this._setTech(D)}
+      ${this._setTech(D, "heat")}
       ${this._setAppl(D)}
       ${this._setShade(D)}
       ${wxSettingsHTML(h, D)}
       ${maintSettingsHTML(D)}`;
-    else if (tab === "displays") body = displaySettingsHTML(this, D);
+    else if (tab === "energie") body = `${dlAll}${dlSensor}
+      <div class="set glass"><h2>${icon("mdi:solar-power-variant")}Energie</h2>
+        <p class="hint">Diese Werte stehen im Dach des Hausschnitts und auf der Seite „Energie“ (Energiefluss, Bilanz heute, Verlauf 24 h; die Wallbox steht weiter unten). Ein Tipp aufs Dach öffnet die Seite „Energie“; ohne Energiedaten die erste Verknüpfung.</p>
+        ${ent("pv", "PV-Leistung", "z. B. sensor.growatt_modbus_…_pv_power")}
+        ${ent("battery", "Akku-Ladestand", "in %")}
+        ${ent("power", "Hausverbrauch", "z. B. dein AC-seitig berechneter Verbrauch")}
+        ${ent("grid", "Netz", "positiv = Bezug, negativ = Einspeisung")}
+        <div class="srow"><span class="lbl">Speicher-Leistung<small>positiv = Laden, negativ = Entladen; leer = automatisch</small></span>
+          <input class="inp w" list="dl-sensor" data-set="energy.battery_power" value="${esc(D.energy.battery_power || "")}" placeholder="sensor.…"></div>
+        <div class="srow"><span class="lbl">Netz: Vorzeichen umkehren<small>wenn dein Zähler Einspeisung positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.grid_invert" data-bool="1" ${D.energy.grid_invert ? "checked" : ""}><span></span></label></div>
+        <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
+        <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
+      ${this._setForecast(D)}
+      ${this._setPrice(D)}
+      ${this._setTech(D, "wb")}`;
+    else if (tab === "displays") body = `${this._setWall(D)}
+      ${displaySettingsHTML(this, D)}`;
     else if (tab === "system") body = systemSettingsHTML(this, D);
     else if (tab === "meldungen") body = `
       ${this._setPush(D)}
       ${this._setBell(D)}`;
-    else body = `${dlSensor}
+    else body = `
       ${defaultSettingsHTML(this)}
-      ${this._setWall(D)}
       <div class="set glass"><h2>${icon("mdi:tune-variant")}Darstellung</h2>
         ${sw("confirm_quick", "Schnellzugriff bestätigen", "Abfrage vor „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff")}
         ${sw("glass", "Glas-Effekt", "Weichzeichner hinter Karten; auf schwachen Tablets ausschalten")}
@@ -140,27 +156,25 @@ const EinstellungenMixin = (Base) => class extends Base {
           <input class="inp s" type="number" min="1" max="99" data-set="battery_critical" data-num="1" value="${D.battery_critical}">
           <input class="inp s" type="number" min="1" max="99" data-set="battery_low" data-num="1" value="${D.battery_low}"></div>
         <div class="srow"><span class="lbl">Ausblende-Labels<small>Label-IDs, durch Komma getrennt</small></span><input class="inp w" data-set="hide_labels" data-csv="1" value="${esc((D.hide_labels || []).join(", "))}"></div></div>
-      <div class="set glass"><h2>${icon("mdi:solar-power-variant")}Energie</h2>
-        <p class="hint">Diese Werte stehen im Dach des Hausschnitts und auf der Seite „Energie“ (Energiefluss, Bilanz heute, Verlauf 24 h; die Wallbox kommt aus Technik). Ein Tipp aufs Dach öffnet die Seite „Energie“; ohne Energiedaten die erste Verknüpfung.</p>
-        ${ent("pv", "PV-Leistung", "z. B. sensor.growatt_modbus_…_pv_power")}
-        ${ent("battery", "Akku-Ladestand", "in %")}
-        ${ent("power", "Hausverbrauch", "z. B. dein AC-seitig berechneter Verbrauch")}
-        ${ent("grid", "Netz", "positiv = Bezug, negativ = Einspeisung")}
-        <div class="srow"><span class="lbl">Speicher-Leistung<small>positiv = Laden, negativ = Entladen; leer = automatisch</small></span>
-          <input class="inp w" list="dl-sensor" data-set="energy.battery_power" value="${esc(D.energy.battery_power || "")}" placeholder="sensor.…"></div>
-        <div class="srow"><span class="lbl">Netz: Vorzeichen umkehren<small>wenn dein Zähler Einspeisung positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.grid_invert" data-bool="1" ${D.energy.grid_invert ? "checked" : ""}><span></span></label></div>
-        <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
-        <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
-      ${this._setForecast(D)}
       ${this._setTermine(D)}
-      ${this._setPrice(D)}
       <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
         <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
         <div class="sortl" data-sort="links">${links}</div><div class="srow"><button class="pbtn" data-act="s-link-add">${icon("mdi:plus")}Verknüpfung hinzufügen</button></div></div>`;
 
+    // Sprungleiste: ab drei Abschnitten führt eine Zeile oben zu jeder Überschrift des Reiters
+    const jumps = [];
+    body = body.replace(/<div class="set glass([^"]*)"([^>]*)><h2>([\s\S]*?)<\/h2>/g, (all, cls, attrs, h2) => {
+      jumps.push(h2);
+      return `<div class="set glass${cls}"${attrs} data-jump="${jumps.length - 1}"><h2>${h2}</h2>`;
+    });
+    // am Handy eine Auswahl statt der Knöpfe – sonst stünden dort mehrere Zeilen vor dem ersten Abschnitt
+    const jumpBar = jumps.length < 3 ? "" : `<nav class="sjump" aria-label="Abschnitte">${jumps.map((h2, i) => `<button class="altab sm" data-act="s-jump" data-jump-to="${i}">${h2}</button>`).join("")}</nav>
+      <select class="inp sjumpsel" data-jump-sel="1" aria-label="Zum Abschnitt springen"><option value="">Zum Abschnitt springen …</option>${jumps.map((h2, i) => `<option value="${i}">${h2.replace(/<[^>]+>/g, "").trim()}</option>`).join("")}</select>`;
+
     return `<div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span><span class="sp"></span></div>
       <div class="altabs stabs" role="tablist">${tabs}</div>
       <p class="hint savehint">Änderungen gelten erst nach „Speichern“ unten. Was mit ${instant()} gekennzeichnet ist, wirkt direkt.</p>
+      ${jumpBar}
       ${body}
       <div class="savebar glass${this._dirtySettings ? " dirty" : ""}"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>${this._dirtySettings ? this._dirtyWhere() : ""}
         <button class="pbtn" data-act="s-reset"${this._dirtySettings ? "" : " disabled"}>${icon("mdi:undo")}Verwerfen</button>
@@ -175,8 +189,8 @@ const EinstellungenMixin = (Base) => class extends Base {
     const found = auto ? `${auto.src}: ${[...auto.today, ...auto.tomorrow].join(", ")}` : "keine Forecast.Solar- oder Solcast-Sensoren gefunden";
     const inp = (key, label, hint) => `<div class="srow"><span class="lbl">${label}<small>${hint}</small></span>
       <input class="inp w" list="dl-sensor" data-set="forecast.${key}" value="${esc(F[key] || "")}" placeholder="automatisch"></div>`;
-    return `<div class="set glass"><h2>${icon("mdi:weather-partly-cloudy")}Vorhersage auf der Übersicht</h2>
-      <p class="hint">Kompakte Karte mit dem Wetter der nächsten Tage${wid ? ` (${esc(wid)}, wie im Wandpanel eingestellt)` : ""}, dem erwarteten PV-Ertrag und dem wichtigsten Beschattungshinweis. Die Solarprognose kommt automatisch aus Forecast.Solar oder Solcast (${esc(found)}); eigene Sensoren in kWh oder Wh hier eintragen.</p>
+    return `<div class="set glass"><h2>${icon("mdi:weather-partly-cloudy")}Vorhersage und PV-Prognose</h2>
+      <p class="hint">Karte „Vorhersage“ auf der Übersicht: kompakt mit dem Wetter der nächsten Tage${wid ? ` (${esc(wid)}, wie im Wandpanel eingestellt)` : ""}, dem erwarteten PV-Ertrag und dem wichtigsten Beschattungshinweis. Die Solarprognose kommt automatisch aus Forecast.Solar oder Solcast (${esc(found)}); eigene Sensoren in kWh oder Wh hier eintragen.</p>
       <div class="srow"><span class="lbl">Karte „Vorhersage“ zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.enabled" data-bool="1" ${F.enabled !== false ? "checked" : ""}><span></span></label></div>
       <div class="srow"><span class="lbl">Solarprognose zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.solar" data-bool="1" ${F.solar !== false ? "checked" : ""}><span></span></label></div>
       ${inp("solar_today", "PV-Prognose heute", "Energie in kWh; leer = automatisch")}
@@ -251,7 +265,8 @@ const EinstellungenMixin = (Base) => class extends Base {
     </div>`;
   }
 
-  _setTech(D) {
+  /** Heizung (part "heat", Reiter Technik) oder Wallbox (part "wb", Reiter Energie). */
+  _setTech(D, part) {
     const h = this._hass, m = buildModel(h, { ...D, hidden_areas: [] }), T = m.tech;
     // automatisch erkannte Zuordnung (ohne eigene Einträge) für die Platzhalter
     const blankH = Object.fromEntries(Object.entries(D.heating).map(([k, v]) => [k, typeof v === "string" ? "" : k === "tank" ? [] : v]));
@@ -268,6 +283,20 @@ const EinstellungenMixin = (Base) => class extends Base {
     const tank = eh ? eh.tank : [];
     const found = (c, parts) => (c ? `Erkannt: ${parts.filter(Boolean).join(" · ")}` : "Nichts erkannt.");
     const M = H.manual || {};
+    if (part === "wb") return `<div class="set glass"><h2>${icon("mdi:ev-station")}Wallbox</h2>
+      <p class="hint">Die Karte „Wallbox“ erscheint auf der Raumseite der Einfahrt: Ladeleistung, Ladestand und Reichweite des Autos, geladene Energie, Lademodus (Aus, Sofort, Min + PV, PV) und Ziel-Ladestand. Passt zu EVCC und anderen Wallboxen. Leere Felder = automatisch.</p>
+      <p class="hint techfound">${esc(found(ew, [ew && `Raum ${areaName(ew.area)}`, ew && ew.power && "Ladeleistung", ew && ew.mode && "Lademodus", ew && ew.soc && "Ladestand", ew && ew.limit && "Ziel"]))}</p>
+      ${tg("wallbox.enabled", W.enabled !== false, "Wallbox-Karte anzeigen")}
+      <div class="srow"><span class="lbl">Raum</span>${areaSel("wallbox.area", W.area, AW.area)}</div>
+      ${fld("wallbox", "power", "Ladeleistung", "W oder kW", AW.power)}
+      ${fld("wallbox", "mode", "Lademodus", "Auswahl (select)", AW.mode)}
+      ${fld("wallbox", "soc", "Ladestand Auto", "%", AW.soc)}
+      ${fld("wallbox", "limit", "Ziel-Ladestand", "number – in der Karte mit − / + änderbar", AW.limit)}
+      ${fld("wallbox", "energy", "Geladen (Sitzung)", "kWh", AW.energy)}
+      ${fld("wallbox", "range", "Reichweite", "km", AW.range)}
+      ${fld("wallbox", "connected", "Fahrzeug angesteckt", "binary_sensor", AW.connected)}
+      ${fld("wallbox", "charging", "Lädt", "binary_sensor", AW.charging)}
+    </div>`;
     return `<div class="set glass"><h2>${icon("mdi:heating-coil")}Heizung</h2>
       <p class="hint">Die Karte „Heizung“ erscheint auf der Raumseite des Heizungsraums: Speicher mit Schichtung und Ladung, Kamin mit Pumpe und die Heizkurve mit Betriebspunkt. Die Heizkurve kommt aus der Integration „Heizkurve Fußbodenheizung“ (Sensor mit Kurvenpunkten), sonst aus den Werten unten. Leere Felder = automatisch.</p>
       <p class="hint techfound">${esc(found(eh, [eh && `Raum ${areaName(eh.area)}`, tank.length && `${tank.length} Speicherfühler`, eh && eh.stove && "Kamin", eh && eh.curve && `Heizkurve ${eh.curve}`, eh && eh.mixer && "Mischer"]))}</p>
@@ -294,20 +323,6 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${H.manual_curve || !(eh && eh.curve) ? `<div class="srow sub techman">
         ${[["slope", "Steilheit", 0.1, 3, 0.05], ["level", "Niveau K", -15, 15, 0.5], ["room", "Raum °C", 15, 28, 0.5], ["min", "Min °C", 15, 45, 1], ["max", "Max °C", 25, 70, 1], ["limit", "Heizgrenze °C", 5, 25, 1]]
           .map(([k, t, mn, mx, st]) => `<label class="tml"><small>${t}</small><input class="inp xs" type="number" min="${mn}" max="${mx}" step="${st}" data-set="heating.manual.${k}" data-num="1" value="${M[k]}"></label>`).join("")}</div>` : ""}
-    </div>
-    <div class="set glass"><h2>${icon("mdi:ev-station")}Wallbox</h2>
-      <p class="hint">Die Karte „Wallbox“ erscheint auf der Raumseite der Einfahrt: Ladeleistung, Ladestand und Reichweite des Autos, geladene Energie, Lademodus (Aus, Sofort, Min + PV, PV) und Ziel-Ladestand. Passt zu EVCC und anderen Wallboxen. Leere Felder = automatisch.</p>
-      <p class="hint techfound">${esc(found(ew, [ew && `Raum ${areaName(ew.area)}`, ew && ew.power && "Ladeleistung", ew && ew.mode && "Lademodus", ew && ew.soc && "Ladestand", ew && ew.limit && "Ziel"]))}</p>
-      ${tg("wallbox.enabled", W.enabled !== false, "Wallbox-Karte anzeigen")}
-      <div class="srow"><span class="lbl">Raum</span>${areaSel("wallbox.area", W.area, AW.area)}</div>
-      ${fld("wallbox", "power", "Ladeleistung", "W oder kW", AW.power)}
-      ${fld("wallbox", "mode", "Lademodus", "Auswahl (select)", AW.mode)}
-      ${fld("wallbox", "soc", "Ladestand Auto", "%", AW.soc)}
-      ${fld("wallbox", "limit", "Ziel-Ladestand", "number – in der Karte mit − / + änderbar", AW.limit)}
-      ${fld("wallbox", "energy", "Geladen (Sitzung)", "kWh", AW.energy)}
-      ${fld("wallbox", "range", "Reichweite", "km", AW.range)}
-      ${fld("wallbox", "connected", "Fahrzeug angesteckt", "binary_sensor", AW.connected)}
-      ${fld("wallbox", "charging", "Lädt", "binary_sensor", AW.charging)}
     </div>`;
   }
 
@@ -328,7 +343,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="actrow sub">${ent(i, "energy", "Energiezähler in kWh (optional)", "genauer als die aufsummierte Leistung")}${ent(i, "door", "Tür (optional): binary_sensor.…", "Tür auf quittiert „fertig“")}${ent(i, "remaining", "Restzeit (optional)", "Zeitpunkt oder Minuten")}</div>
       <div class="actrow sub"><span class="rl">läuft ab</span>${nm(i, "start_w", "W", 1, 2000, "Startgrenze: so viel Leistung mindestens 1 Minute lang")}<span class="rl">fertig unter</span>${nm(i, "stop_w", "W", 1, 2000, "Stoppgrenze")}<span class="rl">für</span>${nm(i, "stop_min", "min", 1, 60, "so lange unter der Stoppgrenze (Spülmaschine trocknet oft lange ohne Strom: eher 10–20 min)")}</div></div>`).join("");
     return `<div class="set glass" data-sec="appliances"><h2>${icon("mdi:washing-machine")}Haushaltsgeräte</h2>
-      <p class="hint">Karte „Geräte“ auf der Übersicht: läuft seit, Restzeit, „fertig seit …“, Energie und Kosten je Durchgang (Strompreis aus Darstellung → Strompreis; eigener PV-Strom zählt nicht). Bei „fertig“ kommt eine Meldung (Hinweis, auch als Push), bis jemand quittiert, die Tür öffnet oder das Gerät neu startet. Dazu ein Tipp, wann sich das Starten lohnt (PV-Überschuss, günstiges Zeitfenster, Solarprognose).</p>
+      <p class="hint">Karte „Geräte“ auf der Übersicht: läuft seit, Restzeit, „fertig seit …“, Energie und Kosten je Durchgang (Strompreis aus Energie → Strompreis; eigener PV-Strom zählt nicht). Bei „fertig“ kommt eine Meldung (Hinweis, auch als Push), bis jemand quittiert, die Tür öffnet oder das Gerät neu startet. Dazu ein Tipp, wann sich das Starten lohnt (PV-Überschuss, günstiges Zeitfenster, Solarprognose).</p>
       <div class="srow"><span class="lbl">Haushaltsgeräte auswerten</span><label class="tgl"><input type="checkbox" data-set="appliances.enabled" data-bool="1" ${A.enabled !== false ? "checked" : ""}><span></span></label></div>
       <div class="srow"><span class="lbl">Automatisch erkennen<small>ohne eigene Einträge: Leistungssensoren mit Waschmaschine, Trockner oder Spülmaschine im Namen${auto.length ? ` – erkannt: ${esc(auto.map((a) => `${a.name} (${a.power})`).join(", "))}` : " – zurzeit keine erkannt"}</small></span><label class="tgl"><input type="checkbox" data-set="appliances.auto" data-bool="1" ${A.auto !== false ? "checked" : ""}><span></span></label></div>
       ${rows ? `<div class="appllist">${rows}</div>` : ""}
@@ -692,6 +707,12 @@ const EinstellungenMixin = (Base) => class extends Base {
     super._onChange(e);
     const t = e.target;
     if (t.dataset && t.dataset.bkFile && e.type === "change") { systemFile(this, t); return; }
+    if (t.dataset && t.dataset.jumpSel && e.type === "change") {
+      const sec = t.value !== "" && this.shadowRoot.querySelector(`.set[data-jump="${t.value}"]`);
+      t.value = "";
+      if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (t.dataset && t.dataset.pushTarget && e.type === "change" && this._draft) {
       const sv = t.dataset.pushTarget, P = this._draft.push;
       P.targets = t.checked ? [...new Set([...P.targets, sv])] : P.targets.filter((x) => x !== sv);

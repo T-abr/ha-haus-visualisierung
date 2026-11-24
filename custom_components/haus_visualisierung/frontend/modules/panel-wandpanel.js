@@ -12,7 +12,7 @@ import { applSaverHint } from "./geraete.js";
 const WandpanelMixin = (Base) => class extends Base {
   /* ---------- Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite ---------- */
   /* Ob ein Gerät ein Wandpanel ist, gilt je Browser (localStorage, auch per Adresse ?wandpanel=1 bzw. =0).
-     Zeiten und Inhalte gelten für alle Wandpanels (Einstellungen → Darstellung). Ein Takt von 5 s prüft
+     Zeiten und Inhalte gelten für alle Wandpanels (Einstellungen → Wandpanel & Displays). Ein Takt von 5 s prüft
      die Ruhezeit – nur bei sichtbarem Tab und nur auf Wandpanels. */
   _wallIsOn() {
     if (this._wallFlag === undefined) {

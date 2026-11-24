@@ -16,18 +16,18 @@ function layoutRefs(L) {
   const out = [];
   const add = (e, where, tab) => { if (typeof e === "string" && ENT_RE.test(e)) out.push({ e, where, tab }); };
   const H = L.header || {};
-  [["pv", "PV-Leistung"], ["battery", "Akku-Ladestand"], ["power", "Hausverbrauch"], ["grid", "Netz"]].forEach(([k, t]) => add(H[k], `Energie · ${t}`, "darstellung"));
-  add((L.energy || {}).battery_power, "Energie · Speicher-Leistung", "darstellung");
-  add((L.price || {}).sensor, "Strompreis · Sensor", "darstellung");
-  add((L.forecast || {}).solar_today, "Vorhersage · Solar heute", "darstellung");
-  add((L.forecast || {}).solar_tomorrow, "Vorhersage · Solar morgen", "darstellung");
-  add((L.wallpanel || {}).weather, "Wandpanel · Wetter", "darstellung");
-  add((L.wallpanel || {}).wake_entity, "Wandpanel · Aufwecken", "darstellung");
+  [["pv", "PV-Leistung"], ["battery", "Akku-Ladestand"], ["power", "Hausverbrauch"], ["grid", "Netz"]].forEach(([k, t]) => add(H[k], `Energie · ${t}`, "energie"));
+  add((L.energy || {}).battery_power, "Energie · Speicher-Leistung", "energie");
+  add((L.price || {}).sensor, "Strompreis · Sensor", "energie");
+  add((L.forecast || {}).solar_today, "Vorhersage · Solar heute", "energie");
+  add((L.forecast || {}).solar_tomorrow, "Vorhersage · Solar morgen", "energie");
+  add((L.wallpanel || {}).weather, "Wandpanel · Wetter", "displays");
+  add((L.wallpanel || {}).wake_entity, "Wandpanel · Aufwecken", "displays");
   const HE = L.heating || {};
   ["stove", "stove_pump", "curve", "mixer", "flow", "outdoor"].forEach((k) => add(HE[k], `Heizung · ${k}`, "technik"));
   (HE.tank || []).forEach((e) => add(e, "Heizung · Speicher", "technik"));
   const WB = L.wallbox || {};
-  ["power", "mode", "soc", "limit", "energy", "connected", "charging", "range"].forEach((k) => add(WB[k], `Wallbox · ${k}`, "technik"));
+  ["power", "mode", "soc", "limit", "energy", "connected", "charging", "range"].forEach((k) => add(WB[k], `Wallbox · ${k}`, "energie"));
   (((L.appliances || {}).items) || []).forEach((a) => ["power", "energy", "status", "door", "remaining"].forEach((k) => add(a[k], `Haushaltsgerät ${a.name || a.id} · ${k}`, "technik")));
   const WX = L.weather_alerts || {};
   (WX.dwd || []).forEach((e) => add(e, "Wetterwarnungen · DWD", "technik"));
@@ -79,7 +79,7 @@ function setupChecks(h, L) {
 
   // Wetter, Beschattung, Wetterwarnungen
   const wid = weatherIdOf(h, L);
-  if (!wid) push("warn", "mdi:weather-cloudy-alert", "Keine Wetter-Entität", "Ohne Wetter gibt es keine Vorhersage, keine Beschattungs- und keine Regenhinweise (z. B. Integration „Met.no“ oder „DWD“ einrichten)", "darstellung");
+  if (!wid) push("warn", "mdi:weather-cloudy-alert", "Keine Wetter-Entität", "Ohne Wetter gibt es keine Vorhersage, keine Beschattungs- und keine Regenhinweise (z. B. Integration „Met.no“ oder „DWD“ einrichten)", "displays");
   else if (L.weather_alerts && L.weather_alerts.rain !== false && !(Number(S[wid].attributes.supported_features) & 2) && !wxAuto(h).rain && !(L.weather_alerts.rain_sensor))
     push("info", "mdi:weather-pouring", "Regenhinweis nur nach aktueller Wetterlage", `${wid} liefert keine stündliche Vorhersage und es gibt keinen Regensensor – „Regen kommt“ geht erst mit einem von beiden`, "technik");
   if (L.weather_alerts && L.weather_alerts.enabled !== false && !wxAuto(h).dwd.length && !(L.weather_alerts.dwd || []).length)
@@ -118,12 +118,12 @@ function setupChecks(h, L) {
 
   // Displays
   const noDev = (L.displays || []).filter((d) => !d.device);
-  if (noDev.length) push("info", "mdi:tablet-dashboard", `${noDev.length} ${noDev.length === 1 ? "Display ohne" : "Displays ohne"} Gerät`, `${short(noDev.map((d) => d.name || d.id))} – im Reiter Displays ein Gerät zuordnen`, "displays");
+  if (noDev.length) push("info", "mdi:tablet-dashboard", `${noDev.length} ${noDev.length === 1 ? "Display ohne" : "Displays ohne"} Gerät`, `${short(noDev.map((d) => d.name || d.id))} – im Reiter „Wandpanel & Displays“ ein Gerät zuordnen`, "displays");
 
   return out.sort((a, b) => (a.lvl === b.lvl ? 0 : a.lvl === "warn" ? -1 : 1));
 }
 
-const TAB_NAME = { raeume: "Räume", alarme: "Alarme", meldungen: "Meldungen", technik: "Technik", displays: "Displays", darstellung: "Darstellung" };
+const TAB_NAME = { raeume: "Räume", alarme: "Alarme", meldungen: "Meldungen", energie: "Energie", technik: "Technik", displays: "Wandpanel & Displays", darstellung: "Darstellung" };
 const REASON = { update: "vor dem Update", taeglich: "automatisch", wiederherstellen: "vor dem Wiederherstellen", manuell: "von Hand", import: "vor dem Import" };
 const dt = (ts) => new Date(ts * 1000).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 

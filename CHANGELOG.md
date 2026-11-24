@@ -28,6 +28,13 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - **Frontend-Dateien werden zwischengespeichert:** Die Adresse enthält die Version, deshalb darf der Browser die Dateien jetzt lange behalten; nach einem Update lädt er automatisch die neuen.
 - **Karten:** Beim Ansichtswechsel im Dashboard kamen Zeiger- und Kontextmenü-Handler bei jedem erneuten Einhängen doppelt dazu; jetzt bleibt es bei einem.
 
+### Verbessert – Einstellungen übersichtlicher
+- **Neuer Reiter „Energie“**: Energie-Sensoren, Vorhersage und PV-Prognose, Strompreis und Wallbox (bisher verteilt auf Darstellung und Technik).
+- **Reiter „Wandpanel & Displays“**: Wandpanel (Tablet) und Wanddisplays stehen zusammen; „Darstellung“ enthält nur noch Aussehen, Standard-Dashboard, Müll und Termine sowie Verknüpfungen.
+- **Sprungleiste** oben in jedem Reiter mit mindestens drei Abschnitten; am Handy als Auswahl „Zum Abschnitt springen …“.
+- Adressen wie `einstellungen/technik` wählen den Reiter auch dann, wenn dieselbe Adresse vorher schon offen war (z. B. „Aufgaben bearbeiten“ auf der Seite Wartung).
+- Einrichtungs-Check führt zu den neuen Reitern.
+
 ## 1.18.1 – 2026-11-24
 
 Mitgelieferte Firmware **0.6.1** – Update im Reiter Displays über „Update auf 0.6.1“.
