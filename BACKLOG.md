@@ -38,9 +38,11 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 27 | Display: kurze Meldungen als Popup | mittel | S–M | neu |
 | 28 | Display: Raumbezug je Display | mittel | M | neu |
 | 29 | Display: Wetter-/PV-Seite mit Stundenverlauf | niedrig | M | neu |
+| 30 | Display-Speicher: Schriften, gemeinsame Stile, interner Puffer | später | M–L | zurückgestellt |
 
 „Umgesetzt“: seit Version 1.11.0 (1–10) bzw. 1.17.0 (18–21) enthalten. „Neu“: im Backlog, noch nicht
-ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23).
+ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23). „Zurückgestellt“: erst
+angehen, wenn die genannte Bedingung eintritt.
 
 ## Neue Ideen
 
@@ -146,6 +148,20 @@ automatisch, ohne Kacheln von Hand einzurichten. Firmware nur, wenn die Seite ei
 
 ### 29. Display: Wetter-/PV-Seite mit Stundenverlauf
 Temperatur, Regen und erwartete PV-Leistung der nächsten Stunden als kleine Kurven. Braucht neue Firmware.
+
+### 30. Display-Speicher: Schriften, gemeinsame Stile, interner Puffer (zurückgestellt)
+Restpunkte 6–8 der Display-Optimierung, zurückgestellt nach den Messwerten von Firmware 0.6.1 (Tobias, 2026-11-24):
+intern 75,9 KB frei, größter Block 64 KB, PSRAM 5,8 MB frei, Loop-Zeit max. 66 ms je Minute (Neuzeichnen des
+ganzen Bildschirms, im Alltag nicht spürbar).
+- **Schriften reduzieren** (11 Roboto-Größen): liegen im Flash, entlasten den internen Speicher nicht.
+- **Gemeinsame LVGL-Stile statt Einzelfarben** (~370 Widgets, Umbau von `basis.yaml`): ESPHome legt Widgets und
+  Stile zuerst im PSRAM an, Gewinn wäre nur PSRAM.
+- **Zeichenpuffer intern statt PSRAM**: der 25-%-Puffer (115 KB) passt nicht in den freien internen Speicher; ein
+  kleinerer nähme WLAN und API den Platz.
+
+**Wieder aufgreifen,** wenn der Diagnose-Sensor „Speicher frei“ unter etwa 40 KB oder „Größter freier Block“ unter
+etwa 20 KB fällt oder das Display spürbar träge wird. Die Ursache langer Loops zeigt das USB-Log als Warnung
+„took a long time“ mit dem Namen des Bausteins (auch bei Stufe INFO).
 
 ## Vorgemerkt (früher vorgeschlagen)
 
