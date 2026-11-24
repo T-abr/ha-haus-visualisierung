@@ -241,6 +241,7 @@ class AlertMonitor:
         self._last_sent: dict[str, float] = {}
         self._baseline_done = False
         self._eval_pending: Callable[[], None] | None = None
+        self._rebuild_due = False
         self.sent: list[dict] = []  # zuletzt verschickte Meldungen (für Status/Tests)
         self.book = AlarmBook(hass)
         self.house = HouseMode(hass, self)
@@ -305,6 +306,7 @@ class AlertMonitor:
 
     @callback
     def _rebuild(self) -> None:
+        self._rebuild_due = False
         hass, layout = self.hass, self.layout
         ent_reg, dev_reg, area_reg = er.async_get(hass), dr.async_get(hass), ar.async_get(hass)
         hidden_areas = set(layout.get("hidden_areas", []))
@@ -613,6 +615,13 @@ class AlertMonitor:
     @callback
     def _on_state(self, event: Event) -> None:
         eid = event.data.get("entity_id")
+        new, old = event.data.get("new_state"), event.data.get("old_state")
+        if new is not None and (old is None or old.attributes.get("device_class") != new.attributes.get("device_class")):
+            # Entität taucht erst nach dem Aufbau auf (z. B. MQTT/Zigbee2MQTT meldet sich nach dem Start)
+            # oder bekommt erst jetzt ihre Geräteklasse: Modell neu aufbauen, sonst wird sie nie beobachtet.
+            self._rebuild_due = True
+            self._schedule()
+            return
         if eid in self._watch:
             if eid in self.appliances.watch and self._baseline_done:
                 self.appliances.update()
@@ -652,6 +661,8 @@ class AlertMonitor:
 
     @callback
     def _process(self) -> None:
+        if self._rebuild_due:
+            self._rebuild()
         current = {a.key: a for a in self.evaluate()}
         self.book.sync(current)
         for key, alert in current.items():

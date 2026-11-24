@@ -223,3 +223,27 @@ async def test_eigene_regeln_an_aus_dauer_modus(hass: HomeAssistant, freezer) ->
     await _tick(hass, 31)
     await _tick(hass, 31)
     assert f"rule:2:{ids['temp']}" in keys()
+
+
+@pytest.mark.parametrize("vorher", ["fehlt", "unavailable"])
+async def test_spaet_gemeldeter_bewegungsmelder(hass: HomeAssistant, vorher: str) -> None:
+    """Melder, deren Zustand erst nach dem Start der Integration kommt (z. B. Zigbee2MQTT/MQTT nach dem
+    Hochfahren) oder die anfangs keine Geräteklasse haben, müssen trotzdem Alarm auslösen."""
+    calls = async_mock_service(hass, "notify", "mobile_app_handy")
+    reg = er.async_get(hass)
+    flur = ar.async_get(hass).async_create("Flur").id
+    e = reg.async_get_or_create("binary_sensor", "mqtt", "flur_bewegung", suggested_object_id="flur_bewegung")
+    reg.async_update_entity(e.entity_id, area_id=flur)
+    if vorher == "unavailable":
+        hass.states.async_set(e.entity_id, "unavailable", {})
+    monitor = await _setup(hass)
+    await _tick(hass)
+    monitor.house.set_mode("abwesend", "Test")
+    await _tick(hass)
+    attrs = {"device_class": "motion", "friendly_name": "Flur Bewegung"}
+    hass.states.async_set(e.entity_id, "off", attrs)
+    await _tick(hass)
+    hass.states.async_set(e.entity_id, "on", attrs)
+    await _tick(hass)
+    assert f"presence:{e.entity_id}" in monitor.book.alarms
+    assert "🏠 Flur: Bewegung erkannt" in _titles(calls)

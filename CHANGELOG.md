@@ -5,10 +5,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ## Unveröffentlicht
 
 ### Behoben
+- **Bewegungsalarm (und andere Warnungen) blieben nach einem Neustart stumm.** Der Alarmmanager baut beim Start auf, welche Melder er beobachtet. Entitäten, deren Zustand erst danach kam (z. B. Geräte über MQTT/Zigbee2MQTT, die sich nach dem Hochfahren melden) oder die anfangs keine Geräteklasse hatten, fehlten in dieser Liste, bis zufällig etwas in den Einstellungen oder im Entitäten-Register gespeichert wurde. Das Panel zeigte sie trotzdem an. Taucht eine Entität neu auf oder ändert sich ihre Geräteklasse, baut der Alarmmanager die Liste jetzt neu auf.
 - **Kein Bewegungsalarm in Abwesend/Urlaub.** Wurde Abwesend oder Urlaub von Hand gesetzt, während eine Person noch als „zu Hause“ galt, setzte die Automatik den Hausmodus beim nächsten Standort-Update der Companion-App (gleicher Zustand, neue Koordinaten) sofort zurück auf Zuhause. Danach meldete der Alarmmanager Bewegung nicht mehr. Die Automatik reagiert jetzt nur noch auf echte Zustandswechsel der Personen: Zurück auf Zuhause geht es erst, wenn jemand ankommt; „alle weg → Abwesend“ bleibt wie bisher.
 - **Energiefluss: „Speicher entlädt“ fehlte.** Die automatische Erkennung der Speicher-Leistung konnte einen reinen Lade- oder Entladesensor erwischen (z. B. Growatt „Battery Charge Power“, immer ≥ 0) statt des vorzeichenbehafteten Sensors. Dann zeigte der Fluss nur eine Richtung, und Gesamtverbrauch, Autarkie und Bilanz rechneten falsch. Solche Sensoren (Namen mit „charge“/„discharge“, „Laden“/„Entladen“) werden jetzt übersprungen, im Panel wie fürs Wanddisplay. Eine fest eingestellte Speicher-Leistung (Einstellungen → Energie) hat weiterhin Vorrang.
 
 ### Tests
+- Bewegungsmelder, die erst nach dem Start (ohne Zustand oder „nicht verfügbar“ ohne Geräteklasse) auftauchen, lösen bei Abwesend Alarm und Push aus.
 - Neue Gesamtprüfung aller Warnregeln (`test_regeln.py`): Fenster/Tür (auch mit Verzögerung), Fenster offen beim Heizen, Wasser/Rauch/Sirene, Alarmanlage, Schloss, Garagentor, Batterien, nicht erreichbare Geräte, Abschalten und Hausmodus-Einschränkung sowie eigene Regeln mit allen Vergleichen, Dauer, Modus und „aus“. Jeweils Meldung, Push und Aufräumen beim Beheben.
 - Hausmodus: Abwesend und Urlaub von Hand bleiben bei Standort-Updates bestehen, Bewegung löst Alarm und kritische Push-Meldung aus, eine Ankunft schaltet zurück auf Zuhause.
 - Energie: Lade- und Entladesensoren vor dem eigentlichen Speicher-Sensor, Entladen muss als Fluss zum Haus erscheinen.
