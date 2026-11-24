@@ -4,10 +4,18 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.19.1 – 2026-11-24
+
+Mitgelieferte Firmware unverändert **0.6.1**.
+
 ### Behoben
 - **Bewegungsalarm (und andere Warnungen) blieben nach einem Neustart stumm.** Der Alarmmanager baut beim Start auf, welche Melder er beobachtet. Entitäten, deren Zustand erst danach kam (z. B. Geräte über MQTT/Zigbee2MQTT, die sich nach dem Hochfahren melden) oder die anfangs keine Geräteklasse hatten, fehlten in dieser Liste, bis zufällig etwas in den Einstellungen oder im Entitäten-Register gespeichert wurde. Das Panel zeigte sie trotzdem an. Taucht eine Entität neu auf oder ändert sich ihre Geräteklasse, baut der Alarmmanager die Liste jetzt neu auf.
 - **Kein Bewegungsalarm in Abwesend/Urlaub.** Wurde Abwesend oder Urlaub von Hand gesetzt, während eine Person noch als „zu Hause“ galt, setzte die Automatik den Hausmodus beim nächsten Standort-Update der Companion-App (gleicher Zustand, neue Koordinaten) sofort zurück auf Zuhause. Danach meldete der Alarmmanager Bewegung nicht mehr. Die Automatik reagiert jetzt nur noch auf echte Zustandswechsel der Personen: Zurück auf Zuhause geht es erst, wenn jemand ankommt; „alle weg → Abwesend“ bleibt wie bisher.
 - **Energiefluss: „Speicher entlädt“ fehlte.** Die automatische Erkennung der Speicher-Leistung konnte einen reinen Lade- oder Entladesensor erwischen (z. B. Growatt „Battery Charge Power“, immer ≥ 0) statt des vorzeichenbehafteten Sensors. Dann zeigte der Fluss nur eine Richtung, und Gesamtverbrauch, Autarkie und Bilanz rechneten falsch. Solche Sensoren (Namen mit „charge“/„discharge“, „Laden“/„Entladen“) werden jetzt übersprungen, im Panel wie fürs Wanddisplay. Eine fest eingestellte Speicher-Leistung (Einstellungen → Energie) hat weiterhin Vorrang.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 15–18 ms, Klima 36 ms, übrige 7–29 ms; hass-Setter Übersicht rund 25 µs, Unterseiten 0,3–18 µs; Aktualisierer auf der Übersicht 480 pro Minute. Im Rahmen der Messschwankung wie 1.19.0.
+- Alarmmanager (Backend-Test): Auswertung 0,09 ms, Neuaufbau des Modells 1,2 ms bei 312 beobachteten Entitäten. Der zusätzliche Neuaufbau beim Auftauchen neuer Entitäten läuft gesammelt mit der nächsten Auswertung.
 
 ### Tests
 - Bewegungsmelder, die erst nach dem Start (ohne Zustand oder „nicht verfügbar“ ohne Geräteklasse) auftauchen, lösen bei Abwesend Alarm und Push aus.
