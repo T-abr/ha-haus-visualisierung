@@ -1,12 +1,54 @@
 # Hinweise für Claude-Sitzungen
 
-Entwicklung, Tests, Versionen und Releases: siehe Abschnitt „Entwicklung“ in `README.md`. Antworten auf Deutsch.
+Home-Assistant-Integration „Haus Visualisierung“: Backend (Python) plus eigenes Panel (ES-Module ohne Build-Schritt).
+Antworten auf Deutsch, auch Kommentare, Commit-Texte und CHANGELOG. Funktionsumfang: `README.md`; Befehle für
+Tests, Version und ZIP: Abschnitt „Entwicklung“ in `README.md`. Hier steht nur, was dort fehlt.
 
-## Tests während der Entwicklung
-- Zwischendurch nur die betroffenen Prüfungen laufen lassen: `python3 tests/changed.py`
-  (wählt anhand von `git diff` gegen `main` die Gruppen der Bedienprüfungen; `--zeigen` zeigt nur die Auswahl).
-- Vor dem Pull Request bzw. wenn gemeinsam genutzte Module betroffen sind: alles, also `pytest` und
-  `python3 tests/interact.py` ohne Angabe. Die CI am Pull Request führt ohnehin immer alles aus.
+## Arbeitsweise
+- Entscheidungen (auch kleine) bei Tobias erfragen, nicht selbst treffen. Firmware nie ungefragt bauen.
+- Keine Screenshots oder Mockups, außer sie sind ausdrücklich gewünscht.
+- Kein Release aus einem Thread: keine Tags pushen. Release macht Tobias über Actions → „Release“ → „Run workflow“.
+- Änderungen ins CHANGELOG unter `## Unveröffentlicht`, gegliedert mit `### Neu`, `### Behoben`, `### Geändert`/`### Verbessert`, `### Tests`.
+  Versionssprung nur auf Wunsch: `scripts/bump_version.py` verlangt dort einen Abschnitt `### Performance`
+  (Ergebnis von `python3 tests/perf/measure.py`, siehe `PERFORMANCE.md`).
+- Ideen und Prioritäten: `BACKLOG.md` (umgesetzte Punkte dort streichen).
+- Wanddisplay-Firmware liegt im Repo `T-abr/ha-haus-display`. Schnittstelle: `DISPLAY_PROTOKOLL.md`; wer das
+  Protokoll ändert, passt beide Repos an (`PROTOCOL` in `display.py`, `hd::PROTOKOLL` in der Firmware).
+  Fertige Firmware (Zweig `firmware` im Display-Repo) wird nach `custom_components/haus_visualisierung/firmware/` kopiert.
+
+## Aufbau (`custom_components/haus_visualisierung/`)
+Backend, je Datei ein Thema (der Docstring am Dateianfang erklärt es):
+- `__init__.py` Einrichtung, Panel/Lader registrieren, Dienste; `const.py`; `config_flow.py`
+- `store.py` Layout-Einstellungen (`.storage/haus_visualisierung`); `websocket.py` alle Befehle `haus_visualisierung/*`
+  (`save` nimmt `changes` = Liste geänderter Pfade, gespeichert per `store.async_patch`)
+- `alerts.py` alle Warnregeln (nur hier, das Frontend zeigt nur an), `alarms.py` Zustand/Protokoll, `actions.py` Eskalation
+- `mode.py` + `select.py` Hausmodus; `presence.py` Anwesenheits-Simulation; `appliances.py` + `sensor.py` Haushaltsgeräte
+- `weather.py` Wetterwarnungen; `maintenance.py` Wartung; `pin.py` PIN; `backup.py` Sicherungen
+- `display.py` Inhalte fürs Wanddisplay, `display_setup.py` Einrichten/Flashen, `update.py` Firmware-Update je Display
+
+Frontend (`frontend/`):
+- `karten-loader.js` läuft auf jeder HA-Seite (klein halten!), meldet `haus-raum-card`/`haus-hausschnitt-card` an
+  und lädt `modules/karten.js` erst bei Bedarf. Neue Dashboard-Karten dort anmelden, nicht im Panel.
+- `haus-visualisierung.js` Einstieg des Panels (nur beim Öffnen geladen). Panel = `modules/panel.js` plus Mixins
+  `panel-*.js` (Ansichten, Einstellungen, Alarmseite, Wandpanel, Klingel, Aktionen, Kompakt).
+- Fachmodule je Thema: `energie`, `klima`, `verlauf`, `rueckblick`, `strompreis`, `prognose`, `wetter`,
+  `wetterwarnung`, `termine`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
+  `technik`, `wanddisplay`, `warnungen`. Gemeinsam genutzt: `basis`, `grundlagen`, `bausteine`, `modell`,
+  `bindungen`, `aktualisierer`, `stile` (Änderungen daran lösen alle Bedienprüfungen aus).
+- Frontend-Version: `modules/version.js` (setzt `bump_version.py` mit). Das Release-ZIP legt `.js.gz` daneben.
+
+Tests: `tests/backend/` (pytest mit echter HA-Instanz), `tests/interact.py` (Playwright gegen `tests/harness/`
+mit `mock-hass.js`/`mock-alerts.js`), `tests/perf/`. CI: `.github/workflows/tests.yml` prüft immer alles.
+
+## Tests
+- Während der Entwicklung nur die betroffenen Prüfungen: `python3 tests/changed.py` (Auswahl per `git diff`
+  gegen `main`; `--zeigen` zeigt nur die Auswahl). Die komplette Suite (`pytest` und `python3 tests/interact.py`)
+  lokal nur bei einem Versionssprung; am Pull Request läuft sie ohnehin in der CI.
+- Im Cloud-Container: System-pip scheitert, daher venv:
+  `python3 -m venv /tmp/venv && /tmp/venv/bin/pip install -r tests/requirements.txt`, dann
+  `PATH=/tmp/venv/bin:$PATH PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers python3 tests/changed.py`.
+  Vorher `git fetch origin main && git branch -f main origin/main`, sonst wählt `changed.py` alle Gruppen.
+  `BrokenPipeError` im Log ist Rauschen des Testservers.
 - Neue Bedienprüfungen gehören in einen Abschnitt in `tests/interact.py` (Funktion mit `@gruppe("…")`,
   beginnt mit `pg.goto(…)`, darf sich nicht auf Variablen anderer Abschnitte verlassen). Neue Gruppe oder neues
   Frontend-Modul mit eigener Gruppe: in `GRUPPEN_FUER` in `tests/changed.py` eintragen.
