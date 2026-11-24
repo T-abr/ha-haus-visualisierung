@@ -11,6 +11,9 @@ Tests, Version und ZIP: Abschnitt „Entwicklung“ in `README.md`. Hier steht n
 - Änderungen ins CHANGELOG unter `## Unveröffentlicht`, gegliedert mit `### Neu`, `### Behoben`, `### Geändert`/`### Verbessert`, `### Tests`.
   Versionssprung nur auf Wunsch: `scripts/bump_version.py` verlangt dort einen Abschnitt `### Performance`
   (Ergebnis von `python3 tests/perf/measure.py`, siehe `PERFORMANCE.md`).
+- Sparsam arbeiten: ein Thread pro Anforderung, danach schließen. Nach dem Öffnen eines PRs nicht auf die CI warten
+  und nicht selbst mergen; gemergt wird gesammelt im Release-Thread. Keine Zwischenstände melden, nur Ergebnis oder
+  Frage (Fortschritt nur in der Checkliste). Große Dateien nicht komplett lesen, sondern gezielt suchen (`grep`, Ausschnitte).
 - Ideen und Prioritäten: `BACKLOG.md` (umgesetzte Punkte dort streichen).
 - Wanddisplay-Firmware liegt im Repo `T-abr/ha-haus-display`. Schnittstelle: `DISPLAY_PROTOKOLL.md`; wer das
   Protokoll ändert, passt beide Repos an (`PROTOCOL` in `display.py`, `hd::PROTOKOLL` in der Firmware).

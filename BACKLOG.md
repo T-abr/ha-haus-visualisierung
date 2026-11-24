@@ -39,6 +39,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 28 | Display: Raumbezug je Display | mittel | M | neu |
 | 29 | Display: Wetter-/PV-Seite mit Stundenverlauf | niedrig | M | neu |
 | 30 | Display-Speicher: Schriften, gemeinsame Stile, interner Puffer | später | M–L | zurückgestellt |
+| 31 | Display-Firmware in kleinere Dateien aufteilen | mittel | M | neu |
 
 „Umgesetzt“: seit Version 1.11.0 (1–10) bzw. 1.17.0 (18–21) enthalten. „Neu“: im Backlog, noch nicht
 ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23). „Zurückgestellt“: erst
@@ -162,6 +163,12 @@ ganzen Bildschirms, im Alltag nicht spürbar).
 **Wieder aufgreifen,** wenn der Diagnose-Sensor „Speicher frei“ unter etwa 40 KB oder „Größter freier Block“ unter
 etwa 20 KB fällt oder das Display spürbar träge wird. Die Ursache langer Loops zeigt das USB-Log als Warnung
 „took a long time“ mit dem Namen des Bausteins (auch bei Stufe INFO).
+
+### 31. Display-Firmware in kleinere Dateien aufteilen
+`haus-display/basis.yaml` im Repo ha-haus-display hat über 4.400 Zeilen in einer Datei. Aufgeteilt nach Themen
+(z. B. Seiten, Kacheln, Kopfzeile, Schoner, Einrichtung, Sensoren) per ESPHome-`packages`/`!include` müssen Threads
+nur den passenden Teil lesen; das spart Verlauf und Nutzung. Verhalten und Firmware bleiben gleich; Aufbau-Abschnitt
+im README des Display-Repos nachziehen.
 
 ## Vorgemerkt (früher vorgeschlagen)
 
