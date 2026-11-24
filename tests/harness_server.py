@@ -1,6 +1,6 @@
 """Gemeinsamer Webserver und Browserstart für die Bedien- und Screenshot-Prüfungen.
 
-Der Server liefert tests/harness/ aus. Unter /haus-visualisierung.js und /modules/… liefert er
+Der Server liefert tests/harness/ aus. Unter /haus-visualisierung.js, /karten-loader.js und /modules/… liefert er
 direkt das echte Frontend der Integration (Einstiegspunkt, Module und vendor/), damit nie eine veraltete
 Kopie getestet wird. Es liegt bewusst auf derselben Ebene wie das Harness, damit relative Importe
 (z. B. ./test-panels.js) wie bisher aufgelöst werden.
@@ -14,6 +14,7 @@ from pathlib import Path
 HARNESS = Path(__file__).parent / "harness"
 FRONTEND = Path(__file__).parents[1] / "custom_components" / "haus_visualisierung" / "frontend"
 PANEL = FRONTEND / "haus-visualisierung.js"
+CARDS = FRONTEND / "karten-loader.js"
 MODULES = FRONTEND / "modules"
 VENDOR = FRONTEND / "vendor"
 
@@ -21,8 +22,9 @@ VENDOR = FRONTEND / "vendor"
 class _Handler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
         p = path.split("?", 1)[0].split("#", 1)[0]
-        if p == "/" + PANEL.name:
-            return str(PANEL)
+        for f in (PANEL, CARDS):
+            if p == "/" + f.name:
+                return str(f)
         if p.startswith("/modules/"):
             f = (MODULES / p[len("/modules/"):]).resolve()
             if f.parent == MODULES.resolve():

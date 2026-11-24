@@ -26,6 +26,10 @@ class HvBase extends HTMLElement {
     this._onDown = this._onDown.bind(this);
     this._onUp = this._onUp.bind(this);
     this._onChange = this._onChange.bind(this);
+    // Feste Funktionen: addEventListener ignoriert dieselbe Funktion beim erneuten Einhängen (Ansichtswechsel im Dashboard
+    // hängt Karten ab und wieder an), anonyme Funktionen kämen bei jedem connectedCallback doppelt dazu.
+    this._onMove = this._onMove.bind(this);
+    this._onMenu = (e) => { const t = e.target.closest("[data-long]"); if (t) { e.preventDefault(); this._more(t.dataset.eid); } };
     this._onVis = () => { if (!document.hidden) { this._schedule(); this._camTick(true); } };
   }
 
@@ -36,30 +40,33 @@ class HvBase extends HTMLElement {
     r.addEventListener("pointerdown", this._onDown);
     r.addEventListener("pointerup", this._onUp);
     r.addEventListener("pointercancel", this._onUp);
-    r.addEventListener("pointermove", (e) => {
-      if (this._downAt && Math.hypot(e.clientX - this._downAt[0], e.clientY - this._downAt[1]) > 12) { this._downAt = null; clearTimeout(this._longT); }
-      const dm = this._dim;
-      if (!dm) return;
-      const dx = e.clientX - dm.x0, dy = e.clientY - dm.y0;
-      if (!dm.active && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-        dm.active = true;
-        clearTimeout(this._longT);
-        dm.el.classList.add("dragging");
-        try { dm.el.setPointerCapture(e.pointerId); } catch (err) { /* egal */ }
-      }
-      if (dm.active) {
-        dm.pct = Math.max(1, Math.min(100, Math.round(dm.pct0 + (dx / dm.w) * 100)));
-        setWidth(dm.el.querySelector(".fill"), dm.pct);
-        setText(dm.el, ".tstate", `${dm.pct} %`);
-      }
-    });
-    r.addEventListener("contextmenu", (e) => { const t = e.target.closest("[data-long]"); if (t) { e.preventDefault(); this._more(t.dataset.eid); } });
+    r.addEventListener("pointermove", this._onMove);
+    r.addEventListener("contextmenu", this._onMenu);
     r.addEventListener("change", this._onChange);
     r.addEventListener("input", this._onChange);
     document.addEventListener("visibilitychange", this._onVis);
     this._dirty = true;
     this._schedule();
     this._startCams();
+  }
+
+  /** Zeiger bewegt: Langdruck abbrechen, Helligkeit per Wischen. */
+  _onMove(e) {
+    if (this._downAt && Math.hypot(e.clientX - this._downAt[0], e.clientY - this._downAt[1]) > 12) { this._downAt = null; clearTimeout(this._longT); }
+    const dm = this._dim;
+    if (!dm) return;
+    const dx = e.clientX - dm.x0, dy = e.clientY - dm.y0;
+    if (!dm.active && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      dm.active = true;
+      clearTimeout(this._longT);
+      dm.el.classList.add("dragging");
+      try { dm.el.setPointerCapture(e.pointerId); } catch (err) { /* egal */ }
+    }
+    if (dm.active) {
+      dm.pct = Math.max(1, Math.min(100, Math.round(dm.pct0 + (dx / dm.w) * 100)));
+      setWidth(dm.el.querySelector(".fill"), dm.pct);
+      setText(dm.el, ".tstate", `${dm.pct} %`);
+    }
   }
 
   disconnectedCallback() {

@@ -851,9 +851,23 @@ def verlauf_raumseiten():
 def einstellungen_reiter():
     # ---------- Einstellungen mit Reitern und Sortieren per Ziehen (1.1.0) ----------
     pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
-    check("ST: sieben Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 7 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
+    check("ST: acht Reiter, Adresse wählt „Alarme“", pg.locator(f"{P} .stab").count() == 8 and "on" in pg.locator(f"{P} .stab[data-tab=alarme]").get_attribute("class")
           and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 0)
+    jb = pg.locator(f"{P} .sjump [data-act=s-jump]")
+    check("ST: Sprungleiste nennt jeden Abschnitt des Reiters", jb.count() == pg.locator(f"{P} .set[data-jump]").count() >= 3 and "Hausmodus" in jb.first.inner_text())
+    jb.nth(2).click(); pg.wait_for_timeout(800)
+    last = 2
+    top = pg.evaluate(f"(() => {{ const m = {R}.querySelector('.main'), s = {R}.querySelectorAll('.set[data-jump]')[{last}]; return s.getBoundingClientRect().top - m.getBoundingClientRect().top; }})()")
+    check("ST: Sprungleiste scrollt zum Abschnitt", pg.evaluate(f"{R}.querySelector('.main').scrollTop") > 0 and 0 <= top < 60)
+    stab(pg, "energie")
+    check("ST: Reiter „Energie“ mit Energie, Vorhersage, Strompreis und Wallbox", all(pg.locator(f"{P} .set h2:has-text('{t}')").count() == 1 for t in ("Energie", "PV-Prognose", "Strompreis", "Wallbox"))
+          and pg.locator(f"{P} .sjump [data-act=s-jump]").count() == 4)
+    stab(pg, "displays")
+    check("ST: Wandpanel und Wanddisplays in einem Reiter", pg.locator(f"{P} .set h2:has-text('Wandpanel')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Wanddisplays')").count() == 1)
+    stab(pg, "darstellung")
+    check("ST: Darstellung ohne Energie und Wandpanel", pg.locator(f"{P} .set[data-sec=price]").count() == 0 and pg.locator(f'{P} [data-set="wallpanel.saver_min"]').count() == 0 and pg.locator(f"{P} .set[data-sec=termine]").count() == 1)
     stab(pg, "raeume")
+    check("ST: keine Sprungleiste bei nur zwei Abschnitten", pg.locator(f"{P} .sjump").count() == 0)
     check("ST: Reiter „Räume“ zeigt Etagen und Favoriten", pg.locator(f"{P} .set h2:has-text('Etagen')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Favoriten')").count() == 1 and pg.locator(f"{P} .set h2:has-text('Hausmodus')").count() == 0)
     pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
     check("ST: zuletzt gewählter Reiter bleibt (je Gerät)", "on" in pg.locator(f"{P} .stab[data-tab=raeume]").get_attribute("class"))
@@ -893,11 +907,16 @@ def einstellungen_reiter():
     check("ST: Entwurf über Reiter hinweg (Verknüpfungen weiter geändert)", [l["title"] for l in D("links")][:2] == ["Kameras", "Solar"])
     ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
     mp = ctx.new_page(); mp.on("pageerror", lambda e: errs.append(str(e)))
-    for t in ("raeume", "alarme", "meldungen", "darstellung"):
+    for t in ("raeume", "alarme", "meldungen", "energie", "displays", "darstellung"):
         mp.goto(base.split("?")[0] + f"?view=einstellungen/{t}"); mp.wait_for_timeout(500)
         wide = mp.evaluate(WIDE)
         check(f"ST-Handy: Reiter {t} – nichts breiter als der Bildschirm", not wide)
         if wide: print("     ", wide[:3])
+    mp.goto(base.split("?")[0] + "?view=einstellungen/alarme"); mp.wait_for_timeout(500)
+    sel = mp.locator(f"{P} select[data-jump-sel]")
+    check("ST-Handy: Sprungleiste als Auswahl statt Knöpfen", sel.is_visible() and not mp.locator(f"{P} .sjump").is_visible() and sel.locator("option").count() == 7)
+    sel.select_option("2"); mp.wait_for_timeout(800)
+    check("ST-Handy: Auswahl springt zum Abschnitt", mp.evaluate(f"{R}.querySelector('.main').scrollTop") > 0 and sel.input_value() == "")
     mp.goto(base.split("?")[0] + "?view=raum/bad"); mp.wait_for_timeout(600)
     bx = mp.locator(f"{P} .trend .trc").bounding_box()
     mp.touchscreen.tap(bx["x"] + bx["width"] * 0.3, bx["y"] + bx["height"] / 2); mp.wait_for_timeout(150)
@@ -905,6 +924,38 @@ def einstellungen_reiter():
     mp.wait_for_timeout(2700)
     check("TR-Handy: Anzeige verschwindet nach kurzer Zeit", "on" not in mp.locator(f"{P} .trend .trtip").get_attribute("class"))
     ctx.close()
+
+@gruppe("einstellungen")
+def einstellungen_speichern():
+    # ---------- Speichern klar gekennzeichnet, nur Geändertes speichern, Hausmodus-Legende (1.19.0) ----------
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
+    leg = pg.locator(f"{P} .mlegend")
+    check("SP: Legende der Hausmodi über den Regeln (Handy hat keine Tooltips)", leg.count() >= 1 and all(t in leg.first.inner_text() for t in ("Zuhause", "Nacht", "Abwesend", "Urlaub")))
+    check("SP: Hausmodus-Symbole tragen ihren Namen", pg.locator(f'{P} .mchip[data-path="alerts.modes.contacts"][data-m=nacht]').get_attribute("aria-label") == "Nacht")
+    check("SP: Code und PIN mit eigenem Knopf, gekennzeichnet", "Code setzen" in pg.locator(f"{P} [data-act=s-code-save]").inner_text()
+          and "PIN setzen" in pg.locator(f"{P} [data-act=s-pin-save]").inner_text() and pg.locator(f"{P} .instant:has-text('eigener Knopf')").count() == 2)
+    check("SP: Hinweis oben erklärt Speichern-Leiste und Sofort-Kennzeichen", pg.locator(f"{P} .savehint .instant").count() == 1)
+    check("SP: ohne Änderungen ist „Verwerfen“ gesperrt", pg.locator(f"{P} [data-act=s-reset]").is_disabled())
+    pg.locator(f'{P} .mchip[data-path="alerts.modes.contacts"][data-m=nacht]').click(); pg.wait_for_timeout(200)
+    check("SP: Leiste nennt den Reiter mit offenen Änderungen", "Alarme" in pg.locator(f"{P} .savebar .where").inner_text() and not pg.locator(f"{P} [data-act=s-reset]").is_disabled())
+    # Ein anderes Gerät speichert inzwischen etwas, das hier nicht geändert wurde
+    pg.evaluate("window.__api.hass.callWS({ type: 'x/save', changes: [{ path: ['camera_interval'], value: 42 }] })"); pg.wait_for_timeout(200)
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout)")
+    check("SP: Speichern schickt nur Geändertes – Wert des anderen Geräts bleibt", saved["camera_interval"] == 42 and saved["alerts"]["modes"]["contacts"] == ["zuhause", "abwesend", "urlaub"])
+    check("SP: danach alles gespeichert", pg.locator(f"{P} .savebar .msg").inner_text() == "Alles gespeichert" and pg.locator(f"{P} .savebar .where").count() == 0)
+    stab(pg, "darstellung")
+    check("SP: Standard-Dashboard als „wirkt sofort“ gekennzeichnet", pg.locator(f"{P} [data-sec=default-panel] h2 .instant").count() == 1)
+    # Karten und Panel: erneutes Einhängen (Ansichtswechsel im Dashboard) hängt keine Maus-Handler doppelt an
+    pg.goto(dense); pg.wait_for_timeout(600)
+    n = pg.evaluate(f"""(() => {{ const p = {PP}, par = p.parentNode, nx = p.nextSibling;
+      for (let i = 0; i < 2; i++) {{ par.removeChild(p); par.insertBefore(p, nx); }}
+      let c = 0; const orig = p._more; p._more = () => {{ c++; }};
+      const t = p.shadowRoot.querySelector('[data-long]');
+      if (t) t.dispatchEvent(new MouseEvent('contextmenu', {{ bubbles: true, composed: true, cancelable: true }}));
+      p._more = orig; return t ? c : -1; }})()""")
+    check("SP: nach erneutem Einhängen öffnet Rechtsklick/Langdruck nur einmal", n == 1)
+
 
 @gruppe("anwesenheit")
 def anwesenheits_simulation():
@@ -999,14 +1050,17 @@ def technik_einstellungen():
     # ---------- Einstellungen → Technik (1.2.0) ----------
     pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(600)
     fd = pg.locator(f"{P} .techfound")
-    check("TE: Reiter Technik zeigt Erkanntes", pg.locator(f"{P} .stab").count() == 7 and "3 Speicherfühler" in fd.first.inner_text() and "Heizkurve sensor.heizkurve_soll_vorlauftemperatur" in fd.first.inner_text() and "Lademodus" in fd.nth(1).inner_text())
+    check("TE: Reiter Technik zeigt Erkanntes", pg.locator(f"{P} .stab").count() == 8 and "3 Speicherfühler" in fd.first.inner_text() and "Heizkurve sensor.heizkurve_soll_vorlauftemperatur" in fd.first.inner_text())
     check("TE: Platzhalter nennt automatische Zuordnung", "sensor.kamin_temperatur" in (pg.locator(f'{P} input[data-set="heating.stove"]').get_attribute("placeholder") or ""))
     D = lambda k: pg.evaluate(f"document.querySelector('{P}')._draft.{k}")
     drag(pg.locator(f'{P} [data-sort=tank] .pin[data-sort-id="sensor.speicher_unten"]'), pg.locator(f'{P} [data-sort=tank] .pin[data-sort-id="sensor.speicher_oben"]'))
     check("TE: Speicherfühler per Ziehen sortieren", D("heating.tank") == ["sensor.speicher_unten", "sensor.speicher_oben", "sensor.speicher_mitte"])
-    pg.locator(f'{P} select[data-set="wallbox.area"]').select_option("garten"); pg.wait_for_timeout(100)
     pg.locator(f'{P} input[data-set="heating.manual_curve"]').evaluate("e => e.click()"); pg.wait_for_timeout(200)
     check("TE: eigene Heizkurve – Felder erscheinen", pg.locator(f'{P} input[data-set="heating.manual.slope"]').count() == 1)
+    check("TE: Wallbox nicht mehr unter Technik", pg.locator(f'{P} select[data-set="wallbox.area"]').count() == 0)
+    stab(pg, "energie")
+    check("TE: Wallbox im Reiter Energie zeigt Erkanntes", "Lademodus" in pg.locator(f"{P} .techfound").first.inner_text())
+    pg.locator(f'{P} select[data-set="wallbox.area"]').select_option("garten"); pg.wait_for_timeout(100)
     pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
     pg.evaluate(f"document.querySelector('{P}')._go('raum/heizungsraum')"); pg.wait_for_timeout(500)
     tl = pg.evaluate(f"[...{R}.querySelectorAll('.heat .tkl')].map(e => e.dataset.eid)")
@@ -1117,6 +1171,7 @@ def wandpanel():
     pg.locator(f'{P} input[data-set="camera_interval"]').fill("12"); pg.locator(f'{P} input[data-set="camera_interval"]').dispatch_event("change")
     idle(3); pg.wait_for_timeout(200)
     check("WP: keine Rückkehr bei ungespeicherten Einstellungen", pg.evaluate(f"{PP}._view") == "einstellungen")
+    stab(pg, "displays")
     check("WP: Einstellungen – Abschnitt Wandpanel mit Gerät an", pg.locator(f"{P} .set h2:has-text('Wandpanel')").count() == 1 and "Wandpanel an" in pg.locator(f"{P} [data-act=s-wall-device]").inner_text())
     check("WP: Einstellung „wandern lassen“, standardmäßig aus", pg.locator(f'{P} input[data-set="wallpanel.wander"]').count() == 1 and not pg.locator(f'{P} input[data-set="wallpanel.wander"]').is_checked())
     pg.locator(f'{P} input[data-set="wallpanel.saver_min"]').fill("10"); pg.locator(f'{P} input[data-set="wallpanel.saver_min"]').dispatch_event("change")
@@ -1126,7 +1181,7 @@ def wandpanel():
     check("WP: neue Zeit gilt (10 Min.)", saver().count() == 0)
     check("WP: gespeichert – Rückkehr zur Übersicht wieder erlaubt", pg.evaluate(f"{PP}._view") is None)
     pg.mouse.click(640, 400)
-    pg.evaluate(f"{PP}._go('einstellungen/darstellung')"); pg.wait_for_timeout(400)
+    pg.evaluate(f"{PP}._go('einstellungen/displays')"); pg.wait_for_timeout(400)
     pg.locator(f"{P} [data-act=s-saver-test]").click(); pg.wait_for_timeout(200)
     check("WP: „Bildschirmschoner zeigen“", saver().count() == 1)
     pg.mouse.click(640, 400); pg.wait_for_timeout(200)
@@ -1158,7 +1213,7 @@ def verzoegerung_heizen():
     keys = lambda: pg.evaluate(f"window.__HAUS_VIS__.evalAlertsAll(window.__api.hass, {PP}._model, {PP}._layout).map(a => a.key)")
     check("FH: Fenster beim Heizen erst nach der eingestellten Zeit", "heat:kuche" not in keys() and "contact:binary_sensor.kuche_fenster" not in keys())
     # Fenster seit 11 Minuten offen: Zeitpunkt der letzten Änderung zurückdatieren
-    pg.evaluate("(() => { const H = window.__api.hass, st = H.states['binary_sensor.kuche_fenster']; H.states = { ...H.states, 'binary_sensor.kuche_fenster': { ...st, last_changed: new Date(Date.now() - 11 * 60000).toISOString() } }; })()")
+    pg.evaluate("(() => { const H = window.__api.hass, st = H.states['binary_sensor.kuche_fenster']; H.states = { ...H.states, 'binary_sensor.kuche_fenster': { ...st, last_changed: new Date(Date.now() - 11 * 60000).toISOString() } }; })()"); pg.wait_for_timeout(300)  # Backend wertet aus
     check("FH: nach 11 Min. „Fenster offen beim Heizen“", "heat:kuche" in keys() and "contact:binary_sensor.kuche_fenster" not in keys())
 
 @gruppe("klima")
@@ -1262,7 +1317,7 @@ def klima_feuchte():
     # Schimmelrisiko im Alarmmanager
     keys = lambda: pg.evaluate(f"window.__HAUS_VIS__.evalAlertsAll(window.__api.hass, {PP}._model, {PP}._layout).map(a => a.key)")
     mold = lambda: pg.evaluate(f"(window.__HAUS_VIS__.evalAlertsAll(window.__api.hass, {PP}._model, {PP}._layout).find(a => a.key === 'mold:bad') || null)")
-    back = lambda m: pg.evaluate(f"(() => {{ const r = window.__HAUS_VIS__.MOLD.get('bad'); if (r) r.since -= {m} * 60000; }})()")
+    back = lambda m: pg.evaluate(f"(() => {{ const r = window.__api.mold.get('bad'); if (r) r.since -= {m} * 60000; }})()")
     pg.evaluate("window.__api.set('sensor.bad_feuchte', '72')"); pg.wait_for_timeout(250)
     check("SR: Schimmelrisiko nicht sofort (Duschen)", "mold:bad" not in keys())
     back(29); pg.wait_for_timeout(1100)
@@ -1274,7 +1329,7 @@ def klima_feuchte():
     check("SR: erscheint in der Warnkarte und an der Glocke", "Schimmelrisiko" in pg.evaluate(f"{R}.querySelector('[data-k=alerts] .ct, .acard .sst') ? {R}.querySelector('[data-k=alerts] .ct, .acard .sst').textContent : ''") or pg.locator(f"{P} .navbadge, {P} [data-u=navbadge]").count() >= 1)
     # Schlafzimmer: Fenster steht offen
     pg.evaluate("window.__api.set('sensor.schlafzimmer_feuchte', '74')"); pg.wait_for_timeout(1100)
-    pg.evaluate("(() => { const r = window.__HAUS_VIS__.MOLD.get('schlafzimmer'); if (r) r.since -= 40 * 60000; })()"); pg.wait_for_timeout(1100)
+    pg.evaluate("(() => { const r = window.__api.mold.get('schlafzimmer'); if (r) r.since -= 40 * 60000; })()"); pg.wait_for_timeout(1100)
     check("SR: Fenster im Raum offen – keine Meldung (es wird gelüftet)", "mold:schlafzimmer" not in keys() and "mold:bad" in keys())
     pg.evaluate("window.__api.set('binary_sensor.schlafzimmer_fenster', 'off')"); pg.wait_for_timeout(1100)
     check("SR: Fenster zu und noch feucht – sofort da", "mold:schlafzimmer" in keys())
@@ -1290,7 +1345,7 @@ def klima_feuchte():
     check("SR: draußen feuchter – heizen oder entfeuchten statt lüften", al and al["detail"].endswith("draußen feuchter, besser heizen oder entfeuchten"))
     check("KF: Kopfkarte – „Draußen feuchter“", "Draußen feuchter" in ch.locator(".ctstats").inner_text() and ch.locator(".cts.vent.nicht").count() == 1)
     # Backend hat die Meldung schon (z. B. nach Neuladen): ohne erneute Wartezeit
-    pg.evaluate("(() => { window.__HAUS_VIS__.MOLD.clear(); })()")
+    pg.evaluate("(() => { window.__api.mold.clear(); })()")
     pg.evaluate(f"(() => {{ const a = window.__api; a.alarmSnap.alarms = {{ ...(a.alarmSnap.alarms || {{}}), 'mold:bad': {{ key: 'mold:bad', status: 'neu', since: Date.now() / 1000 - 3600 }} }}; a.alarmPush(); }})()"); pg.wait_for_timeout(1100)
     check("SR: nach Neuladen sofort, wenn das Backend die Meldung führt", "mold:bad" in keys())
     pg.evaluate("(() => { const a = window.__api; delete a.alarmSnap.alarms['mold:bad']; a.alarmPush(); a.set('sensor.bad_feuchte', '64'); a.set('sensor.aussen_temperatur', '6.8'); a.set('sensor.aussen_feuchte', '86'); })()"); pg.wait_for_timeout(1100)
@@ -1420,7 +1475,7 @@ def energie():
     check("EN: ohne Recorder – Hinweis, Fluss trotzdem da", "Noch kein Verlauf" in pg.locator(f"{P} .entrend").inner_text() and "Noch kein Verlauf" in pg.locator(f"{P} .enday").inner_text() and "3,2 kW" in nd("pv"))
     pg.goto(base + "&view=energie"); pg.wait_for_timeout(700)
     check("EN: Komfort", pg.locator(f"{P} .eflow").count() == 1 and pg.locator(f"{P} .entrend").count() == 1)
-    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'darstellung')
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'energie')
     inp = pg.locator(f'{P} [data-set="energy.battery_power"]')
     check("EN: Einstellungen – Speicher-Leistung und Vorzeichen", inp.count() == 1 and pg.locator(f'{P} [data-set="energy.grid_invert"]').count() == 1 and pg.locator(f'{P} [data-set="energy.battery_invert"]').count() == 1)
     pg.locator(f'{P} [data-set="energy.battery_invert"] + span').click(); pg.wait_for_timeout(100)
@@ -1628,7 +1683,7 @@ def prognose():
     pg.goto(base); pg.wait_for_timeout(500)
     check("PR: Komfort – Karte da", pg.locator(f"{P} .fcast").count() == 1)
     # abschalten (Einstellungen → Darstellung)
-    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500); stab(pg, "darstellung")
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500); stab(pg, "energie")
     tg = pg.locator(f'{P} [data-set="forecast.enabled"]')
     check("PR: Einstellungen – Schalter und Sensoren", tg.count() == 1 and pg.locator(f'{P} [data-set="forecast.solar_today"]').count() == 1 and pg.locator(f'{P} [data-set="forecast.solar_tomorrow"]').count() == 1)
     tg.evaluate("e => { e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); }"); pg.wait_for_timeout(100)
@@ -1801,7 +1856,7 @@ def strompreis():
     check("SP: Wallbox mit festem Preis, ohne Zeitfenster", "32,5 ct/kWh" in wp and "fest" in wp and "Günstig laden" not in wp)
     pg.goto(dense + "?view=energie&norec"); pg.wait_for_timeout(700)
     check("SP: ohne Recorder – Preis da, Kosten mit Hinweis", "ct/kWh" in pg.locator(f"{P} .enpnow").inner_text() and "Noch kein Verlauf" in pg.locator(f"{P} .enpcost").inner_text())
-    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'darstellung')
+    pg.locator(f'{P} .nav[data-to=einstellungen]').click(); pg.wait_for_timeout(250); stab(pg, 'energie')
     sec = pg.locator(f'{P} .set[data-sec="price"]')
     check("SP: Einstellungen – Strompreis mit erkanntem Sensor", sec.count() == 1 and "erkannt: sensor.nordpool_kwh_de_eur" in sec.inner_text()
           and all(pg.locator(f'{P} [data-set="price.{k}"]').count() == 1 for k in ("sensor", "use_sensor", "fixed_ct", "feed_in_ct", "surcharge_ct", "window_h")))
@@ -2290,7 +2345,7 @@ def wetterwarnungen():
     al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).map(a => [a.key, a.level, a.to]); }})()")
     check("WW: Meldungen im Alarmmanager", al == [["wx:dwd:gewitter", "warn", "beschattung"], ["wx:rain", "warn", "sicherheit"]])
     # feste Regel aus → keine Meldungen
-    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, builtin: {{ ...p._layout.alerts.builtin, weather: false }} }} }}; }})()")
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, builtin: {{ ...p._layout.alerts.builtin, weather: false }} }} }}; }})()"); pg.wait_for_timeout(300)  # Backend wertet aus
     al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).length; }})()")
     check("WW: Regel „Wetter“ aus → keine Meldungen", al == 0)
     # Einstellungen
@@ -2308,6 +2363,29 @@ def wetterwarnungen():
     stab(pg, "alarme")
     check("WW: feste Regel „Wetter“ unter Warnungen", pg.locator(f"{P} [data-set='alerts.builtin.weather']").count() == 1)
     pg.evaluate("window.__api.set('sensor.haus_wetter', '0', { warnungen: [], regen: null, wind: null, meldungen: [] })")
+
+
+@gruppe("karten")
+def karten_bei_bedarf():
+    # ---------- Dashboard-Karten: kleiner Lader auf jeder Seite, Kartencode erst bei Bedarf ----------
+    res = "performance.getEntriesByType('resource').map(e => new URL(e.name).pathname).filter(n => n.endsWith('.js'))"
+    pg.goto(f"{ORIGIN}/mock-hass.js"); pg.wait_for_timeout(100)
+    files = pg.evaluate(f"import('/karten-loader.js').then(() => new Promise(r => setTimeout(r, 200))).then(() => {res})")
+    check("K: ohne Karte nur Lader und Version geladen", sorted(files) == ["/karten-loader.js", "/modules/version.js"])
+    check("K: Karten angemeldet und im Kartenwähler", pg.evaluate("!!customElements.get('haus-raum-card') && !!customElements.get('haus-hausschnitt-card') && window.customCards.filter(c => c.type.startsWith('haus-')).length === 2"))
+    check("K: Vorschlag und Größe vor dem Laden", pg.evaluate("[customElements.get('haus-raum-card').getStubConfig({ areas: { kueche: {} } }).area, document.createElement('haus-hausschnitt-card').getCardSize()]") == ["kueche", 8])
+    pg.goto(f"{ORIGIN}/cards.html"); pg.wait_for_timeout(800)
+    files = pg.evaluate(res)
+    check("K: mit Karte kommt karten.js, aber nicht das Panel", "/modules/karten.js" in files and "/modules/panel.js" not in files and "/haus-visualisierung.js" not in files)
+    raum = "document.querySelector('haus-raum-card').card"
+    check("K: Raumkarte zeigt den Raum", pg.evaluate(f"!!{raum} && !!{raum}.shadowRoot.querySelector('.room') && {raum}.getCardSize() === 2"))
+    check("K: Hausschnitt-Karte mit Titel", "Unser Haus" in pg.evaluate("document.querySelector('haus-hausschnitt-card').card.shadowRoot.textContent"))
+    # hass wird weitergereicht: neue Temperatur erscheint in der Kachel
+    pg.evaluate("window.__api.set('sensor.wohnzimmer_temperatur', '25.7')"); pg.wait_for_timeout(300)
+    check("K: Zustandsänderung erreicht die Karte", "25,7" in pg.evaluate(f"{raum}.shadowRoot.textContent"))
+    # Panel und Lader gemeinsam: keine doppelte Anmeldung, Panel-Einstieg lädt den Lader mit
+    pg.goto(dense); pg.wait_for_timeout(500)
+    check("K: Panel lädt den Lader mit", pg.evaluate("!!customElements.get('haus-raum-card') && !!customElements.get('haus-visualisierung-panel')"))
 
 
 def auswahl(args):

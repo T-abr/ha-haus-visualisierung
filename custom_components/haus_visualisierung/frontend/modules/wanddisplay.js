@@ -5,7 +5,7 @@
  * unter vendor/), WLAN per Improv, Gerät übernehmen und zuordnen (display_setup.py).
  * Schnittstelle: DISPLAY_PROTOKOLL.md; Firmware: Repository ha-haus-display. */
 
-import { entName, esc, icon } from "./grundlagen.js";
+import { entName, esc, icon, instant } from "./grundlagen.js";
 import { DOMAIN } from "./version.js";
 
 /* Muss zu display.py passen (TILES, PAGES, Protokoll) */
@@ -175,7 +175,7 @@ function devicesHTML(ctx, D) {
     const opts = [`<option value="">– keinem Display –</option>`, ...list.map((d, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${esc(d.name || d.id)}</option>`),
       list.length < 6 ? `<option value="neu">+ neues Display anlegen</option>` : ""].join("");
     return `<div class="ddev"><span class="lbl">${icon("mdi:tablet-dashboard")} <b>${esc(x.name)}</b><small class="${cls}">${txt}${x.host ? ` · ${esc(x.host)}` : ""}</small></span>
-      ${adopt}${upd}<select class="inp" data-disp-assign="${esc(x.name)}" title="Display zuordnen">${opts}</select></div>`;
+      ${adopt}${upd}<select class="inp" data-disp-assign="${esc(x.name)}" title="Display zuordnen – speichert sofort, mit allen offenen Änderungen">${opts}</select></div>`;
   }).join("");
   return rows || `<p class="hint">Noch kein Gerät gefunden. Nach dem Flashen und WLAN dauert es bis zu einer Minute. Steht das Gerät in einem anderen Netz (VLAN), hier seine IP-Adresse eintragen.</p>`;
 }
@@ -190,7 +190,7 @@ function wizardHTML(ctx, D) {
     <div class="dstep"><span class="dnum">2</span><div class="dbody"><b>WLAN</b>
       <small>Fragt der Installationsdialog direkt nach dem Flashen ab. Ohne Flashen aus dem Browser: mit dem WLAN-Hotspot <code>haus-display-…</code> des Geräts verbinden und dort das WLAN wählen.</small></div></div>
     <div class="dstep"><span class="dnum">3</span><div class="dbody"><b>Übernehmen und zuordnen</b>
-      <small>Home Assistant findet das Gerät im Netz. „Übernehmen“ fügt es zu ESPHome hinzu und erlaubt ihm, Aktionen auszuführen (für Tipps wie Gute Nacht); danach einem Display zuordnen – die Inhalte kommen sofort.</small>
+      <small>Home Assistant findet das Gerät im Netz. „Übernehmen“ fügt es zu ESPHome hinzu und erlaubt ihm, Aktionen auszuführen (für Tipps wie Gute Nacht); danach einem Display zuordnen – das speichert sofort (mit allen offenen Änderungen) ${instant()} und die Inhalte kommen gleich.</small>
       <div class="ddevs">${devicesHTML(ctx, D)}</div>
       <div class="srow dhost"><input class="inp" data-disp-host="1" placeholder="IP-Adresse, z. B. 192.168.1.50"><button class="pbtn sm" data-act="s-disp-ip" ${W.busy ? "disabled" : ""}>${icon("mdi:ip-network-outline")}Per IP hinzufügen</button></div></div></div>
   </div>`;

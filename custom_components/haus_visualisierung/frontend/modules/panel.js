@@ -438,6 +438,8 @@ class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(Einstellungen
       this._dirtySettings = false;
     }
     if (!toSettings) this._draft = null;
+    // „einstellungen/<reiter>“ wählt den Reiter auch dann, wenn dieselbe Adresse schon einmal offen war
+    else this._setTabArg = null;
     this._navigate(sub ? `${this._base}/${sub}` : this._base);
     // Falls Home Assistant die Route nicht zurückmeldet (z. B. im Test), selbst umschalten.
     const [view, arg] = sub.split("/");

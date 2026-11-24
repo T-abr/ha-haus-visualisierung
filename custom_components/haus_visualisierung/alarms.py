@@ -27,6 +27,8 @@ SNAPSHOT_LOG = 60
 MORNING_HOUR = 7
 
 NEW, ACKED, MUTED = "neu", "quittiert", "stumm"
+# Felder der Meldung, die das Panel anzeigt (Alert in alerts.py); leere werden nicht gespeichert
+SHOW_FIELDS = ("icon", "eid", "to", "fmt", "ts")
 
 
 def next_morning(now: datetime | None = None) -> float:
@@ -48,6 +50,7 @@ class AlarmBook:
         self.log: list[dict[str, Any]] = []
         self._listeners: list[Callable[[dict], None]] = []
         self.rev = 0
+        self.order: list[str] = []           # aktive Meldungen in der Reihenfolge der Auswertung
         self.mode: dict[str, Any] = {}       # Hausmodus {mode, since, by}
         self.code: str = ""                  # Code der Alarmanlage (nur im Backend, nie im Panel)
         self.pin: dict = {}                  # PIN für heikle Aktionen als {salt, hash} (pin.py), nie im Panel
@@ -70,6 +73,14 @@ class AlarmBook:
     def _changed(self) -> None:
         self.rev += 1
         self._store.async_delay_save(self._data, 2)
+        snap = self.snapshot()
+        for cb in list(self._listeners):
+            cb(snap)
+
+    @callback
+    def _notify(self) -> None:
+        """Nur die Anzeige hat sich geändert (Titel, Text, Reihenfolge): Panels informieren, nicht speichern."""
+        self.rev += 1
         snap = self.snapshot()
         for cb in list(self._listeners):
             cb(snap)
@@ -118,13 +129,22 @@ class AlarmBook:
         """Aktive Meldungen abgleichen. Liefert (neu aufgetreten, behoben)."""
         new, gone = [], []
         now = time.time()
+        shown_changed = list(current) != self.order
+        self.order = list(current)
         for key, alert in current.items():
             a = self.alarms.get(key)
             if a is None:
                 a = {"key": key, "since": now, "status": NEW}
                 self.alarms[key] = a
                 new.append(key)
+            before = _shown(a)
             a.update(level=alert.level, title=alert.title, detail=alert.detail, path=alert.path)
+            for f in SHOW_FIELDS:
+                if v := getattr(alert, f, None):
+                    a[f] = v
+                else:
+                    a.pop(f, None)
+            shown_changed = shown_changed or before != _shown(a)
             if key in new and not silent_new:
                 self._entry("neu", a)
         for key in [k for k in self.alarms if k not in current]:
@@ -133,6 +153,8 @@ class AlarmBook:
             self._entry("behoben", a, dur=round(now - a.get("since", now)))
         if new or gone:
             self._changed()
+        elif shown_changed:
+            self._notify()
         return new, gone
 
     @callback
@@ -227,6 +249,7 @@ class AlarmBook:
         return {
             "rev": self.rev,
             "alarms": self.alarms,
+            "active": [k for k in self.order if k in self.alarms] or list(self.alarms),
             "log": self.log[-SNAPSHOT_LOG:],
             "today": {lvl: sum(1 for e in today if e.get("level") == lvl) for lvl in ("alarm", "warn", "info")},
             "mode": self.mode_info() if self.mode_info else {"mode": self.mode.get("mode", "zuhause")},
@@ -275,3 +298,8 @@ class AlarmBook:
             c["verdacht"] = reasons
             out.append(c)
         return sorted(out, key=lambda c: (-len(c["verdacht"]), -c["n"]))[:10]
+
+
+def _shown(a: dict) -> tuple:
+    """Was das Panel von einer Meldung zeigt. Bei fmt "state" zeigt es den Zustand live, dann zählt der Text nicht."""
+    return (a.get("level"), a.get("title"), None if a.get("fmt") == "state" else a.get("detail"), *(a.get(f) for f in SHOW_FIELDS))

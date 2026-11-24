@@ -4,6 +4,43 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.19.0 – 2026-11-24
+
+Mitgelieferte Firmware unverändert **0.6.1**.
+
+### Verbessert – Home Assistant lädt schneller
+- **Panel-Code nur noch bei Bedarf**: Bisher lud jeder Browser auf jeder Seite von Home Assistant das ganze Panel (rund 680 KB in 38 Dateien), nur damit die Dashboard-Karten bekannt sind. Jetzt läuft dort nur ein kleiner Lader (`karten-loader.js`, knapp 3 KB mit Versionsdatei). Das Panel lädt Home Assistant erst beim Öffnen, den Code der Karten (`haus-raum-card`, `haus-hausschnitt-card`) erst, wenn eine davon auf einem Dashboard steht. Für bestehende Dashboards ändert sich nichts.
+- **Vorgepackte Dateien im Release-ZIP**: Neben jeder JavaScript-Datei liegt eine `.js.gz`, die Home Assistant an Browser ausliefert, die gzip annehmen (rund 215 KB statt 680 KB für das Panel). Ist eine `.js` neuer als ihre `.gz` (z. B. Dateien von Hand kopiert), räumt die Integration die alte `.gz` beim Start weg.
+
+### Verbessert – Speichern, Beschriftung, Caching
+- **Nur Geändertes speichern:** Das Panel schickt beim Speichern nur noch die geänderten Einstellungen (`changes`), nicht mehr den ganzen Stand. Ein zweites Gerät mit älterem Stand überschreibt damit nichts mehr, was es selbst nicht angefasst hat. `layout` (ganzer Stand) geht weiterhin, z. B. für Import und ältere Panels.
+- **Speichern klar gekennzeichnet:** Hinweis unter den Reitern; alles, was ohne die Speichern-Leiste wirkt, trägt ein gelbes Kennzeichen „wirkt sofort“ (Wandpanel-Gerät, Standard-Dashboard, Display zuordnen) bzw. „eigener Knopf“ (Code der Alarmanlage, PIN, Knöpfe heißen jetzt „Code setzen“ und „PIN setzen“). Die Leiste nennt die Reiter mit offenen Änderungen, „Verwerfen“ ist ohne Änderungen gesperrt.
+- **Hausmodus-Symbole beschriftet:** Über festen Regeln, eigenen Regeln und Aktionen steht eine Legende mit den Namen der Hausmodi (am Handy gibt es keine Tooltips); die Schaltflächen tragen ihren Namen auch für Screenreader. In der Anwesenheits-Simulation stehen die Namen direkt in den Schaltflächen.
+- **Frontend-Dateien werden zwischengespeichert:** Die Adresse enthält die Version, deshalb darf der Browser die Dateien jetzt lange behalten; nach einem Update lädt er automatisch die neuen.
+- **Karten:** Beim Ansichtswechsel im Dashboard kamen Zeiger- und Kontextmenü-Handler bei jedem erneuten Einhängen doppelt dazu; jetzt bleibt es bei einem.
+
+### Verbessert – Einstellungen übersichtlicher
+- **Neuer Reiter „Energie“**: Energie-Sensoren, Vorhersage und PV-Prognose, Strompreis und Wallbox (bisher verteilt auf Darstellung und Technik).
+- **Reiter „Wandpanel & Displays“**: Wandpanel (Tablet) und Wanddisplays stehen zusammen; „Darstellung“ enthält nur noch Aussehen, Standard-Dashboard, Müll und Termine sowie Verknüpfungen.
+- **Sprungleiste** oben in jedem Reiter mit mindestens drei Abschnitten; am Handy als Auswahl „Zum Abschnitt springen …“.
+- Adressen wie `einstellungen/technik` wählen den Reiter auch dann, wenn dieselbe Adresse vorher schon offen war (z. B. „Aufgaben bearbeiten“ auf der Seite Wartung).
+- Einrichtungs-Check führt zu den neuen Reitern.
+
+### Intern – Warnregeln nur noch im Backend
+- Jede Warnregel stand bisher doppelt: in `alerts.py` (Push) und in `warnungen.js` (Panel). Jetzt wertet nur noch das Backend aus; Panel, Wandpanel, Kopfzeile, Aktiv-Fokus und Alarmmanager zeigen die Meldungen aus dem Alarmmanager-Abo an. Neue oder geänderte Regeln wirken damit überall gleich, und das Panel rechnet bei Zustandsänderungen weniger.
+- Der Schnappschuss des Alarmmanagers bringt dafür je Meldung Symbol, Entität, Ziel im Panel und die Art des Untertitels mit (Zustand bzw. „seit …“ bildet das Panel weiterhin live) sowie die Reihenfolge der Auswertung (`active`). Ändert sich nur der Text einer Meldung, bekommen die Panels den neuen Stand, ohne dass gespeichert oder protokolliert wird.
+- Kleine Unterschiede zur alten Panel-Auswertung: Meldungen erscheinen nach rund 1 s (Sammelzeit des Backends) statt sofort; fertige Geräte zeigen „seit … · Dauer · kWh · €“ wie in der Push-Nachricht.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py` gegen 1.18.1 im selben Container: Weil das Panel die Warnregeln nicht mehr selbst auswertet, beobachten Unterseiten nur noch ihre eigenen Entitäten (Raum 14 statt 339, Licht 144, Alarme/Energie 0–5). Der hass-Setter dort sinkt von rund 60–90 µs auf 0,5–22 µs; Übersicht 59–62 µs (vorher 62–82 µs), Aktualisierer auf der Übersicht 480 statt 840 pro Minute.
+- Aufbauzeiten unverändert im Rahmen der Messschwankung (Übersicht 23–31 ms, Klima 56–91 ms, übrige 9–66 ms; 1.18.1 im selben Lauf 10–65 ms).
+- Auf jeder HA-Seite: 2 statt 38 Frontend-Dateien, rund 3 KB statt 680 KB. Panel und Karten unverändert schnell, sobald geladen.
+- Bündeln und Verkleinern im Release geprüft und bewusst weggelassen: Mit gzip bleibt fast derselbe Gewinn ohne Build-Schritt, und die Module bleiben im Browser lesbar.
+
+### Tests
+- Bedienprüfung `karten`: ohne Karte lädt nur der Lader, mit Karte kommt `karten.js`, aber nicht das Panel; Karten zeigen Raum bzw. Hausschnitt und bekommen Zustandsänderungen.
+- `test_frontend.py`: Lader statt Panel als zusätzliches Modul auf jeder Seite, Lader bleibt klein, veraltete `.gz` werden entfernt.
+
 ## 1.18.1 – 2026-11-24
 
 Mitgelieferte Firmware **0.6.1** – Update im Reiter Displays über „Update auf 0.6.1“.

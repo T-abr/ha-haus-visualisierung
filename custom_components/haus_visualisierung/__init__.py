@@ -15,6 +15,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .alerts import AlertMonitor
 from .const import (
+    CARDS_URL,
     CONF_ICON,
     CONF_NAME,
     CONF_REQUIRE_ADMIN,
@@ -44,6 +45,21 @@ TAP_SCHEMA = vol.Schema({vol.Required("display"): vol.All(str, vol.Length(max=40
 PLATFORMS = ["select", "sensor", "update"]
 
 
+def _drop_stale_gz(frontend_dir: Path) -> None:
+    """Vorgepackte .js.gz (aus dem Release-ZIP) entfernen, wenn die .js daneben neuer ist.
+
+    aiohttp liefert die .gz bevorzugt aus; nach einer Installation ohne ZIP (z. B. Dateien von Hand kopiert)
+    bekäme der Browser sonst den alten Stand.
+    """
+    for gz in frontend_dir.rglob("*.js.gz"):
+        js = gz.with_suffix("")
+        try:
+            if not js.is_file() or js.stat().st_mtime > gz.stat().st_mtime:
+                gz.unlink()
+        except OSError:
+            pass
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Statische Dateien, Karten und Websocket-Befehle einmalig registrieren."""
     data = hass.data.setdefault(DOMAIN, {})
@@ -63,11 +79,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     data["backups"] = backups
 
     frontend_dir = Path(__file__).parent / "frontend"
+    await hass.async_add_executor_job(_drop_stale_gz, frontend_dir)
+    # Die Adresse enthält die Version (FRONTEND_URL), also darf der Browser die Dateien lange zwischenspeichern:
+    # Nach einem Update ändert sich die Adresse, alte Stände werden nie ausgeliefert.
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(frontend_dir), False)]
+        [StaticPathConfig(FRONTEND_URL, str(frontend_dir), True)]
     )
-    # Die Karten (haus-raum-card, haus-hausschnitt-card) lädt derselbe Einstiegspunkt.
-    frontend.add_extra_js_url(hass, MODULE_URL)
+    # Auf jeder Seite nur der kleine Lader der Karten (haus-raum-card, haus-hausschnitt-card); deren Code und
+    # das Panel (module_url) lädt der Browser erst, wenn er sie braucht.
+    frontend.add_extra_js_url(hass, CARDS_URL)
 
     # Wanddisplays: mitgelieferte Firmware zum Flashen aus dem Browser (ESP Web Tools lädt Manifest und Bin von hier)
     data["firmware"] = await hass.async_add_executor_job(firmware_version)

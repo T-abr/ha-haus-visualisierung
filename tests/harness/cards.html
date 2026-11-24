@@ -1,7 +1,7 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8"><style>body{margin:0;padding:20px;background:#eef0f4;font-family:Roboto,system-ui;--primary-text-color:#1c1f26;--secondary-text-color:#5b6372;--divider-color:rgba(0,0,0,.1);--card-background-color:#fff}.g{display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:start}</style></head>
 <body><div class="g"><div id="a"></div><div id="b"></div></div>
 <script type="module">
-await import("./ha-icon-stub.js"); await import("./haus-visualisierung.js");
+await import("./ha-icon-stub.js"); await import("./karten-loader.js");
 const { makeHass } = await import("./mock-hass.js");
 const api = makeHass(); window.__api = api;
 const c1 = document.createElement("haus-raum-card"); c1.setConfig({ area: "wohnzimmer" }); document.getElementById("a").appendChild(c1); c1.hass = { ...api.hass };
