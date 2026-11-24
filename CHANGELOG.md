@@ -6,6 +6,13 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## 1.18.1 – 2026-11-24
 
+Mitgelieferte Firmware **0.6.1** – Update im Reiter Displays über „Update auf 0.6.1“.
+
+### Verbessert – Firmware 0.6.1
+- **Diagnose-Sensoren** je Display in Home Assistant (Kategorie Diagnose, jede Minute): Speicher frei, größter freier Block, PSRAM frei, Loop-Zeit. Grundlage, um weitere Optimierungen (Schriften, Puffer) nach echten Messwerten zu entscheiden.
+- Log auf INFO statt DEBUG, Touch-Rohwerte nicht mehr im normalen Build (rund 5 KB kleiner, weniger Arbeit pro Touch).
+- Farben, Rahmen und Ein-/Ausblenden werden nur noch gesetzt, wenn sie sich ändern; bisher zeichnete das Display bei jedem Push alle Kacheln neu.
+
 ### Verbessert – Wanddisplay entlasten
 - **Messwerte gebündelt**: Ändert sich ein Sensor (Leistung, Temperatur, Feuchte …), schickt die Integration die neuen Werte frühestens nach 10 s ans Display statt nach 1 s. Schaltzustände (Licht, Rollo, Fenster …) gehen weiterhin nach 1 s raus und nehmen dabei alle inzwischen geänderten Messwerte mit. Bei schwankenden PV- und Hausleistungen sinkt die Zahl der Pushes damit deutlich, das Display muss seltener neu zeichnen.
 - Die Liste der beobachteten Entitäten wird nur noch bei jedem Neuaufbau berechnet statt bei jeder Zustandsänderung im Haus.
