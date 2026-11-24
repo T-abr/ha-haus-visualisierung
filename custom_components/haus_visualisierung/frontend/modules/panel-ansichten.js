@@ -223,7 +223,7 @@ const AnsichtenMixin = (Base) => class extends Base {
   /* ---------- Energie ---------- */
   _vEnergy() {
     const c = this._model.energy;
-    if (!c) return pageEmpty("Energie", "mdi:lightning-bolt-outline", "Keine Energiedaten gefunden. Unter Einstellungen → Darstellung → „Energie“ PV-Leistung, Netz, Hausverbrauch oder Speicher eintragen.");
+    if (!c) return pageEmpty("Energie", "mdi:lightning-bolt-outline", "Keine Energiedaten gefunden. Unter Einstellungen → Energie PV-Leistung, Netz, Hausverbrauch oder Speicher eintragen.");
     const L = this._layout, T = this._model.tech || {};
     const solar = (L.links || []).find((l) => l.path && /(solar|pv|energ)/i.test(`${l.path} ${l.title}`));
     const tr = L.show_trends !== false;
