@@ -133,6 +133,39 @@ async def test_setup_panel_and_ws(hass: HomeAssistant, hass_ws_client) -> None:
     assert PANEL_URL_PATH not in hass.data[frontend.DATA_PANELS]
 
 
+async def test_save_only_changes(hass: HomeAssistant, hass_ws_client) -> None:
+    """Zweites Gerät mit altem Stand: Speichern übernimmt nur, was es geändert hat."""
+    await _setup(hass)
+    client = await hass_ws_client(hass)
+    # Gerät A speichert den ganzen Stand
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/save", "layout": {
+        "camera_interval": 20, "hidden_areas": ["bad"], "alerts": {"contacts_min": 5, "mold_hum": 70}}})
+    assert (await client.receive_json())["success"]
+    # Gerät B (hatte noch den Stand davor) ändert nur zwei Werte, davon einen tief verschachtelt
+    await client.send_json({"id": 2, "type": f"{DOMAIN}/save", "changes": [
+        {"path": ["camera_interval"], "value": 30},
+        {"path": ["alerts", "mold_hum"], "value": 75},
+        {"path": ["evil"], "value": "x"},
+        {"path": [], "value": 1}, {"path": ["a", 3], "value": 1}, {"value": 2},
+    ]})
+    msg = await client.receive_json()
+    assert msg["success"]
+    lay = msg["result"]["layout"]
+    assert lay["camera_interval"] == 30 and lay["hidden_areas"] == ["bad"]
+    assert lay["alerts"]["mold_hum"] == 75 and lay["alerts"]["contacts_min"] == 5
+    assert "evil" not in lay
+    # Löschen eines Schlüssels: Standardwert kommt zurück
+    await client.send_json({"id": 3, "type": f"{DOMAIN}/save", "changes": [{"path": ["alerts", "contacts_min"], "delete": True}]})
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"]["layout"]["alerts"]["contacts_min"] == 0
+    assert msg["result"]["layout"]["alerts"]["mold_hum"] == 75
+    # Ohne layout und changes: Fehler; beides zusammen: Fehler
+    await client.send_json({"id": 4, "type": f"{DOMAIN}/save"})
+    assert not (await client.receive_json())["success"]
+    await client.send_json({"id": 5, "type": f"{DOMAIN}/save", "layout": {}, "changes": []})
+    assert not (await client.receive_json())["success"]
+
+
 async def test_single_instance(hass: HomeAssistant) -> None:
     await _setup(hass)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})

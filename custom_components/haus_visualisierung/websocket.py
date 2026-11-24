@@ -63,14 +63,26 @@ def ws_info(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg
 
 @websocket_api.require_admin
 @websocket_api.websocket_command(
-    {vol.Required("type"): f"{DOMAIN}/save", vol.Required("layout"): dict}
+    {
+        vol.Required("type"): f"{DOMAIN}/save",
+        vol.Exclusive("layout", "save"): dict,
+        vol.Exclusive("changes", "save"): [dict],
+    }
 )
 @websocket_api.async_response
 async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
-    """Layout speichern (nur Administratoren). Vor dem ersten Speichern eines Tages wird der alte Stand gesichert."""
+    """Layout speichern (nur Administratoren). Vor dem ersten Speichern eines Tages wird der alte Stand gesichert.
+
+    ``changes`` (Panel): nur die geänderten Einstellungen, der Rest bleibt wie gespeichert.
+    ``layout``: ganzer Stand (Import, ältere Panels, Tests).
+    """
+    if "layout" not in msg and "changes" not in msg:
+        connection.send_error(msg["id"], "invalid_format", "layout oder changes fehlt")
+        return
     if backups := hass.data[DOMAIN].get("backups"):
         backups.before_save()
-    layout = await hass.data[DOMAIN]["store"].async_save(msg["layout"])
+    store = hass.data[DOMAIN]["store"]
+    layout = await (store.async_patch(msg["changes"]) if "changes" in msg else store.async_save(msg["layout"]))
     connection.send_result(msg["id"], {"layout": layout})
 
 

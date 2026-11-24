@@ -263,6 +263,10 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex;align-items:center;justify-cont
 .tgl input:checked+span{background:var(--hv-accent)}.tgl input:checked+span::after{transform:translateX(18px)}
 .savebar{position:sticky;bottom:12px;display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:12px 16px;margin-top:8px;z-index:3}
 .savebar .msg{flex:1;color:var(--hv-dim);font-size:13px}
+.savebar .where{flex:1;min-width:0;color:var(--hv-dim);font-size:12px}.savebar.dirty .msg{flex:0 1 auto;color:var(--hv-text);font-weight:600}
+.savebar .pbtn:disabled{opacity:.45;cursor:default}
+.instant{display:inline-flex;align-items:center;gap:2px;margin-left:6px;padding:1px 7px 1px 4px;border-radius:999px;font-size:11px;font-weight:500;line-height:16px;vertical-align:middle;white-space:nowrap;color:#ffc457;background:rgba(255,196,87,.12);border:1px solid rgba(255,196,87,.3)}
+.instant ha-icon{--mdc-icon-size:12px}.savehint{margin:-4px 0 10px}
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);padding:10px 16px;border-radius:12px;background:rgba(20,24,34,.95);border:1px solid var(--hv-line);font-size:13px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 
 /* ====== Kompakt-Modus ====== */
@@ -713,7 +717,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .narrow .rail{height:auto !important;position:fixed;z-index:10;left:var(--hv-rail-left,0px);width:var(--hv-rail-width,100%);bottom:0;height:auto;flex-direction:row;padding:6px 6px calc(6px + env(safe-area-inset-bottom));border-right:0;border-top:1px solid var(--hv-line);overflow-x:auto;overflow-y:hidden;justify-content:flex-start;background:rgba(8,12,20,.86);-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%)}
 .app.narrow .main{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 .narrow .toast{bottom:calc(86px + env(safe-area-inset-bottom))}
-.narrow .savebar{bottom:calc(76px + env(safe-area-inset-bottom))}
+.narrow .savebar{bottom:calc(76px + env(safe-area-inset-bottom))}.narrow .savebar .where{display:none}.narrow .savebar .msg{min-width:0;font-size:12px}.narrow .savebar.dirty .msg{flex:1}
 .narrow .rail .logo,.narrow .rail hr,.narrow .rail .grow{display:none}
 .narrow .nav{width:auto;min-width:64px;padding:7px 8px 5px;flex:none}
 .narrow .main{padding:14px 12px 28px}
@@ -748,6 +752,9 @@ details[open]>summary.shead{padding-bottom:2px}
 .mchips{display:inline-flex;gap:3px;flex:none}
 .mchip{width:28px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--hv-surface);border:1px solid var(--hv-line);color:var(--hv-faint)}
 .mchip ha-icon{--mdc-icon-size:15px}.mchip.on{color:var(--hv-text);background:rgba(124,196,255,.16);border-color:rgba(124,196,255,.4)}
+.mlegend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:2px 0 6px;color:var(--hv-dim)}.mlegend small{color:var(--hv-dim)}
+.mlist{display:inline-flex;flex-wrap:wrap;gap:4px 12px}.mleg{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--hv-text)}.mleg ha-icon{--mdc-icon-size:15px;color:var(--hv-dim)}
+.mchips.wrap{flex-wrap:wrap;flex:0 1 auto}.mchip.lbl{width:auto;padding:0 8px;gap:4px;display:inline-flex;align-items:center;font-size:12px}
 /* ---------- Aktionen ---------- */
 .actcard{border:1px solid var(--hv-line);border-radius:14px;padding:8px 10px;margin:8px 0;background:var(--hv-surface)}
 .actcard.off{opacity:.55}

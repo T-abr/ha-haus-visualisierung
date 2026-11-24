@@ -15,6 +15,18 @@ import { applList } from "./geraete.js";
 import { maintCall, newTask } from "./wartung.js";
 import { adoptDevice, customAction, displaysForSave, newDisplay, togglePage, testBell, updateDevice } from "./wanddisplay.js";
 
+const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+/** Unterschiede Entwurf ↔ Ausgangsstand als Liste von Pfaden; Objekte werden durchlaufen, Listen als Ganzes ersetzt. */
+function layoutChanges(base, next, path = [], out = []) {
+  for (const k of new Set([...Object.keys(base || {}), ...Object.keys(next || {})])) {
+    const a = base ? base[k] : undefined, b = next[k], p = [...path, k];
+    if (b === undefined) { if (a !== undefined) out.push({ path: p, delete: true }); continue; }
+    if (isObj(a) && isObj(b)) layoutChanges(a, b, p, out);
+    else if (JSON.stringify(a) !== JSON.stringify(b)) out.push({ path: p, value: b });
+  }
+  return out;
+}
+
 const AktionenMixin = (Base) => class extends Base {
   async _actionExtra(act, t) {
     const D = this._draft;
@@ -228,9 +240,12 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-reset": this._draft = null; this._dirtySettings = false; this._dirty = true; this._flush(); return;
       case "s-save": {
         try {
-          const res = await h.callWS({ type: `${DOMAIN}/save`, layout: { ...D, displays: displaysForSave(D.displays) } });
+          // Nur Geändertes schicken: Was ein anderes Gerät inzwischen gespeichert hat, bleibt erhalten.
+          const changes = layoutChanges(this._draftBase || this._layout, { ...D, displays: displaysForSave(D.displays) });
+          const res = changes.length ? await h.callWS({ type: `${DOMAIN}/save`, changes }) : { layout: this._layout };
           this._layout = withDefaults(res.layout);
           this._draft = structuredClone(this._layout);
+          this._draftBase = structuredClone(this._layout);
           this._dirtySettings = false;
           this._startCams();
           this._dirty = true;
@@ -247,4 +262,4 @@ const AktionenMixin = (Base) => class extends Base {
   }
 };
 
-export { AktionenMixin };
+export { AktionenMixin, layoutChanges };

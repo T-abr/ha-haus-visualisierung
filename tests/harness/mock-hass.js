@@ -1,6 +1,7 @@
 import { evaluate as evalAlertRules, MOLD } from "./mock-alerts.js";
 
 // Nachgebautes hass-Objekt mit Registern, Zuständen und Diensten.
+import { withDefaults } from "./modules/grundlagen.js";
 export function makeHass({ big = false, komfort = false, ov = "haus", hs = "kompakt" } = {}) {
   const states = {}, entities = {}, devices = {}, areas = {}, floors = {};
   const now = new Date().toISOString();
@@ -257,7 +258,18 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         if (api.layoutCb) setTimeout(() => api.layoutCb({ layout }), 0);
         return { layout, items: api.bkList() };
       }
-      if (msg.type.endsWith("/save")) { layout = msg.layout; return { layout }; }
+      if (msg.type.endsWith("/save")) {
+        if (msg.changes) {
+          // wie store.async_patch: Pfade über Objekt-Schlüssel, Listen als Ganzes
+          layout = withDefaults(structuredClone(layout || {})); // Server ergänzt Standardwerte (sanitize)
+          for (const c of msg.changes) {
+            let o = layout;
+            for (const k of c.path.slice(0, -1)) o = (o[k] !== null && typeof o[k] === "object" && !Array.isArray(o[k])) ? o[k] : (o[k] = {});
+            if (c.delete) delete o[c.path[c.path.length - 1]]; else o[c.path[c.path.length - 1]] = structuredClone(c.value);
+          }
+        } else layout = msg.layout;
+        return { layout };
+      }
       if (msg.type.endsWith("/display_devices")) {
         const own = Object.fromEntries(((layout.displays) || []).filter((d) => d.device).map((d) => [d.device, d.id]));
         return { devices: api.dispDevices.map((x) => ({ ...x, display: own[x.name] || null })), firmware: api.dispFirmware, service: "haus_daten" };

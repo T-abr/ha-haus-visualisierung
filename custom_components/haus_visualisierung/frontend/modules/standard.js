@@ -4,7 +4,7 @@
  * Das Profil und die Dashboard-Liste von Home Assistant bieten eigene Panels nicht an, deshalb setzt dieser Abschnitt
  * die Werte direkt (frontend/set_user_data bzw. frontend/set_system_data, Schlüssel „core“). Wirkt sofort, ohne Speichern. */
 
-import { esc, icon } from "./grundlagen.js";
+import { esc, icon, instant } from "./grundlagen.js";
 
 const LS_KEY = "defaultPanel";
 
@@ -50,7 +50,7 @@ function defaultSettingsHTML(p) {
   ] : [];
   rows.push(row("s-std-device", dev === me, "Nur dieses Gerät",
     srv ? `nur dieser Browser; greift erst, wenn oben nichts festgelegt ist${other(dev)}` : `nur dieser Browser${other(dev)}`));
-  return `<div class="set glass" data-sec="default-panel"><h2>${icon("mdi:home-import-outline")}Beim Öffnen von Home Assistant</h2>
+  return `<div class="set glass" data-sec="default-panel"><h2>${icon("mdi:home-import-outline")}Beim Öffnen von Home Assistant ${instant()}</h2>
       <p class="hint">Die Haus Visualisierung statt der Übersicht zeigen, sobald Home Assistant geöffnet wird (Browser, Companion-App, Wandpanel). Das Profil und die Dashboard-Liste von Home Assistant bieten eigene Panels nicht zur Auswahl an, deshalb geht das hier. Wirkt sofort, ohne Speichern; zurück zur Übersicht mit demselben Knopf.${srv ? "" : " Diese Home-Assistant-Version merkt sich das Standard-Dashboard nur im Browser; ab einer neueren Version geht es auch je Benutzer und für alle."}</p>
       <div class="srow"><span class="lbl">Auf diesem Gerät öffnet Home Assistant<small>${isMe ? "die Haus Visualisierung" : esc(panelTitle(p, h, eff))}</small></span>${icon(isMe ? "mdi:check-circle" : "mdi:circle-outline")}</div>
       ${rows.join("")}</div>`;

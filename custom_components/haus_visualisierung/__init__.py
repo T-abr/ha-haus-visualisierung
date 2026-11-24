@@ -80,8 +80,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.async_add_executor_job(_drop_stale_gz, frontend_dir)
+    # Die Adresse enthält die Version (FRONTEND_URL), also darf der Browser die Dateien lange zwischenspeichern:
+    # Nach einem Update ändert sich die Adresse, alte Stände werden nie ausgeliefert.
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(frontend_dir), False)]
+        [StaticPathConfig(FRONTEND_URL, str(frontend_dir), True)]
     )
     # Auf jeder Seite nur der kleine Lader der Karten (haus-raum-card, haus-hausschnitt-card); deren Code und
     # das Panel (module_url) lädt der Browser erst, wenn er sie braucht.
