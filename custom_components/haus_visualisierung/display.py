@@ -98,7 +98,8 @@ GN_TITLE = {"garage": "Garage & Tore", "contact": "Fenster & Türen", "lock": "S
             "light": "Licht", "media": "Medien"}
 GN_MAX = 8
 BAT_RE = re.compile(r"(akku|batter|battery|hausspeicher|stromspeicher)", re.I)
-BAT_NOT = re.compile(r"(pv|solar|grid|netz|soc|wallbox|evcc|lade)", re.I)
+# Reine Lade-/Entladesensoren (immer >= 0) ausschließen, sonst fehlt eine Flussrichtung
+BAT_NOT = re.compile(r"(pv|solar|grid|netz|soc|wallbox|evcc|lade|charg)", re.I)
 
 WEATHER_TTL = 30 * 60
 CAL_TTL = 15 * 60
