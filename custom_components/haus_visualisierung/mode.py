@@ -170,14 +170,21 @@ class HouseMode:
         if new is None:
             return
         if eid.startswith("person."):
-            self._check_persons()
+            # Nur echte Zustandswechsel zählen: Die Companion-App schickt laufend neue Standort-Attribute
+            # bei gleichem Zustand. Früher setzte jede solche Meldung Abwesend/Urlaub auf Zuhause zurück,
+            # sobald jemand zu Hause war – danach gab es bei Bewegung keinen Alarm mehr.
+            old = event.data.get("old_state")
+            if old is None or old.state != new.state:
+                self._check_persons(arrived=old is not None and new.state == "home")
         elif eid.startswith("alarm_control_panel.") and eid == self.panel():
             old = event.data.get("old_state")
             if not old or old.state != new.state:
                 self._on_panel(new.state)
 
     @callback
-    def _check_persons(self) -> None:
+    def _check_persons(self, arrived: bool = False) -> None:
+        """Alle weg → nach Wartezeit Abwesend. Zurück auf Zuhause nur, wenn jemand ankommt
+        (Wechsel auf „home“); ein von Hand gesetztes Abwesend/Urlaub bleibt sonst bestehen."""
         cfg = self.cfg
         if not cfg.get("enabled", True) or not cfg.get("auto_away", True):
             return
@@ -188,7 +195,7 @@ class HouseMode:
         mode = self.mode
         if home:
             self._cancel_away()
-            if mode in ("abwesend", "urlaub"):
+            if arrived and mode in ("abwesend", "urlaub"):
                 self.set_mode("zuhause", AUTO, "auto")
             return
         if mode in ("zuhause", "nacht") and self._away_timer is None:

@@ -1,6 +1,7 @@
 """Hausmodus: Automatik, Alarmo-Kopplung, Regeln je Modus, Entitäten (pytest tests/backend)."""
 from datetime import timedelta
 
+import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -9,6 +10,8 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 from test_push import _house, _setup, _tick
+
+from custom_components.haus_visualisierung.const import HOUSE_MODE_NAMES
 
 DOMAIN = "haus_visualisierung"
 
@@ -157,6 +160,48 @@ async def test_auto_persons_night_and_alarmo(hass: HomeAssistant) -> None:
     # Hausmodus aus → immer Zuhause
     await _layout(hass, enabled=False)
     assert house.mode == "zuhause"
+
+
+@pytest.mark.parametrize("mode", ["abwesend", "urlaub"])
+async def test_manual_away_survives_person_updates(hass: HomeAssistant, mode: str) -> None:
+    """Abwesend/Urlaub von Hand, während eine Person noch als „home“ gilt: Standort-Updates
+    der Companion-App (gleicher Zustand, neue Attribute) dürfen den Modus nicht auf Zuhause
+    zurücksetzen – sonst kommt bei Bewegung kein Alarm. Erst eine echte Ankunft schaltet zurück."""
+    calls = async_mock_service(hass, "notify", "mobile_app_handy")
+    await _house(hass)
+    reg = er.async_get(hass)
+    from homeassistant.helpers import area_registry as ar
+    flur = ar.async_get(hass).async_create("Flur").id
+    e = reg.async_get_or_create("binary_sensor", "test", "flur_bewegung", suggested_object_id="flur_bewegung")
+    reg.async_update_entity(e.entity_id, area_id=flur)
+    motion = e.entity_id
+    attrs = {"device_class": "motion", "friendly_name": "Flur Bewegung"}
+    hass.states.async_set(motion, "off", attrs)
+    hass.states.async_set("person.tobias", "home", {"latitude": 50.0})
+    hass.states.async_set("person.anna", "not_home", {"latitude": 48.0})
+    monitor = await _setup(hass)
+    await hass.async_block_till_done()
+
+    monitor.house.set_mode(mode, "Tobias")
+    await _tick(hass)
+    hass.states.async_set("person.tobias", "home", {"latitude": 50.001})  # nur neuer Standort
+    hass.states.async_set("person.anna", "not_home", {"latitude": 48.1})
+    await _tick(hass)
+    assert monitor.house.mode == mode
+
+    # Bewegung → Alarm im Alarmmanager und Push
+    hass.states.async_set(motion, "on", attrs)
+    await _tick(hass)
+    key = f"presence:{motion}"
+    assert key in monitor.book.alarms and monitor.book.alarms[key]["level"] == "alarm"
+    pushed = [c for c in calls if c.data.get("title") == "🏠 Flur: Bewegung erkannt"]
+    assert len(pushed) == 1 and pushed[0].data["data"]["push"]["interruption-level"] == "critical"
+    assert HOUSE_MODE_NAMES[mode] in pushed[0].data["message"]
+
+    # Echte Ankunft (Wechsel auf „home“) → Zuhause
+    hass.states.async_set("person.anna", "home", {"latitude": 50.0})
+    await _tick(hass)
+    assert monitor.house.mode == "zuhause"
 
 
 async def test_alarm_panel_triggered(hass: HomeAssistant) -> None:
