@@ -107,6 +107,7 @@ BELL_EVENT_RE = re.compile(r"ring|press|doorbell|klingel", re.I)
 BELL_CAM_RE = re.compile(r"entry|doorbell|klingel|haust", re.I)
 BELL_IMG = (432, 243)  # Kamerabild im Overlay (16:9); die Firmware passt es mit gleichem Seitenverhältnis ein
 BELL_AFTER_DOOR = 15   # Sekunden, die das Overlay nach „Tür öffnen“ noch offen bleibt
+SENSOR_DELAY = 10     # Sekunden: Messwert-Änderungen gebündelt schicken (Display-Last, siehe CHANGELOG 1.18.1)
 
 
 # ---------- Formatierung (deutsch) ----------
@@ -330,6 +331,8 @@ class DisplayHub:
         self._listeners: set[Callable[[], None]] = set()
         self._unsubs: list[Callable[[], None]] = []
         self._pending: Callable[[], None] | None = None
+        self._pending_at = 0.0
+        self._watched: set[str] = set()
         self.payloads: dict[str, dict[str, Any]] = {}
         self._weather: dict[str, Any] = {"at": 0.0, "eid": None, "days": []}
         self._cal: dict[str, Any] = {"at": 0.0, "events": []}
@@ -401,8 +404,10 @@ class DisplayHub:
         if eid == self._bell_eid and is_ring(event.data.get("old_state"), event.data.get("new_state")):
             self.start_ring()
             return
-        if eid in self._watch() or eid.startswith(("weather.", "calendar.")):
-            self.schedule()
+        if eid in self._watched or eid.startswith(("weather.", "calendar.")):
+            # Messwerte (Leistung, Temperatur …) ändern sich ständig: höchstens alle SENSOR_DELAY s schicken,
+            # Schaltzustände (Licht, Rollo …) sofort, damit die Rückmeldung am Display flott bleibt
+            self.schedule(SENSOR_DELAY if eid.startswith("sensor.") else 1.0)
 
     @callback
     def _on_service(self, event: Event) -> None:
@@ -524,14 +529,19 @@ class DisplayHub:
 
     @callback
     def schedule(self, delay: float = 1.0) -> None:
+        """Ein Update vormerken; ein schon vorgemerktes späteres wird vorgezogen, ein früheres bleibt."""
+        at = time.monotonic() + delay
         if self._pending:
-            return
+            if at >= self._pending_at:
+                return
+            self._pending()
 
         @callback
         def _run(_now: Any) -> None:
             self._pending = None
             self.update()
 
+        self._pending_at = at
         self._pending = async_call_later(self.hass, delay, _run)
 
     # ---------- Energie ----------
@@ -1006,6 +1016,7 @@ class DisplayHub:
             return
         self._ensure_async()
         self._bell_eid = self.bell_entity()
+        self._watched = self._watch()
         new = {}
         for d in self.displays:
             try:
