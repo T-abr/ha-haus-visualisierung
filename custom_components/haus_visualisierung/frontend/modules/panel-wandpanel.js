@@ -7,7 +7,26 @@ import { curMode, evalAlerts, LEVEL_ICON, LEVELS } from "./warnungen.js";
 import { finite } from "./verlauf.js";
 import { dayOf, fcDays, shadeHeadline, shadeHints } from "./wetter.js";
 import { saverTermHTML } from "./termine.js";
+import { outdoorTemp } from "./klima.js";
 import { applSaverHint } from "./geraete.js";
+
+/** Liegt die Uhrzeit in der Nachtzeit „von–bis“ (HH:MM, auch über Mitternacht)? */
+const hm = (v, d) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || "")); return m ? +m[1] * 60 + +m[2] : d; };
+function inNight(now, from, to) {
+  const t = now.getHours() * 60 + now.getMinutes(), a = hm(from, 23 * 60), b = hm(to, 6 * 60);
+  return a === b ? false : a < b ? t >= a && t < b : t >= a || t < b;
+}
+
+/** Innentemperatur für den Schoner: "avg" = Haus Ø (alle Innenräume), sonst Bereichs-ID. */
+function indoorTemp(h, m, which) {
+  if (!m) return null;
+  if (which === "avg") {
+    const vals = m.agg.temps.map((e) => num(h.states[e])).filter((v) => v !== null);
+    return vals.length ? { name: "", t: vals.reduce((a, b) => a + b, 0) / vals.length } : null;
+  }
+  const a = m.areas.get(which), t = a && a.tempId ? num(h.states[a.tempId]) : null;
+  return t !== null ? { name: a.name, t } : null;
+}
 
 const WandpanelMixin = (Base) => class extends Base {
   /* ---------- Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite ---------- */
@@ -142,36 +161,42 @@ const WandpanelMixin = (Base) => class extends Base {
     if (!el || !this._hass) return;
     const W = this._wallCfg(), h = this._hass, now = new Date();
     const black = W.black_min > 0 && idle >= W.saver_min + W.black_min;
-    const night = W.night_dim && (curMode() === "nacht" || now.getHours() >= 23 || now.getHours() < 6);
+    const night = W.night_dim && (curMode() === "nacht" || inNight(now, W.night_from, W.night_to));
     el.classList.toggle("black", black);
     el.classList.toggle("night", night && !black);
     const minute = Math.floor(now.getTime() / 60000);
     if (!force && this._saverMin === minute && !this._saverDirty) return;
     this._saverMin = minute; this._saverDirty = false;
+    // Elemente einzeln abschaltbar (Einstellungen → Wandpanel → Bildschirmschoner)
+    el.dataset.clock = ["s", "m"].includes(W.clock_size) ? W.clock_size : "l";
     setText(el, ".svclock", now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }));
-    setText(el, ".svdate", now.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" }));
+    setText(el, ".svdate", W.sv_date ? now.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" }) : "");
     const wid = W.weather || Object.keys(h.states).find((e) => e.startsWith("weather."));
     const wst = wid && h.states[wid];
-    const out = this._model && this._model.tech && this._model.tech.heat && this._model.tech.heat.outdoor;
-    const outT = num(h.states[out || ""]) ?? (wst && finite(wst.attributes.temperature) ? wst.attributes.temperature : null);
-    const pv = powerW(h.states[this._layout.header.pv || ""]);
-    const md = curMode();
+    // Außentemperatur aus derselben Quelle wie Kopfzeile und Klimaseite: Außenfühler, sonst Wetter-Entität
+    const outT = outdoorTemp(h, this._model, this._layout, wid);
     const parts = [];
-    if (wst) parts.push(`<span>${icon(WEATHER_ICON[wst.state] || "mdi:weather-cloudy")}${outT !== null ? `${NF1.format(outT)}°` : ""}</span>`);
-    else if (outT !== null) parts.push(`<span>${icon("mdi:thermometer")}${NF1.format(outT)}°</span>`);
+    if (W.sv_weather) {
+      if (wst) parts.push(`<span>${icon(WEATHER_ICON[wst.state] || "mdi:weather-cloudy")}${outT !== null ? `${NF1.format(outT)}°` : ""}</span>`);
+      else if (outT !== null) parts.push(`<span>${icon("mdi:thermometer")}${NF1.format(outT)}°</span>`);
+    }
+    const inT = W.sv_indoor ? indoorTemp(h, this._model, W.sv_indoor) : null;
+    if (inT) parts.push(`<span class="svin">${icon("mdi:home-thermometer")}${inT.name ? `${esc(inT.name)} ` : ""}${NF1.format(inT.t)}°</span>`);
+    const pv = W.sv_pv ? powerW(h.states[this._layout.header.pv || ""]) : null;
     if (pv !== null && pv > 50) parts.push(`<span>${icon("mdi:solar-power-variant")}${pv >= 1000 ? `${NF1.format(pv / 1000)} kW` : `${NF0.format(pv)} W`}</span>`);
     // Vorhersage morgen
-    const tm = wid ? dayOf(fcDays(h, wid), 1) : null;
+    const tm = W.sv_forecast && wid ? dayOf(fcDays(h, wid), 1) : null;
     if (tm && finite(tm.hi)) parts.push(`<span class="svfc">${icon(WEATHER_ICON[tm.cond] || "mdi:weather-partly-cloudy")}Morgen ${NF0.format(tm.hi)}°${finite(tm.lo) ? ` / ${NF0.format(tm.lo)}°` : ""}</span>`);
-    parts.push(`<span>${icon(MODE_ICON[md])}${MODE_NAME[md]}</span>`);
+    const md = curMode();
+    if (W.sv_mode) parts.push(`<span>${icon(MODE_ICON[md])}${MODE_NAME[md]}</span>`);
     setHtml(el.querySelector(".svrow"), parts.join(""));
-    const hl = this._model ? shadeHeadline(shadeHints(h, this._model, this._layout)) : "";
+    const hl = W.sv_shade && this._model ? shadeHeadline(shadeHints(h, this._model, this._layout)) : "";
     setHtml(el.querySelector(".svcal"), saverTermHTML(h, this._layout));
-    const ap = applSaverHint(h, this._layout);
+    const ap = W.sv_appl ? applSaverHint(h, this._layout) : null;
     setHtml(el.querySelector(".svhint"), [ap ? `<span class="svappl">${icon(ap.icon)}${esc(ap.text)}</span>` : "", hl ? `<span>${icon("mdi:window-shutter-alert")}${esc(hl)}</span>` : ""].filter(Boolean).join("<br>"));
-    const al = this._model ? evalAlerts(h, this._model, this._layout) : [];
+    const al = W.sv_status && this._model ? evalAlerts(h, this._model, this._layout) : [];
     const top = al.length ? al.reduce((a, b) => (LEVELS[b.level] > LEVELS[a.level] ? b : a)) : null;
-    setHtml(el.querySelector(".svstat"), top ? `<span class="${top.level}">${icon(LEVEL_ICON[top.level])}${al.length === 1 ? esc(top.title) : `${al.length} Meldungen · ${esc(top.title)}`}</span>` : `<span class="ok">${icon("mdi:shield-check")}Alles in Ordnung</span>`);
+    setHtml(el.querySelector(".svstat"), !W.sv_status ? "" : top ? `<span class="${top.level}">${icon(LEVEL_ICON[top.level])}${al.length === 1 ? esc(top.title) : `${al.length} Meldungen · ${esc(top.title)}`}</span>` : `<span class="ok">${icon("mdi:shield-check")}Alles in Ordnung</span>`);
     // Standard: mittig. Auf Wunsch gegen Einbrennen jede Minute ein Stück versetzen.
     const box = el.querySelector(".svbox");
     const k = minute % 9, dx = ((k % 3) - 1) * 6, dy = (Math.floor(k / 3) - 1) * 5;
@@ -179,4 +204,4 @@ const WandpanelMixin = (Base) => class extends Base {
   }
 };
 
-export { WandpanelMixin };
+export { inNight, WandpanelMixin };

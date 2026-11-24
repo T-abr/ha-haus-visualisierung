@@ -34,6 +34,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .alerts import UNAV, is_on, num
+from .const import DEFAULT_LAYOUT
 from .pin import KIND_TXT as PIN_TXT
 from .pin import mode_kind
 from .pin import needs as pin_needs
@@ -424,6 +425,7 @@ class DisplayHub:
         c = self.energy_cfg()
         ents = {v for v in (c or {}).values() if isinstance(v, str) and "." in v}
         ents |= set(self.monitor._all)
+        ents |= {e for k, e in self.monitor._outdoor.items() if k == "temperature"}
         ents |= {e for d in self.displays for t in d["tiles"] if t.startswith("entity:") for e in [t[7:]]}
         ents |= {t["entity"] for d in self.displays for pg in d.get("custom", []) for t in pg["tiles"]}
         return ents
@@ -822,7 +824,10 @@ class DisplayHub:
         eid = self.weather_eid()
         if eid and (st := get(eid)) is not None:
             txt, ic = W_COND.get(st.state, (st.state, "weather-partly-cloudy"))
-            t = st.attributes.get("temperature")
+            # Temperatur jetzt vom Außenfühler (wie im Panel), sonst von der Wetter-Entität
+            t = num(get(self.monitor._outdoor.get("temperature", "")))
+            if t is None:
+                t = st.attributes.get("temperature")
             days = self._weather["days"] if self._weather["eid"] == eid else []
             tomorrow = days[1] if len(days) > 1 else None
             out["wetter"] = {"i": ic, "t": f"{de(float(t), 0)}°" if isinstance(t, (int, float)) else "–", "txt": txt,
@@ -910,31 +915,48 @@ class DisplayHub:
 
     def schoner(self) -> dict:
         """Bildschirmschoner wie am Wandpanel: Wetter, PV, morgen, Hausmodus; Müll und Termine; fertige Geräte; Meldungen."""
+        W = {**DEFAULT_LAYOUT["wallpanel"], **(self.layout.get("wallpanel") or {})}
         K = self.kopf()
         zeile = []
-        if w := K.get("wetter"):
+        w = K.get("wetter")
+        if w and W["sv_weather"]:
             zeile.append({"i": w["i"], "t": w["t"]})
-        F = self.energy_now()
+        if (inn := self._indoor_temp(W["sv_indoor"])) is not None:
+            zeile.append({"i": "home-thermometer", "t": f"{de(inn, 1)}°"})
+        F = self.energy_now() if W["sv_pv"] else None
         if F and F["pv"] is not None and F["pv"] > 50:
             zeile.append({"i": "solar-power-variant", "t": kw(F["pv"])})
-        if w and w["morgen"]:
+        if w and w["morgen"] and W["sv_forecast"]:
             zeile.append({"i": "calendar", "t": w["morgen"][:1].upper() + w["morgen"][1:]})
-        zeile.append({"i": K["modus"]["i"], "t": K["modus"]["n"]})
+        if W["sv_mode"]:
+            zeile.append({"i": K["modus"]["i"], "t": K["modus"]["n"]})
         termine = []
-        if T := self.termine():
+        T = self.termine() if (self.layout.get("termine") or {}).get("saver", True) is not False else None
+        if T:
             if T["waste"]:
                 color, ic = bin_of(T["waste"][0])
                 termine.append({"i": ic, "f": color, "t": f"{T['waste_word']}: {', '.join(T['waste'])}", "hot": T["hot"]})
             termine += [{"i": "calendar-clock", "f": C_DIM, "t": e, "hot": False} for e in T["events"][:3 - len(termine)]]
-        done = self._done_appliances()
+        done = self._done_appliances() if W["sv_appl"] else []
         al = self._alerts()
         lvl = al[0].get("level") if al else None
-        status = ({"i": "alarm-light" if lvl == "alarm" else "bell-alert", "f": C_ALERT if lvl == "alarm" else C_WARM,
+        status = None if not W["sv_status"] else ({"i": "alarm-light" if lvl == "alarm" else "bell-alert", "f": C_ALERT if lvl == "alarm" else C_WARM,
                    "t": str(al[0].get("title", "")) if len(al) == 1 else f"{len(al)} Meldungen · {al[0].get('title', '')}"}
                   if al else {"i": "shield-check", "f": C_OK, "t": "Alles in Ordnung"})
         return {"zeile": zeile[:4], "termine": termine,
                 "hinweis": {"i": "check-circle-outline", "t": " · ".join(f"{x} fertig" for x in done[:2])} if done else None,
                 "status": status}
+
+    def _indoor_temp(self, which: str) -> float | None:
+        """Innentemperatur für den Schoner: "avg" = Haus Ø (Innenräume), sonst Bereichs-ID; "" = aus."""
+        if not which:
+            return None
+        get = self.hass.states.get
+        if which == "avg":
+            ts = [t for r in self.monitor._rooms if r.indoor and r.temp_id and (t := num(get(r.temp_id))) is not None]
+            return sum(ts) / len(ts) if ts else None
+        r = next((r for r in self.monitor._rooms if r.area_id == which), None)
+        return num(get(r.temp_id)) if r and r.temp_id else None
 
     def custom_tile(self, t: dict) -> dict:
         """Kachel einer eigenen Seite: wie eine entity:-Kachel, mit eigenem Namen und Symbol."""

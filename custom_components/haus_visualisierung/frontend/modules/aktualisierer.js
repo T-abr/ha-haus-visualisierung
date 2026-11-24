@@ -4,7 +4,7 @@ import { batteryIcon, dc, dom, entIcon, entName, esc, fmtPower, fmtState, icon, 
 import { CONTACT_DC, PRESENCE_DC, SAFETY_DC } from "./modell.js";
 import { roomActive } from "./bausteine.js";
 import { alertsByArea, alertWatch, CHIP_WATCH, CHIPS } from "./warnungen.js";
-import { dewPoint } from "./klima.js";
+import { dewPoint, outdoorTemp } from "./klima.js";
 import { condIcon, condName, dayOf, fcDays, shadeHeadline, shadeHints, W_COND } from "./wetter.js";
 
 /* ------------------------------------------------------------------------ */
@@ -250,7 +250,8 @@ function updateWeather(el, ctx) {
   if (!st) { el.hidden = true; return; }
   el.hidden = false;
   setIcon(el, "ha-icon", condIcon(st.state));
-  const t = st.attributes.temperature;
+  // Temperatur jetzt vom Außenfühler (wie Klimaseite und Schoner), sonst von der Wetter-Entität
+  const t = outdoorTemp(h, ctx._model, ctx._layout, el.dataset.eid);
   setText(el, ".wt", t != null ? `${NF0.format(t)}°` : "");
   const days = fcDays(h, el.dataset.eid), tm = dayOf(days, 1);
   const tmTxt = tm && tm.hi !== null ? `morgen ${NF0.format(tm.hi)}°` : "";

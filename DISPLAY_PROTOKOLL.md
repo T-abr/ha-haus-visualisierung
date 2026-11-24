@@ -68,7 +68,7 @@ Palette der Visualisierung.
  "modus": {"k": "zuhause", "n": "Zuhause", "i": "home-account", "f": "#4fd18b"}}
 ```
 
-`wetter` fehlt ohne Wetter-Entität. Die Uhrzeit nimmt die Firmware von Home Assistant (Zeitquelle).
+`wetter` fehlt ohne Wetter-Entität; `t` ist die Außentemperatur vom Außenfühler (Einstellungen → Heizung → Außentemperatur, sonst nach Namen), ohne Fühler die der Wetter-Entität. Die Uhrzeit nimmt die Firmware von Home Assistant (Zeitquelle).
 
 ### `schoner`
 
@@ -81,6 +81,11 @@ Inhalt des Bildschirmschoners (nur wenn eingeschaltet, sonst `null`), wie am Wan
  "hinweis": {"i": "check-circle-outline", "t": "Waschmaschine fertig"},
  "status": {"i": "shield-check", "f": "#4fd18b", "t": "Alles in Ordnung"}}
 ```
+
+Welche Elemente kommen, stellt man unter Einstellungen → Wandpanel → Bildschirmschoner ein (gilt für Panel und
+Displays): abgeschaltete Teile fehlen in `zeile`, `hinweis` bzw. `status` ist dann `null`. Optional steht in `zeile`
+die Innentemperatur (`home-thermometer`). Die Temperatur bei `weather-*` ist die des Außenfühlers, sonst der
+Wetter-Entität (wie `kopf.wetter.t`).
 
 ### `klingel`
 

@@ -4,11 +4,18 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Bildschirmschoner einstellbar** (Einstellungen → Wandpanel & Displays → Wandpanel → „Bildschirmschoner“): Datum, Wetter mit Außentemperatur, Vorhersage morgen, PV-Leistung, Hausmodus, Müll und Termine, fertige Geräte, Beschattungshinweis und Meldungen einzeln ein- und ausschaltbar; neu wählbar ist die Innentemperatur (Haus Ø oder ein Raum). Uhrgröße groß/mittel/klein. Die Auswahl gilt auch für die Wanddisplays (dort ohne Datum und Uhrgröße, keine neue Firmware nötig).
+- **Nachtzeit für „Nachts dunkler“** einstellbar (bisher fest 23–6 Uhr), auch über Mitternacht.
+
 ### Behoben
+- **Außentemperatur überall aus derselben Quelle.** Kopfzeile, Vorhersage-Karte und Wanddisplay zeigten immer den Wert der Wetter-Entität (Wetterdienst), der Bildschirmschoner den Außenfühler nur, wenn die Heizungskarte erkannt war. Jetzt gilt überall wie auf Klimaseite, im Rückblick und bei den Warnungen: Einstellung Heizung → Außentemperatur, sonst der erste Fühler mit „außen/Garten …“ im Namen, erst ohne Fühler die Wetter-Entität. Fühler im Wintergarten, Gartenhaus oder in der Gartenhütte zählen bei der automatischen Suche nicht mehr als Außenfühler.
+- Wanddisplay: Der Schalter „Müll und Termine im Bildschirmschoner“ galt bisher nur am Wandpanel.
 - **Kein Bewegungsalarm in Abwesend/Urlaub.** Wurde Abwesend oder Urlaub von Hand gesetzt, während eine Person noch als „zu Hause“ galt, setzte die Automatik den Hausmodus beim nächsten Standort-Update der Companion-App (gleicher Zustand, neue Koordinaten) sofort zurück auf Zuhause. Danach meldete der Alarmmanager Bewegung nicht mehr. Die Automatik reagiert jetzt nur noch auf echte Zustandswechsel der Personen: Zurück auf Zuhause geht es erst, wenn jemand ankommt; „alle weg → Abwesend“ bleibt wie bisher.
 - **Energiefluss: „Speicher entlädt“ fehlte.** Die automatische Erkennung der Speicher-Leistung konnte einen reinen Lade- oder Entladesensor erwischen (z. B. Growatt „Battery Charge Power“, immer ≥ 0) statt des vorzeichenbehafteten Sensors. Dann zeigte der Fluss nur eine Richtung, und Gesamtverbrauch, Autarkie und Bilanz rechneten falsch. Solche Sensoren (Namen mit „charge“/„discharge“, „Laden“/„Entladen“) werden jetzt übersprungen, im Panel wie fürs Wanddisplay. Eine fest eingestellte Speicher-Leistung (Einstellungen → Energie) hat weiterhin Vorrang.
 
 ### Tests
+- Bildschirmschoner: Elemente abschaltbar, Innentemperatur, Uhrgröße, Nachtzeit (auch über Mitternacht), Speichern der Auswahl; Außentemperatur vom Außenfühler statt Wetter-Entität (Panel und Wanddisplay), Wintergarten-Fühler wird übergangen.
 - Neue Gesamtprüfung aller Warnregeln (`test_regeln.py`): Fenster/Tür (auch mit Verzögerung), Fenster offen beim Heizen, Wasser/Rauch/Sirene, Alarmanlage, Schloss, Garagentor, Batterien, nicht erreichbare Geräte, Abschalten und Hausmodus-Einschränkung sowie eigene Regeln mit allen Vergleichen, Dauer, Modus und „aus“. Jeweils Meldung, Push und Aufräumen beim Beheben.
 - Hausmodus: Abwesend und Urlaub von Hand bleiben bei Standort-Updates bestehen, Bewegung löst Alarm und kritische Push-Meldung aus, eine Ankunft schaltet zurück auf Zuhause.
 - Energie: Lade- und Entladesensoren vor dem eigentlichen Speicher-Sensor, Entladen muss als Fluss zum Haus erscheinen.

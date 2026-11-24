@@ -60,6 +60,8 @@ ENERGY_DC = {"power", "energy", "current", "voltage", "power_factor", "apparent_
 UNAV = {"unavailable", "unknown"}
 STATELESS = {"scene", "button", "input_button", "event"}
 OUTDOOR_RE = re.compile(r"(au(ß|ss)en|garten|drau(ß|ss)en|outdoor|grundst(ü|ue)ck)", re.IGNORECASE)
+# Fühler im Wintergarten oder Gartenhaus messen nicht die Außentemperatur (wie NOT_OUTDOOR_SENSOR_RE im Frontend)
+NOT_OUTDOOR_SENSOR_RE = re.compile(r"(winter ?garten|garten ?haus|gartenh(ü|ue)tte)", re.IGNORECASE)
 TECH_RE = re.compile(r"(vorlauf|r(ü|ue)cklauf|speicher|puffer|kessel|kamin|solar|kollektor|boiler|warmwasser|abgas|cpu)", re.IGNORECASE)
 LEVEL_ORDER = {"alarm": 3, "warn": 2, "info": 1}
 LEVEL_NAME = {"alarm": "Alarm", "warn": "Warnung", "info": "Hinweis"}
@@ -391,7 +393,8 @@ class AlertMonitor:
         pick = (layout.get("heating") or {}).get("outdoor")
         for st in hass.states.async_all("sensor"):
             dc = st.attributes.get("device_class")
-            if dc in ("temperature", "humidity") and dc not in out and OUTDOOR_RE.search(f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"):
+            label = f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"
+            if dc in ("temperature", "humidity") and dc not in out and OUTDOOR_RE.search(label) and not NOT_OUTDOOR_SENSOR_RE.search(label):
                 out[dc] = st.entity_id
         if pick and hass.states.get(pick):
             out["temperature"] = pick
