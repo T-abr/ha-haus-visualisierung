@@ -4,6 +4,25 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.18.1 – 2026-11-24
+
+Mitgelieferte Firmware **0.6.1** – Update im Reiter Displays über „Update auf 0.6.1“.
+
+### Verbessert – Firmware 0.6.1
+- **Diagnose-Sensoren** je Display in Home Assistant (Kategorie Diagnose, jede Minute): Speicher frei, größter freier Block, PSRAM frei, Loop-Zeit. Grundlage, um weitere Optimierungen (Schriften, Puffer) nach echten Messwerten zu entscheiden.
+- Log auf INFO statt DEBUG, Touch-Rohwerte nicht mehr im normalen Build (rund 5 KB kleiner, weniger Arbeit pro Touch).
+- Farben, Rahmen und Ein-/Ausblenden werden nur noch gesetzt, wenn sie sich ändern; bisher zeichnete das Display bei jedem Push alle Kacheln neu.
+
+### Verbessert – Wanddisplay entlasten
+- **Messwerte gebündelt**: Ändert sich ein Sensor (Leistung, Temperatur, Feuchte …), schickt die Integration die neuen Werte frühestens nach 10 s ans Display statt nach 1 s. Schaltzustände (Licht, Rollo, Fenster …) gehen weiterhin nach 1 s raus und nehmen dabei alle inzwischen geänderten Messwerte mit. Bei schwankenden PV- und Hausleistungen sinkt die Zahl der Pushes damit deutlich, das Display muss seltener neu zeichnen.
+- Die Liste der beobachteten Entitäten wird nur noch bei jedem Neuaufbau berechnet statt bei jeder Zustandsänderung im Haus.
+
+### Performance
+- Panel unverändert (kein Frontend-Code geändert). Im Backend entfällt pro Zustandsänderung das Zusammenstellen der beobachteten Entitäten (vorher Menge aus allen Kacheln, Energie-Sensoren und Monitor-Entitäten, jetzt ein Nachschlagen); bis zu 10-mal weniger Pushes je Display bei sich ständig ändernden Messwerten.
+
+### Tests
+- `test_display.py`: Messwert wartet bis 10 s, Schaltzustand zieht den Push vor und nimmt den Messwert mit, kein doppelter Push danach.
+
 ## 1.18.0 – 2026-11-23
 
 Mitgelieferte Firmware **0.6.0** – Update im Reiter Displays über „Update auf 0.6.0“.

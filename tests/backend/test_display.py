@@ -469,3 +469,33 @@ async def test_display_stellen_und_rueckmeldung(hass: HomeAssistant) -> None:
     assert [c.data for c in on] == [{"entity_id": "light.decke", "brightness_pct": 70}]
     assert [c.data for c in off] == [{"entity_id": "light.decke"}]
     assert [c.data for c in pos] == [{"entity_id": "cover.rollo", "position": 100}]
+
+
+async def test_display_push_gedrosselt(hass: HomeAssistant) -> None:
+    """Messwerte gehen gebündelt (SENSOR_DELAY) ans Display, Schaltzustände sofort; ein Schalter zieht den Push vor."""
+    calls = async_mock_service(hass, "esphome", "haus_display_a1b2c3_haus_daten")
+    hass.states.async_set("light.decke", "on", {"supported_color_modes": ["onoff"]})
+    hass.states.async_set("sensor.temp", "21.5", {"unit_of_measurement": "°C"})
+    await _setup(hass)
+    await hass.data[DOMAIN]["store"].async_save({"displays": [{"name": "Flur", "device": "haus-display-a1b2c3",
+                                                               "tiles": ["entity:light.decke", "entity:sensor.temp"]}]})
+    await _tick(hass)
+    hub = hass.data[DOMAIN]["displays"]
+    assert "sensor.temp" in hub._watched and "light.decke" in hub._watched
+
+    def kacheln():
+        return [json.loads(c.data["daten"]) for c in calls if c.data["bereich"] == "kacheln"]
+
+    n = len(kacheln())
+    hass.states.async_set("sensor.temp", "22.5", {"unit_of_measurement": "°C"})
+    await _tick(hass, 2)
+    assert len(kacheln()) == n                      # Messwert wartet noch
+    await _tick(hass, 11)
+    assert len(kacheln()) == n + 1 and "22,5" in json.dumps(kacheln()[-1], ensure_ascii=False)
+
+    hass.states.async_set("sensor.temp", "23.5", {"unit_of_measurement": "°C"})
+    hass.states.async_set("light.decke", "off", {"supported_color_modes": ["onoff"]})
+    await _tick(hass, 2)                            # Licht zieht den Push vor und nimmt den Messwert mit
+    assert len(kacheln()) == n + 2 and "23,5" in json.dumps(kacheln()[-1], ensure_ascii=False)
+    await _tick(hass, 11)
+    assert len(kacheln()) == n + 2                  # kein zweiter Push hinterher
