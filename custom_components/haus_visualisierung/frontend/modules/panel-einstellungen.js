@@ -2,7 +2,7 @@
  * Wird in panel.js mit den anderen Teilen zur Klasse des Panels zusammengesetzt. */
 
 import { DOMAIN, VERSION } from "./version.js";
-import { BUILTIN_MODES, dc, entName, esc, HOUSE_MODES, icon, NAV } from "./grundlagen.js";
+import { BUILTIN_MODES, dc, entName, esc, HOUSE_MODES, icon, instant, NAV } from "./grundlagen.js";
 import { buildModel, linkMode, PRESENCE_DC } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
 import { techCfg } from "./technik.js";
@@ -29,6 +29,10 @@ const SET_TAB_KEYS = {
   system: [],
 };
 const dragHandle = (label) => `<button class="drag" data-drag aria-label="${esc(label)}" title="Ziehen zum Sortieren (oder Pfeiltasten)">${icon("mdi:drag")}</button>`;
+/* Hausmodus-Symbole: am Handy gibt es keine Tooltips, deshalb steht über jeder Liste eine Legende mit Namen
+   und jede Schaltfläche trägt ihren Namen als aria-label. */
+const modeChips = (path, cur, title) => `<span class="mchips" title="${title}">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}" aria-label="${t}" aria-pressed="${cur.includes(k)}">${icon(i)}</button>`).join("")}</span>`;
+const modeLegend = (text) => `<div class="mlegend"><small>${text}:</small><span class="mlist">${HOUSE_MODES.map(([, t, i]) => `<span class="mleg">${icon(i)}${t}</span>`).join("")}</span></div>`;
 const floorGroup = (f) => (f.outdoor ? "outdoor" : f.level !== null && f.level < 0 ? "lower" : "upper");
 const sortIds = (list) => [...list.children].filter((c) => c.classList.contains("sitem")).map((c) => c.dataset.sortId);
 
@@ -37,7 +41,8 @@ const EinstellungenMixin = (Base) => class extends Base {
   /* ---------- Einstellungen ---------- */
   _vSettings() {
     const h = this._hass;
-    if (!this._draft) this._draft = structuredClone(this._layout);
+    // Ausgangsstand merken: Beim Speichern gehen nur die Unterschiede dazu an den Server
+    if (!this._draft) { this._draft = structuredClone(this._layout); this._draftBase = structuredClone(this._layout); }
     const D = this._draft;
     const m = buildModel(h, { ...D, hidden_areas: [] });
     const allIds = Object.keys(h.states).sort();
@@ -155,9 +160,10 @@ const EinstellungenMixin = (Base) => class extends Base {
 
     return `<div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span><span class="sp"></span></div>
       <div class="altabs stabs" role="tablist">${tabs}</div>
+      <p class="hint savehint">Änderungen gelten erst nach „Speichern“ unten. Was mit ${instant()} gekennzeichnet ist, wirkt direkt.</p>
       ${body}
-      <div class="savebar glass"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>
-        <button class="pbtn" data-act="s-reset">${icon("mdi:undo")}Verwerfen</button>
+      <div class="savebar glass${this._dirtySettings ? " dirty" : ""}"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>${this._dirtySettings ? this._dirtyWhere() : ""}
+        <button class="pbtn" data-act="s-reset"${this._dirtySettings ? "" : " disabled"}>${icon("mdi:undo")}Verwerfen</button>
         <button class="pbtn primary" data-act="s-save">${icon("mdi:content-save")}Speichern</button></div>`;
   }
 
@@ -225,7 +231,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const autoW = ids.find((e) => e.startsWith("weather."));
     return `<div class="set glass"><h2>${icon("mdi:tablet-dashboard")}Wandpanel</h2>
       <p class="hint">Für ein Tablet an der Wand: Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr, Wetter, Hausmodus und Meldungen, und nach einer Weile ohne Berührung zurück zur Startseite. Klingel, neue Alarme und ein Bewegungsmelder wecken das Panel.</p>
-      <div class="srow walldev${on ? " on" : ""}"><span class="lbl">Dieses Gerät ist ein Wandpanel<small>gilt nur für diesen Browser und sofort – ohne Speichern; alternativ Adresse mit <code>?wandpanel=1</code> öffnen (z. B. im Kiosk-Browser)</small></span>
+      <div class="srow walldev${on ? " on" : ""}"><span class="lbl">Dieses Gerät ist ein Wandpanel ${instant("sofort, nur dieser Browser")}<small>gilt ohne Speichern; alternativ Adresse mit <code>?wandpanel=1</code> öffnen (z. B. im Kiosk-Browser)</small></span>
         <button class="pbtn${on ? " primary" : ""}" data-act="s-wall-device">${icon(on ? "mdi:check" : "mdi:tablet")}${on ? "Wandpanel an" : "Als Wandpanel nutzen"}</button></div>
       <div class="fl-title">Zeiten</div>
       ${nm("saver_min", "Bildschirmschoner nach", "Minuten ohne Berührung; 0 = nie", 240)}
@@ -430,8 +436,8 @@ const EinstellungenMixin = (Base) => class extends Base {
         <input class="inp" list="dl-panels" data-set="house_mode.alarmo" value="${esc(H.alarmo)}" placeholder="alarm_control_panel.alarmo"><datalist id="dl-panels">${panels.map((e) => `<option value="${esc(e)}">`).join("")}</datalist></div>
       <div class="srow"><span class="lbl">Hausmodus und Alarmanlage koppeln<small>beide Richtungen: Modus schaltet die Anlage, Schalten an der Anlage ändert den Modus</small></span>${tg("house_mode.alarmo_sync", H.alarmo_sync)}</div>
       ${HOUSE_MODES.map(([k, t, i]) => `<div class="srow"><span class="lbl">${icon(i)} ${t}</span><select class="inp" data-set="house_mode.arm.${k}">${acts.map(([a, at]) => `<option value="${a}" ${H.arm[k] === a ? "selected" : ""}>${at}</option>`).join("")}</select></div>`).join("")}
-      <div class="srow"><span class="lbl">Code der Alarmanlage<small>${M.code ? "gespeichert ✓ – " : ""}nur nötig, wenn Alarmo zum Scharf-/Unscharfschalten einen Code verlangt; bleibt in Home Assistant und wird nicht an Browser geschickt</small></span>
-        <input class="inp s" type="password" autocomplete="off" id="hv-code" placeholder="${M.code ? "••••" : "Code"}"><button class="pbtn sm" data-act="s-code-save">${icon("mdi:content-save-outline")}Speichern</button></div>
+      <div class="srow"><span class="lbl">Code der Alarmanlage ${instant("eigener Knopf")}<small>${M.code ? "gespeichert ✓ – " : ""}„Code setzen“ speichert sofort, nicht über die Leiste unten; nur nötig, wenn Alarmo zum Scharf-/Unscharfschalten einen Code verlangt; bleibt in Home Assistant und wird nicht an Browser geschickt</small></span>
+        <input class="inp s" type="password" autocomplete="off" id="hv-code" placeholder="${M.code ? "••••" : "Code"}"><button class="pbtn sm" data-act="s-code-save">${icon("mdi:lock-check-outline")}Code setzen</button></div>
     </div>`;
   }
 
@@ -447,7 +453,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ...D.alerts.rules.map((r, i) => [`r:${i}`, `Eigene Regel: ${r.title || r.entity || i + 1}`])];
     const sel = (path, opts, cur, cls = "") => `<select class="inp ${cls}" data-set="${path}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${cur === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
     const allM = HOUSE_MODES.map((x) => x[0]);
-    const mchips = (path, cur) => `<span class="mchips" title="nur in diesen Hausmodi">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
+    const mchips = (path, cur) => modeChips(path, cur, "nur in diesen Hausmodi");
     const tg = (path, on, label) => `<label class="actg"><span class="tgl"><input type="checkbox" data-set="${path}" data-bool="1" ${on ? "checked" : ""}><span></span></span><small>${label}</small></label>`;
     const fields = (a, i) => {
       const p = `alarm_actions.${i}`;
@@ -483,6 +489,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="srow"><span class="lbl">Für Stufen</span><span class="lvchips">${[["alarm", "Alarm"], ["warn", "Warnung"], ["info", "Hinweis"]].map(([k, t]) => `<button class="altab sm${(E.levels || []).includes(k) ? " on" : ""}" data-act="s-esc-level" data-lvl="${k}"><span>${t}</span></button>`).join("")}</span></div>
       <div class="srow"><span class="lbl">Erneut als kritische Push-Meldung<small>„Nicht quittiert: …“ an alle Empfänger, laut auch bei „Nicht stören“</small></span><label class="tgl"><input type="checkbox" data-set="escalation.push_critical" data-bool="1" ${E.push_critical !== false ? "checked" : ""}><span></span></label></div>
       <div class="fl-title">Aktionen</div>
+      ${acts ? modeLegend("Aktion läuft nur in den markierten Hausmodi") : ""}
       ${acts ? `<div class="sortl" data-sort="actions">${acts}</div>` : '<p class="hint">Noch keine Aktionen. Vorlagen unten – danach Gruppenadresse bzw. Entität eintragen und mit „Test“ prüfen.</p>'}
       <div class="srow"><button class="pbtn" data-act="s-act-add">${icon("mdi:plus")}Aktion hinzufügen</button>
         <span class="lbl" style="flex:0 0 auto;min-width:0"><small>Vorlagen:</small></span>
@@ -501,7 +508,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ["mold", "Schimmelrisiko – jetzt lüften (Raumfeuchte zu hoch)", "Warnung"], ["appliances", "Haushaltsgerät fertig (Waschmaschine, Trockner, Spülmaschine)", "Hinweis"], ["maintenance", "Wartung fällig (Wartungsplaner)", "Hinweis"],
       ["weather", "Wetter: Unwetter (DWD), Regen bei offenem Fenster, Sturm bei ausgefahrener Markise (Einstellungen unter Technik)", "Warnung"]];
     const allM = HOUSE_MODES.map((x) => x[0]);
-    const mchips = (path, cur) => `<span class="mchips" title="gilt in diesen Hausmodi">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${cur.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="${path}" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
+    const mchips = (path, cur) => modeChips(path, cur, "gilt in diesen Hausmodi");
     const bmodes = (k) => (A.modes && A.modes[k] && A.modes[k].length ? A.modes[k] : BUILTIN_MODES[k] || allM);
     const ops = [["on", "ist an / offen"], ["off", "ist aus / zu"], ["gt", "größer als"], ["lt", "kleiner als"], ["eq", "ist gleich"], ["ne", "ist nicht"], ["unavailable", "nicht erreichbar"]];
     const lv = [["info", "Hinweis"], ["warn", "Warnung"], ["alarm", "Alarm"]];
@@ -520,12 +527,14 @@ const EinstellungenMixin = (Base) => class extends Base {
     return `<div class="set glass"><h2>${icon("mdi:bell-cog-outline")}Warnungen</h2>
       <p class="hint">Aktive Warnungen erscheinen in der Karte „Alles in Ordnung“ (Cockpit, Sicherheit), als Glocke in der Kopfzeile und oberhalb der anderen Übersichten. Stufen: <b>Alarm</b> (rot) vor <b>Warnung</b> (orange) vor <b>Hinweis</b> (blau, nicht in der Kopfzeile).</p>
       <div class="fl-title">Feste Regeln</div>
-      <p class="hint">Die Symbole je Regel legen fest, in welchen Hausmodi sie gilt (${HOUSE_MODES.map(([, t]) => t).join(", ")}). Beispiel: Bewegung ist nur bei Abwesend und Urlaub ein Alarm.</p>
+      <p class="hint">Die Symbole je Regel legen fest, in welchen Hausmodi sie gilt. Beispiel: Bewegung ist nur bei Abwesend und Urlaub ein Alarm.</p>
+      ${modeLegend("Regel gilt in den markierten Hausmodi")}
       ${bi.map(([k, t, l]) => `<div class="srow"><span class="lbl">${t}<small>${l}</small></span>${mchips(`alerts.modes.${k}`, bmodes(k))}<label class="tgl"><input type="checkbox" data-set="alerts.builtin.${k}" data-bool="1" ${B[k] ? "checked" : ""}><span></span></label></div>`).join("")}
       <div class="srow"><span class="lbl">Fenster und Türen erst melden nach<small>Minuten offen; 0 = sofort</small></span><input class="inp s" type="number" min="0" max="240" data-set="alerts.contacts_min" data-num="1" value="${A.contacts_min || 0}"></div>
       <div class="srow"><span class="lbl">Schimmelrisiko ab<small>% relative Raumfeuchte; Entwarnung 3 Prozentpunkte darunter</small></span><input class="inp s" type="number" min="50" max="90" data-set="alerts.mold_hum" data-num="1" value="${A.mold_hum || 65}"></div>
       <div class="srow"><span class="lbl">Schimmelrisiko erst melden nach<small>Minuten über der Grenze, damit kurzes Duschen oder Kochen nicht meldet; nicht bei offenem Fenster im Raum</small></span><input class="inp s" type="number" min="0" max="240" data-set="alerts.mold_min" data-num="1" value="${A.mold_min ?? 30}"></div>
       <div class="fl-title">Eigene Regeln</div>
+      ${rules ? modeLegend("Regel gilt in den markierten Hausmodi") : ""}
       ${rules || '<p class="hint">Noch keine eigenen Regeln. Beispiele: Speicher oben unter 45 °C, Kamin über 85 °C, Akku unter 15 %, Waschmaschine seit 3 Stunden an.</p>'}
       <div class="srow"><button class="pbtn" data-act="s-rule-add">${icon("mdi:plus")}Regel hinzufügen</button>
         <span class="lbl" style="flex:0 0 auto;min-width:0"><small>Vorlagen:</small></span>
@@ -548,9 +557,15 @@ const EinstellungenMixin = (Base) => class extends Base {
     return this._setTabSel;
   }
 
+  /** Speichern-Leiste: in welchen Reitern Änderungen offen sind. */
+  _dirtyWhere() {
+    const tabs = SET_TABS.filter(([k]) => this._tabDirty(k)).map(([, t]) => t);
+    return tabs.length ? `<small class="where">in ${tabs.map(esc).join(", ")}</small>` : "";
+  }
+
   /** Hat der Reiter ungespeicherte Änderungen? */
   _tabDirty(tab) {
-    const D = this._draft, L = this._layout;
+    const D = this._draft, L = this._draftBase || this._layout;
     if (!D || !this._dirtySettings) return false;
     const own = SET_TAB_KEYS[tab] || Object.keys(D).filter((k) => !Object.values(SET_TAB_KEYS).flat().includes(k));
     return own.some((k) => JSON.stringify(D[k] ?? null) !== JSON.stringify(L[k] ?? null));

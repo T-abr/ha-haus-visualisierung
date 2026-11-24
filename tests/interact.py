@@ -906,6 +906,38 @@ def einstellungen_reiter():
     check("TR-Handy: Anzeige verschwindet nach kurzer Zeit", "on" not in mp.locator(f"{P} .trend .trtip").get_attribute("class"))
     ctx.close()
 
+@gruppe("einstellungen")
+def einstellungen_speichern():
+    # ---------- Speichern klar gekennzeichnet, nur Geändertes speichern, Hausmodus-Legende (1.19.0) ----------
+    pg.goto(dense + "?view=einstellungen/alarme"); pg.wait_for_timeout(600)
+    leg = pg.locator(f"{P} .mlegend")
+    check("SP: Legende der Hausmodi über den Regeln (Handy hat keine Tooltips)", leg.count() >= 1 and all(t in leg.first.inner_text() for t in ("Zuhause", "Nacht", "Abwesend", "Urlaub")))
+    check("SP: Hausmodus-Symbole tragen ihren Namen", pg.locator(f'{P} .mchip[data-path="alerts.modes.contacts"][data-m=nacht]').get_attribute("aria-label") == "Nacht")
+    check("SP: Code und PIN mit eigenem Knopf, gekennzeichnet", "Code setzen" in pg.locator(f"{P} [data-act=s-code-save]").inner_text()
+          and "PIN setzen" in pg.locator(f"{P} [data-act=s-pin-save]").inner_text() and pg.locator(f"{P} .instant:has-text('eigener Knopf')").count() == 2)
+    check("SP: Hinweis oben erklärt Speichern-Leiste und Sofort-Kennzeichen", pg.locator(f"{P} .savehint .instant").count() == 1)
+    check("SP: ohne Änderungen ist „Verwerfen“ gesperrt", pg.locator(f"{P} [data-act=s-reset]").is_disabled())
+    pg.locator(f'{P} .mchip[data-path="alerts.modes.contacts"][data-m=nacht]').click(); pg.wait_for_timeout(200)
+    check("SP: Leiste nennt den Reiter mit offenen Änderungen", "Alarme" in pg.locator(f"{P} .savebar .where").inner_text() and not pg.locator(f"{P} [data-act=s-reset]").is_disabled())
+    # Ein anderes Gerät speichert inzwischen etwas, das hier nicht geändert wurde
+    pg.evaluate("window.__api.hass.callWS({ type: 'x/save', changes: [{ path: ['camera_interval'], value: 42 }] })"); pg.wait_for_timeout(200)
+    pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
+    saved = pg.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout)")
+    check("SP: Speichern schickt nur Geändertes – Wert des anderen Geräts bleibt", saved["camera_interval"] == 42 and saved["alerts"]["modes"]["contacts"] == ["zuhause", "abwesend", "urlaub"])
+    check("SP: danach alles gespeichert", pg.locator(f"{P} .savebar .msg").inner_text() == "Alles gespeichert" and pg.locator(f"{P} .savebar .where").count() == 0)
+    stab(pg, "darstellung")
+    check("SP: Standard-Dashboard als „wirkt sofort“ gekennzeichnet", pg.locator(f"{P} [data-sec=default-panel] h2 .instant").count() == 1)
+    # Karten und Panel: erneutes Einhängen (Ansichtswechsel im Dashboard) hängt keine Maus-Handler doppelt an
+    pg.goto(dense); pg.wait_for_timeout(600)
+    n = pg.evaluate(f"""(() => {{ const p = {PP}, par = p.parentNode, nx = p.nextSibling;
+      for (let i = 0; i < 2; i++) {{ par.removeChild(p); par.insertBefore(p, nx); }}
+      let c = 0; const orig = p._more; p._more = () => {{ c++; }};
+      const t = p.shadowRoot.querySelector('[data-long]');
+      if (t) t.dispatchEvent(new MouseEvent('contextmenu', {{ bubbles: true, composed: true, cancelable: true }}));
+      p._more = orig; return t ? c : -1; }})()""")
+    check("SP: nach erneutem Einhängen öffnet Rechtsklick/Langdruck nur einmal", n == 1)
+
+
 @gruppe("anwesenheit")
 def anwesenheits_simulation():
     # ---------- Anwesenheits-Simulation (Reiter „Alarme“) ----------

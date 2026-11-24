@@ -565,6 +565,29 @@ class LayoutStore:
     def data(self) -> dict:
         return self._data
 
+    async def async_patch(self, changes: list[dict]) -> dict:
+        """Nur die geänderten Einstellungen in den aktuellen Stand übernehmen.
+
+        Jede Änderung ist ``{"path": [...], "value": x}`` oder ``{"path": [...], "delete": True}``; der Pfad führt
+        über Schlüssel von Objekten (Listen werden als Ganzes ersetzt). So überschreibt ein zweites Gerät mit älterem
+        Stand nichts, was es selbst nicht angefasst hat.
+        """
+        data = copy.deepcopy(self._data)
+        for change in changes:
+            path = change.get("path")
+            if not isinstance(path, list) or not path or len(path) > 8 or not all(isinstance(k, str) for k in path):
+                continue
+            node = data
+            for key in path[:-1]:
+                if not isinstance(node.get(key), dict):
+                    node[key] = {}
+                node = node[key]
+            if change.get("delete"):
+                node.pop(path[-1], None)
+            elif "value" in change:
+                node[path[-1]] = copy.deepcopy(change["value"])
+        return await self.async_save(data)
+
     async def async_save(self, raw: Any) -> dict:
         self._data = sanitize(raw)
         await self._store.async_save(self._data)

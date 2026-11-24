@@ -37,7 +37,7 @@ function simSettingsHTML(p, D) {
   const opt = (e) => `<option value="${esc(e)}">${esc(entName(h, e))}</option>`;
   const tg = (path, on) => `<label class="tgl"><input type="checkbox" data-set="${path}" data-bool="1" ${on ? "checked" : ""}><span></span></label>`;
   const chips = S.entities.map((e) => `<span class="pin">${esc(h.states[e] ? entName(h, e) : e)}<button data-act="s-sim-del" data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`).join("");
-  const mchips = `<span class="mchips">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip${S.modes.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="presence_sim.modes" data-m="${k}" title="${t}">${icon(i)}</button>`).join("")}</span>`;
+  const mchips = `<span class="mchips wrap">${HOUSE_MODES.map(([k, t, i]) => `<button class="mchip lbl${S.modes.includes(k) ? " on" : ""}" data-act="s-mode-chip" data-path="presence_sim.modes" data-m="${k}" aria-pressed="${S.modes.includes(k)}">${icon(i)}${t}</button>`).join("")}</span>`;
   return `<div class="set glass" data-sec="presence_sim"><h2>${icon("mdi:home-lightbulb-outline")}Anwesenheits-Simulation</h2>
     <p class="hint">Im Urlaub schaltet Home Assistant die ausgewählten Lichter und Rollos wie an einem echten Tag der letzten Wochen (aus dem Verlauf, bevorzugt derselbe Wochentag), jede Schaltzeit leicht zufällig verschoben. Läuft im Hintergrund, auch ohne offenes Panel, und endet sofort, wenn der Hausmodus wechselt – z. B. bei der Rückkehr. Benötigt den Recorder (Verlauf).</p>
     <div class="srow"><span class="lbl">Anwesenheit simulieren</span>${tg("presence_sim.enabled", S.enabled)}</div>

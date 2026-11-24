@@ -4,6 +4,13 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Verbessert – Speichern, Beschriftung, Caching
+- **Nur Geändertes speichern:** Das Panel schickt beim Speichern nur noch die geänderten Einstellungen (`changes`), nicht mehr den ganzen Stand. Ein zweites Gerät mit älterem Stand überschreibt damit nichts mehr, was es selbst nicht angefasst hat. `layout` (ganzer Stand) geht weiterhin, z. B. für Import und ältere Panels.
+- **Speichern klar gekennzeichnet:** Hinweis unter den Reitern; alles, was ohne die Speichern-Leiste wirkt, trägt ein gelbes Kennzeichen „wirkt sofort“ (Wandpanel-Gerät, Standard-Dashboard, Display zuordnen) bzw. „eigener Knopf“ (Code der Alarmanlage, PIN, Knöpfe heißen jetzt „Code setzen“ und „PIN setzen“). Die Leiste nennt die Reiter mit offenen Änderungen, „Verwerfen“ ist ohne Änderungen gesperrt.
+- **Hausmodus-Symbole beschriftet:** Über festen Regeln, eigenen Regeln und Aktionen steht eine Legende mit den Namen der Hausmodi (am Handy gibt es keine Tooltips); die Schaltflächen tragen ihren Namen auch für Screenreader. In der Anwesenheits-Simulation stehen die Namen direkt in den Schaltflächen.
+- **Frontend-Dateien werden zwischengespeichert:** Die Adresse enthält die Version, deshalb darf der Browser die Dateien jetzt lange behalten; nach einem Update lädt er automatisch die neuen.
+- **Karten:** Beim Ansichtswechsel im Dashboard kamen Zeiger- und Kontextmenü-Handler bei jedem erneuten Einhängen doppelt dazu; jetzt bleibt es bei einem.
+
 ## 1.18.1 – 2026-11-24
 
 Mitgelieferte Firmware **0.6.1** – Update im Reiter Displays über „Update auf 0.6.1“.

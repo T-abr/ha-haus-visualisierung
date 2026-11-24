@@ -336,6 +336,8 @@ const OUTDOOR_RE = /(au(ß|ss)en|garten|drau(ß|ss)en|outdoor|grundst(ü|ue)ck)/
 
 /* ---------- DOM-Helfer ---------- */
 const icon = (i, cls = "") => `<ha-icon icon="${esc(i)}"${cls ? ` class="${cls}"` : ""}></ha-icon>`;
+/** Einstellungen: Kennzeichen für alles, was ohne die Speichern-Leiste sofort wirkt. */
+const instant = (text = "wirkt sofort") => `<span class="instant" title="ohne die Speichern-Leiste">${icon("mdi:flash")}${text}</span>`;
 function setText(el, sel, txt) {
   const n = sel ? el.querySelector(sel) : el;
   if (n && n.textContent !== txt) n.textContent = txt;
@@ -369,4 +371,4 @@ const NAV = [
  *  ohne Ringabhängigkeit nachladen können. */
 const UPD = {};
 
-export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, withDefaults };
+export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, instant, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, withDefaults };

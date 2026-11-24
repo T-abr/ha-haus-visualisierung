@@ -4,7 +4,7 @@
  * Gedacht gegen Besuch und Kinder an Wandpanels, kein Ersatz für Benutzerrechte in Home Assistant. */
 
 import { DOMAIN } from "./version.js";
-import { esc, icon, MODE_NAME } from "./grundlagen.js";
+import { esc, icon, instant, MODE_NAME } from "./grundlagen.js";
 import { ALARMS } from "./warnungen.js";
 
 const UNLOCK_MS = 30000;
@@ -103,8 +103,8 @@ function pinSettingsHTML(D) {
   const tg = (k, label, hint) => `<div class="srow"><span class="lbl">${label}<small>${hint}</small></span><label class="tgl"><input type="checkbox" data-set="pin.${k}" data-bool="1" ${P[k] ? "checked" : ""}><span></span></label></div>`;
   return `<div class="set glass" data-sec="pin"><h2>${icon("mdi:dialpad")}PIN für heikle Aktionen</h2>
     <p class="hint">Am Wandpanel und am Wanddisplay hat jeder Zugriff, auch Besuch und Kinder. Mit einer PIN fragen diese Aktionen vorher nach. Die PIN bleibt in Home Assistant (nur als Prüfsumme) und wird nicht an Browser geschickt; nach fünf Fehlversuchen ist die Eingabe eine Minute gesperrt. Das ist ein Schutz vor versehentlichem oder neugierigem Tippen, kein Ersatz für Benutzerrechte.</p>
-    <div class="srow"><span class="lbl">PIN<small>${set ? "gesetzt ✓ – neue eingeben zum Ändern, leer speichern zum Löschen" : "noch keine – 4 bis 8 Ziffern; ohne PIN fragt nichts nach"}</small></span>
-      <input class="inp s" type="password" inputmode="numeric" autocomplete="off" maxlength="8" id="hv-pin" placeholder="${set ? "••••" : "PIN"}"><button class="pbtn sm" data-act="s-pin-save">${icon("mdi:content-save-outline")}Speichern</button></div>
+    <div class="srow"><span class="lbl">PIN ${instant("eigener Knopf")}<small>${set ? "gesetzt ✓ – neue eingeben zum Ändern, leer setzen zum Löschen" : "noch keine – 4 bis 8 Ziffern; ohne PIN fragt nichts nach"}; „PIN setzen“ speichert sofort, die Schalter darunter über die Leiste unten</small></span>
+      <input class="inp s" type="password" inputmode="numeric" autocomplete="off" maxlength="8" id="hv-pin" placeholder="${set ? "••••" : "PIN"}"><button class="pbtn sm" data-act="s-pin-save">${icon("mdi:lock-check-outline")}PIN setzen</button></div>
     ${tg("door", "Tür öffnen", "Türöffner im Klingelfenster und Schlösser entriegeln")}
     ${tg("disarm", "Alarm aus", `aus ${SECURE.map((k) => MODE_NAME[k]).join(", ")} zurück auf „Zuhause“ (schaltet die Alarmanlage unscharf, wenn gekoppelt)`)}
     ${tg("arm", "Abwesend und Urlaub einschalten", "Nacht fragt nie nach, damit „Gute Nacht“ immer geht")}
