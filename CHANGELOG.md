@@ -5,9 +5,11 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ## Unveröffentlicht
 
 ### Behoben
+- **Kein Bewegungsalarm in Abwesend/Urlaub.** Wurde Abwesend oder Urlaub von Hand gesetzt, während eine Person noch als „zu Hause“ galt, setzte die Automatik den Hausmodus beim nächsten Standort-Update der Companion-App (gleicher Zustand, neue Koordinaten) sofort zurück auf Zuhause. Danach meldete der Alarmmanager Bewegung nicht mehr. Die Automatik reagiert jetzt nur noch auf echte Zustandswechsel der Personen: Zurück auf Zuhause geht es erst, wenn jemand ankommt; „alle weg → Abwesend“ bleibt wie bisher.
 - **Energiefluss: „Speicher entlädt“ fehlte.** Die automatische Erkennung der Speicher-Leistung konnte einen reinen Lade- oder Entladesensor erwischen (z. B. Growatt „Battery Charge Power“, immer ≥ 0) statt des vorzeichenbehafteten Sensors. Dann zeigte der Fluss nur eine Richtung, und Gesamtverbrauch, Autarkie und Bilanz rechneten falsch. Solche Sensoren (Namen mit „charge“/„discharge“, „Laden“/„Entladen“) werden jetzt übersprungen, im Panel wie fürs Wanddisplay. Eine fest eingestellte Speicher-Leistung (Einstellungen → Energie) hat weiterhin Vorrang.
 
 ### Tests
+- Hausmodus: Abwesend und Urlaub von Hand bleiben bei Standort-Updates bestehen, Bewegung löst Alarm und kritische Push-Meldung aus, eine Ankunft schaltet zurück auf Zuhause.
 - Energie: Lade- und Entladesensoren vor dem eigentlichen Speicher-Sensor, Entladen muss als Fluss zum Haus erscheinen.
 
 ## 1.19.0 – 2026-11-24
