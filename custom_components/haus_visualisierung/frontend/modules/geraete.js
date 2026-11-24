@@ -130,13 +130,6 @@ function applWatch(el, c) {
 }
 
 /* ---------- Meldungen und Bildschirmschoner ---------- */
-/** Fertige Geräte als Meldungen (gleicher Schlüssel wie im Backend, damit Quittieren zusammenpasst). */
-function applAlerts(h, L) {
-  return applList(h, L).filter((a) => a.state === "fertig").map((a) => ({
-    key: `appliance:${a.id}`, level: "info", icon: a.icon || "mdi:check-circle-outline", title: `${a.name} fertig`,
-    detail: [`seit ${durTxt(sinceMin(a.end || a.since))}`, costTxt(a.kwh, a.cost, null)].filter(Boolean).join(" · "), eid: a.power || undefined,
-  }));
-}
 /** Kurzer Hinweis für den Bildschirmschoner: „Waschmaschine fertig seit 12 min“ bzw. „Spülmaschine noch ca. 20 min“. */
 function applSaverHint(h, L) {
   const list = applList(h, L), done = list.filter((a) => a.state === "fertig");
@@ -145,4 +138,4 @@ function applSaverHint(h, L) {
   return run.length ? { icon: "mdi:washing-machine", text: run.join(" · ") } : null;
 }
 
-export { applAlerts, applCardHTML, applList, applSaverHint, applShown, applWatch, GERAETE, startTip, updateAppl };
+export { applCardHTML, applList, applSaverHint, applShown, applWatch, GERAETE, startTip, updateAppl };

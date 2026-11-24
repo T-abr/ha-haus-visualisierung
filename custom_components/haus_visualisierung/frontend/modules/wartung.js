@@ -74,12 +74,6 @@ const maintList = (L) => (maintOn(L) ? L.maintenance.tasks.map((t) => taskInfo(t
   .sort((a, b) => (a.days ?? -1e9) - (b.days ?? -1e9) || String(a.t.title).localeCompare(String(b.t.title), "de"));
 const maintDueCount = (L) => maintList(L).filter((i) => i.status === "due").length;
 
-/** Meldungen: fällige Aufgaben als Hinweis (wie alerts.py, _maint_alerts) */
-const maintAlerts = (L) => maintList(L).filter((i) => i.status === "due").map((i) => ({
-  key: `maint:${i.t.id}`, level: "info", icon: i.t.icon || "mdi:wrench-clock", title: `Wartung fällig · ${i.t.title || "Aufgabe"}`,
-  detail: i.days === null ? "noch nie erledigt" : i.days === 0 ? "heute fällig" : `seit ${-i.days} ${i.days === -1 ? "Tag" : "Tagen"} fällig`, to: "wartung",
-}));
-
 /* ---------- Seite „Wartung“ ---------- */
 function rowHTML(i) {
   const t = i.t, last = i.last.date ? `zuletzt ${fmtDay(i.last.date)}${i.last.by ? ` · ${esc(i.last.by)}` : ""}` : "";
@@ -147,4 +141,4 @@ function maintSettingsHTML(D) {
       ${TEMPLATES.map(([k, title, ic]) => `<button class="pbtn sm" data-act="s-wt-tpl" data-tpl="${k}">${icon(ic)}${esc(title)}</button>`).join("")}</div></div>`;
 }
 
-export { addInterval, MAINT, maintAlerts, maintCall, maintDueCount, maintOn, maintPageHTML, maintSettingsHTML, newTask, setMaint, taskInfo };
+export { addInterval, MAINT, maintCall, maintDueCount, maintOn, maintPageHTML, maintSettingsHTML, newTask, setMaint, taskInfo };

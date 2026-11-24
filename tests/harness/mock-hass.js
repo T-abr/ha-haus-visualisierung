@@ -1,3 +1,5 @@
+import { evaluate as evalAlertRules, MOLD } from "./mock-alerts.js";
+
 // Nachgebautes hass-Objekt mit Registern, Zuständen und Diensten.
 export function makeHass({ big = false, komfort = false, ov = "haus", hs = "kompakt" } = {}) {
   const states = {}, entities = {}, devices = {}, areas = {}, floors = {};
@@ -376,6 +378,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       const st = { entity_id: eid, ...old, state: String(state), attributes: { ...((old && old.attributes) || {}), ...(attrs || {}) }, last_changed: new Date().toISOString() };
       hass.states = { ...hass.states, [eid]: st };
       api.hass = hass; listeners.forEach((l) => l({ ...hass }));
+      api.alarmSync();
     },
     onChange(l) { listeners.push(l); },
     /** Tagesverlauf für Testdaten: endet beim aktuellen Wert. */
@@ -403,6 +406,24 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     dispDevices: [{ name: "haus-display-a1b2c3", title: "Haus Display a1b2c3", flow_id: "f1", entry_id: null, host: "", online: true, allowed: false, ready: false, version: "", display: null, hello: false, disabled: false, update: false, ota: false }],
     dispFirmware: { version: "0.2.0", manifest: "/haus_visualisierung_static/firmware/1.13.0/manifest.json", bin: "/haus_visualisierung_static/firmware/1.13.0/haus-display.factory.bin" },
     alarmSnap: (() => { try { const s = JSON.parse(sessionStorage.getItem("hv-alarms")); if (s) return s; } catch (e) { /* neu */ } return { rev: 0, alarms: {}, log: [], today: { alarm: 0, warn: 0, info: 0 }, mode: { mode: "zuhause", since: 0, by: "Automatik", panel: null, sync: false, code: false } }; })(),
+    mold: MOLD,
+    /* wie AlertMonitor._process + AlarmBook.sync: Warnregeln (mock-alerts.js) auswerten, aktive Meldungen in den Schnappschuss */
+    alarmSync() {
+      const P = document.querySelector("haus-visualisierung-panel");
+      if (!P || !P._model || !P._hass || !P._layout) return;
+      const snap = api.alarmSnap, now = Date.now() / 1000, old = snap.alarms || {};
+      const cur = evalAlertRules({ ...P._hass, states: api.hass.states }, P._model, P._layout, (snap.mode && snap.mode.mode) || "zuhause", old);
+      const A = {};
+      for (const al of cur) {
+        const a = { ...(old[al.key] || { key: al.key, status: "neu", since: now }), level: al.level, title: al.title, detail: al.detail || "" };
+        for (const f of ["icon", "eid", "to", "fmt", "ts"]) { if (al[f]) a[f] = al[f]; else delete a[f]; }
+        A[al.key] = a;
+      }
+      const active = cur.map((a) => a.key);
+      if (JSON.stringify([A, active]) === JSON.stringify([old, snap.active || []])) return;
+      api.alarmSnap = { ...snap, alarms: A, active };
+      api.alarmPush();
+    },
     alarmPush() { api.alarmSnap = { ...api.alarmSnap, rev: api.alarmSnap.rev + 1 }; try { sessionStorage.setItem("hv-alarms", JSON.stringify(api.alarmSnap)); } catch (e) { /* egal */ } if (api.alarmCb) api.alarmCb(api.alarmSnap); },
     alarmAdd(key, level, title, extra = {}) {
       const now = Date.now() / 1000;
@@ -414,9 +435,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     alarmAction(msg) {
       const now = Date.now() / 1000, A = { ...api.alarmSnap.alarms };
       const one = (key, action) => {
-        const P = document.querySelector("haus-visualisierung-panel");
-        const ev = !A[key] && P && P._model ? window.__HAUS_VIS__.evalAlertsAll(P._hass, P._model, P._layout).find((x) => x.key === key) : null;
-        const a = A[key] ? { ...A[key] } : { key, status: "neu", since: now, level: ev ? ev.level : "warn", title: ev ? ev.title : key };
+        const a = A[key] ? { ...A[key] } : { key, status: "neu", since: now, level: "warn", title: key };
         if (action === "ack") Object.assign(a, { status: "quittiert", ack_by: "Tobias", ack_at: now });
         if (action === "mute") Object.assign(a, { status: "stumm", mute_until: msg.until === "resolved" ? 0 : msg.until === "morning" ? now + 36000 : now + (msg.minutes || 60) * 60 });
         if (action === "unmute") { a.status = a.ack_at ? "quittiert" : "neu"; delete a.mute_until; }
@@ -426,9 +445,6 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       };
       let res;
       if (msg.action === "ack_all") {
-        // wie das Backend: alle aktiven Meldungen kennen (hier aus der Auswertung des Panels)
-        const P = document.querySelector("haus-visualisierung-panel");
-        for (const a of window.__HAUS_VIS__.evalAlertsAll(P._hass, P._model, P._layout)) if (!A[a.key]) A[a.key] = { key: a.key, level: a.level, title: a.title, status: "neu", since: now };
         for (const k of Object.keys(A)) if (A[k].status === "neu") res = one(k, "ack");
         res = res || {};
       }
@@ -452,6 +468,8 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       }
     },
   };
+  // Das Backend wertet auch ohne Zustandsänderung aus (Layout gespeichert, Hausmodus, Zeit): hier alle 150 ms
+  setInterval(() => api.alarmSync(), 150);
   api.fcSet([[8, 3, "partlycloudy"], [9, 4, "cloudy", 2], [7, 2, "rainy", 6], [6, 1, "cloudy"], [8, 2, "sunny"]]);
   return api;
 }

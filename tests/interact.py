@@ -1158,7 +1158,7 @@ def verzoegerung_heizen():
     keys = lambda: pg.evaluate(f"window.__HAUS_VIS__.evalAlertsAll(window.__api.hass, {PP}._model, {PP}._layout).map(a => a.key)")
     check("FH: Fenster beim Heizen erst nach der eingestellten Zeit", "heat:kuche" not in keys() and "contact:binary_sensor.kuche_fenster" not in keys())
     # Fenster seit 11 Minuten offen: Zeitpunkt der letzten Änderung zurückdatieren
-    pg.evaluate("(() => { const H = window.__api.hass, st = H.states['binary_sensor.kuche_fenster']; H.states = { ...H.states, 'binary_sensor.kuche_fenster': { ...st, last_changed: new Date(Date.now() - 11 * 60000).toISOString() } }; })()")
+    pg.evaluate("(() => { const H = window.__api.hass, st = H.states['binary_sensor.kuche_fenster']; H.states = { ...H.states, 'binary_sensor.kuche_fenster': { ...st, last_changed: new Date(Date.now() - 11 * 60000).toISOString() } }; })()"); pg.wait_for_timeout(300)  # Backend wertet aus
     check("FH: nach 11 Min. „Fenster offen beim Heizen“", "heat:kuche" in keys() and "contact:binary_sensor.kuche_fenster" not in keys())
 
 @gruppe("klima")
@@ -1262,7 +1262,7 @@ def klima_feuchte():
     # Schimmelrisiko im Alarmmanager
     keys = lambda: pg.evaluate(f"window.__HAUS_VIS__.evalAlertsAll(window.__api.hass, {PP}._model, {PP}._layout).map(a => a.key)")
     mold = lambda: pg.evaluate(f"(window.__HAUS_VIS__.evalAlertsAll(window.__api.hass, {PP}._model, {PP}._layout).find(a => a.key === 'mold:bad') || null)")
-    back = lambda m: pg.evaluate(f"(() => {{ const r = window.__HAUS_VIS__.MOLD.get('bad'); if (r) r.since -= {m} * 60000; }})()")
+    back = lambda m: pg.evaluate(f"(() => {{ const r = window.__api.mold.get('bad'); if (r) r.since -= {m} * 60000; }})()")
     pg.evaluate("window.__api.set('sensor.bad_feuchte', '72')"); pg.wait_for_timeout(250)
     check("SR: Schimmelrisiko nicht sofort (Duschen)", "mold:bad" not in keys())
     back(29); pg.wait_for_timeout(1100)
@@ -1274,7 +1274,7 @@ def klima_feuchte():
     check("SR: erscheint in der Warnkarte und an der Glocke", "Schimmelrisiko" in pg.evaluate(f"{R}.querySelector('[data-k=alerts] .ct, .acard .sst') ? {R}.querySelector('[data-k=alerts] .ct, .acard .sst').textContent : ''") or pg.locator(f"{P} .navbadge, {P} [data-u=navbadge]").count() >= 1)
     # Schlafzimmer: Fenster steht offen
     pg.evaluate("window.__api.set('sensor.schlafzimmer_feuchte', '74')"); pg.wait_for_timeout(1100)
-    pg.evaluate("(() => { const r = window.__HAUS_VIS__.MOLD.get('schlafzimmer'); if (r) r.since -= 40 * 60000; })()"); pg.wait_for_timeout(1100)
+    pg.evaluate("(() => { const r = window.__api.mold.get('schlafzimmer'); if (r) r.since -= 40 * 60000; })()"); pg.wait_for_timeout(1100)
     check("SR: Fenster im Raum offen – keine Meldung (es wird gelüftet)", "mold:schlafzimmer" not in keys() and "mold:bad" in keys())
     pg.evaluate("window.__api.set('binary_sensor.schlafzimmer_fenster', 'off')"); pg.wait_for_timeout(1100)
     check("SR: Fenster zu und noch feucht – sofort da", "mold:schlafzimmer" in keys())
@@ -1290,7 +1290,7 @@ def klima_feuchte():
     check("SR: draußen feuchter – heizen oder entfeuchten statt lüften", al and al["detail"].endswith("draußen feuchter, besser heizen oder entfeuchten"))
     check("KF: Kopfkarte – „Draußen feuchter“", "Draußen feuchter" in ch.locator(".ctstats").inner_text() and ch.locator(".cts.vent.nicht").count() == 1)
     # Backend hat die Meldung schon (z. B. nach Neuladen): ohne erneute Wartezeit
-    pg.evaluate("(() => { window.__HAUS_VIS__.MOLD.clear(); })()")
+    pg.evaluate("(() => { window.__api.mold.clear(); })()")
     pg.evaluate(f"(() => {{ const a = window.__api; a.alarmSnap.alarms = {{ ...(a.alarmSnap.alarms || {{}}), 'mold:bad': {{ key: 'mold:bad', status: 'neu', since: Date.now() / 1000 - 3600 }} }}; a.alarmPush(); }})()"); pg.wait_for_timeout(1100)
     check("SR: nach Neuladen sofort, wenn das Backend die Meldung führt", "mold:bad" in keys())
     pg.evaluate("(() => { const a = window.__api; delete a.alarmSnap.alarms['mold:bad']; a.alarmPush(); a.set('sensor.bad_feuchte', '64'); a.set('sensor.aussen_temperatur', '6.8'); a.set('sensor.aussen_feuchte', '86'); })()"); pg.wait_for_timeout(1100)
@@ -2290,7 +2290,7 @@ def wetterwarnungen():
     al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).map(a => [a.key, a.level, a.to]); }})()")
     check("WW: Meldungen im Alarmmanager", al == [["wx:dwd:gewitter", "warn", "beschattung"], ["wx:rain", "warn", "sicherheit"]])
     # feste Regel aus → keine Meldungen
-    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, builtin: {{ ...p._layout.alerts.builtin, weather: false }} }} }}; }})()")
+    pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, alerts: {{ ...p._layout.alerts, builtin: {{ ...p._layout.alerts.builtin, weather: false }} }} }}; }})()"); pg.wait_for_timeout(300)  # Backend wertet aus
     al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).length; }})()")
     check("WW: Regel „Wetter“ aus → keine Meldungen", al == 0)
     # Einstellungen

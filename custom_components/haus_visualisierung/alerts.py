@@ -1,8 +1,9 @@
 """Warnungen im Hintergrund auswerten und als Push-Benachrichtigung verschicken.
 
-Die Regeln entsprechen denen im Panel (frontend/haus-visualisierung.js, evalAlerts):
-feste Regeln (Fenster, Fenster beim Heizen, Melder, Schloss, Garagentor, Batterien,
-offline, Schimmelrisiko) und eigene Regeln. So kommen Meldungen auch an, wenn kein Panel offen ist.
+Die Regeln stehen nur hier: feste Regeln (Fenster, Fenster beim Heizen, Melder, Schloss, Garagentor,
+Batterien, offline, Schimmelrisiko, Geräte, Wartung, Wetter) und eigene Regeln. Das Panel, das Wandpanel
+und die Displays zeigen die aktiven Meldungen nur an (Alarmmanager-Abo, alarms.py). So kommen Meldungen
+auch an, wenn kein Panel offen ist.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from .appliances import ApplianceTracker
 from .alarms import ACKED, MUTED, AlarmBook
 from homeassistant.util import dt as dt_util
 
-from .const import BUILTIN_MODES, DOMAIN, HOUSE_MODES, PANEL_URL_PATH
+from .const import BUILTIN_MODES, DOMAIN, HOUSE_MODE_NAMES, HOUSE_MODES, PANEL_URL_PATH
 from .maintenance import due_info, due_text
 from .mode import HouseMode
 from .presence import PresenceSimulator
@@ -62,6 +63,14 @@ OUTDOOR_RE = re.compile(r"(au(ß|ss)en|garten|drau(ß|ss)en|outdoor|grundst(ü|u
 TECH_RE = re.compile(r"(vorlauf|r(ü|ue)cklauf|speicher|puffer|kessel|kamin|solar|kollektor|boiler|warmwasser|abgas|cpu)", re.IGNORECASE)
 LEVEL_ORDER = {"alarm": 3, "warn": 2, "info": 1}
 LEVEL_NAME = {"alarm": "Alarm", "warn": "Warnung", "info": "Hinweis"}
+BATT_ICON = "mdi:battery-alert-variant-outline"
+
+
+def _mdi(icon: str | None) -> str:
+    """Symbolname fürs Panel: „mdi:“ ergänzen, falls es fehlt."""
+    if not icon:
+        return ""
+    return icon if ":" in icon else f"mdi:{icon}"
 
 
 def is_on(st: State | None) -> bool:
@@ -193,7 +202,14 @@ class Alert:
     level: str
     title: str
     detail: str = ""
-    path: str = "sicherheit"
+    path: str = "sicherheit"   # Ziel der Push-Nachricht
+    # Nur fürs Panel: Symbol (leer = Symbol der Entität), Entität, Ziel im Panel (leer = Details der Entität)
+    # und wie das Panel den Untertitel live bildet: "state" Zustand, "since" „seit …“, "ago" „vor …“ (leer = detail)
+    icon: str = ""
+    eid: str = ""
+    to: str = ""
+    fmt: str = ""
+    ts: float = 0              # Zeitpunkt für "since"/"ago" (0 = letzte Änderung der Entität)
 
 
 @dataclass
@@ -424,7 +440,8 @@ class AlertMonitor:
             advice = vent_advice(t, rh, t_out, rh_out) if t is not None else None
             detail = f"{rh:.0f} %" + (f" bei {_de(t, 1)}°" if t is not None else "") + (f" · Taupunkt {_de(dp, 1)}°" if dp is not None else "")
             detail += " – draußen feuchter, besser heizen oder entfeuchten" if advice == "nicht" else " – jetzt lüften"
-            out.append(Alert(f"mold:{r.area_id}", "warn", f"Schimmelrisiko · {r.name}", detail, f"raum/{r.area_id}"))
+            out.append(Alert(f"mold:{r.area_id}", "warn", f"Schimmelrisiko · {r.name}", detail, f"raum/{r.area_id}",
+                             icon="mdi:water-alert", eid=r.hum_id, to=f"raum/{r.area_id}"))
         for area_id in [k for k in self._mold if k not in seen]:
             del self._mold[area_id]
         return out
@@ -442,7 +459,8 @@ class AlertMonitor:
         for t in cfg.get("tasks", []):
             _due, days = due_info(t, state, today)
             if days is None or days <= 0:
-                out.append(Alert(f"maint:{t['id']}", "info", f"Wartung fällig · {t.get('title') or 'Aufgabe'}", due_text(days), "wartung"))
+                out.append(Alert(f"maint:{t['id']}", "info", f"Wartung fällig · {t.get('title') or 'Aufgabe'}", due_text(days), "wartung",
+                                 icon=_mdi(t.get("icon")) or "mdi:wrench-clock", to="wartung"))
         return out
 
     # ---------- Auswertung (wie evalAlerts im Panel) ----------
@@ -492,14 +510,15 @@ class AlertMonitor:
                 if b.get("window_heating", True) and heating(self._area_of.get(e)):
                     continue
                 if open_long(e):
-                    out.append(Alert(f"contact:{e}", "warn", f"{self._name(e)} offen"))
+                    out.append(Alert(f"contact:{e}", "warn", f"{self._name(e)} offen", eid=e, fmt="since"))
         if b.get("window_heating", True) and mode_ok("window_heating"):
             for r in self._rooms:
                 opened = [e for e in r.groups.get("contact", []) if open_long(e)]
                 if opened and heating(r):
                     names = ", ".join(self._name(e).split(" · ", 1)[-1] for e in opened)
                     out.append(Alert(f"heat:{r.area_id}", "warn", f"Fenster offen beim Heizen · {r.name}",
-                                     f"{names} offen – Heizung läuft dagegen", f"raum/{r.area_id}"))
+                                     f"{names} offen – Heizung läuft dagegen", f"raum/{r.area_id}",
+                                     icon="mdi:radiator-disabled", to=f"raum/{r.area_id}"))
         if b.get("safety", True) and mode_ok("safety"):
             for r in self._rooms:
                 for e in r.groups.get("safety", []):
@@ -507,13 +526,14 @@ class AlertMonitor:
                     if e.startswith("alarm_control_panel."):
                         continue  # eigene Regel „Alarmanlage ausgelöst“
                     if is_on(st):
-                        out.append(Alert(f"safety:{e}", "alarm", self._name(e), "ausgelöst"))
+                        out.append(Alert(f"safety:{e}", "alarm", self._name(e), "ausgelöst", eid=e, fmt="state"))
         if b.get("alarm_panel", True) and mode_ok("alarm_panel"):
             for e in self._panels:
                 st = get(e)
                 if st and st.state == "triggered":
                     name = st.attributes.get("friendly_name") or e
-                    out.append(Alert(f"alarmpanel:{e}", "alarm", f"{name} ausgelöst", "Alarmanlage", "alarme"))
+                    out.append(Alert(f"alarmpanel:{e}", "alarm", f"{name} ausgelöst", "Alarmanlage", "alarme",
+                                     icon="mdi:alarm-light", eid=e))
         if b.get("presence_away", True) and mode_ok("presence_away"):
             for r in self._rooms:
                 for e in r.groups.get("presence", []):
@@ -523,18 +543,19 @@ class AlertMonitor:
                         if any(w in short for w in ("beweg", "präsenz", "praesenz", "motion", "presence", "anwesen")):
                             nm = r.name
                         out.append(Alert(f"presence:{e}", "alarm", f"{nm}: Bewegung erkannt",
-                                         f"während Hausmodus {mode.capitalize()}", f"raum/{r.area_id}"))
+                                         f"während Hausmodus {HOUSE_MODE_NAMES.get(mode, mode.capitalize())}", f"raum/{r.area_id}",
+                                         icon="mdi:motion-sensor", eid=e, to=f"raum/{r.area_id}"))
         if b.get("locks", True) and mode_ok("locks"):
             for r in self._rooms:
                 for e in r.groups.get("lock", []):
                     if is_on(get(e)):
-                        out.append(Alert(f"lock:{e}", "warn", f"{self._name(e)} entriegelt"))
+                        out.append(Alert(f"lock:{e}", "warn", f"{self._name(e)} entriegelt", icon="mdi:lock-open-variant", eid=e, fmt="ago"))
         if b.get("garage", True) and mode_ok("garage"):
             for r in self._rooms:
                 for e in r.groups.get("cover", []):
                     st = get(e)
                     if st and st.attributes.get("device_class") in ("garage", "gate") and is_on(st):
-                        out.append(Alert(f"garage:{e}", "warn", f"{self._name(e)} offen"))
+                        out.append(Alert(f"garage:{e}", "warn", f"{self._name(e)} offen", eid=e, fmt="ago"))
         if b.get("battery", False) and mode_ok("battery"):
             limit = layout.get("battery_critical", 15)
             crit = []
@@ -548,23 +569,28 @@ class AlertMonitor:
                 elif (v := num(st)) is not None and v < limit:
                     crit.append(e)
             if len(crit) == 1:
-                out.append(Alert("battery", "warn", f"{self._name(crit[0])} fast leer", fmt(get(crit[0])), "batterien"))
+                out.append(Alert("battery", "warn", f"{self._name(crit[0])} fast leer", fmt(get(crit[0])), "batterien",
+                                 icon=BATT_ICON, to="batterien"))
             elif crit:
-                out.append(Alert("battery", "warn", f"{len(crit)} Batterien fast leer", f"unter {limit} %", "batterien"))
+                out.append(Alert("battery", "warn", f"{len(crit)} Batterien fast leer", f"unter {limit} %", "batterien",
+                                 icon=BATT_ICON, to="batterien"))
         if b.get("offline", False) and mode_ok("offline"):
             n = sum(1 for e in self._all if is_unav(get(e)))
             if n:
-                out.append(Alert("offline", "info", f"{n} {'Gerät' if n == 1 else 'Geräte'} nicht erreichbar", path=""))
+                out.append(Alert("offline", "info", f"{n} {'Gerät' if n == 1 else 'Geräte'} nicht erreichbar", path="", icon="mdi:lan-disconnect"))
         if b.get("mold", True) and mode_ok("mold"):
             out.extend(self._mold_alerts(cfg, now))
         else:
             self._mold.clear()
         if b.get("appliances", True) and mode_ok("appliances"):
-            out.extend(Alert(key, "info", title, detail, "") for key, title, detail, _icon in self.appliances.alerts())
+            out.extend(Alert(key, "info", title, detail, "", icon=_mdi(icon) or "mdi:check-circle-outline", eid=eid,
+                             fmt="since" if since else "", ts=since)
+                       for key, title, detail, icon, eid, since in self.appliances.alerts())
         if b.get("maintenance", True) and mode_ok("maintenance"):
             out.extend(self._maint_alerts())
         if mode_ok("weather"):
-            out.extend(Alert(key, level, title, detail, path) for key, level, title, detail, path, _icon in self.weather.evaluate())
+            out.extend(Alert(key, level, title, detail, path, icon=_mdi(icon) or "mdi:weather-lightning", to=path)
+                       for key, level, title, detail, path, icon in self.weather.evaluate())
         else:
             self.weather.evaluate_off()
         for i, rule in enumerate(cfg.get("rules", [])):
@@ -578,7 +604,8 @@ class AlertMonitor:
                 continue
             if rule.get("minutes") and minutes_since(st) < rule["minutes"]:
                 continue
-            out.append(Alert(f"rule:{i}:{ent}", rule.get("level", "warn"), rule.get("title") or self._name(ent), fmt(st), ""))
+            out.append(Alert(f"rule:{i}:{ent}", rule.get("level", "warn"), rule.get("title") or self._name(ent), fmt(st), "",
+                             eid=ent, fmt="state"))
         out.sort(key=lambda a: -LEVEL_ORDER.get(a.level, 0))
         return out
 
