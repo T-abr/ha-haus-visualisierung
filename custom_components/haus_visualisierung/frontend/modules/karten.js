@@ -1,4 +1,6 @@
-/* Haus Visualisierung – Karten für eigene Dashboards: haus-raum-card und haus-hausschnitt-card. */
+/* Haus Visualisierung – Karten für eigene Dashboards: haus-raum-card und haus-hausschnitt-card.
+ * Geladen erst bei Bedarf über ../karten-loader.js; dessen Hüllen tragen die öffentlichen Namen, die Karten
+ * selbst laufen unter eigenen Namen darin. */
 
 import { DOMAIN } from "./version.js";
 import { DEFAULT_LAYOUT, esc, withDefaults } from "./grundlagen.js";
@@ -67,5 +69,8 @@ class HausHausschnittCard extends HvCardBase {
   }
   getCardSize() { return 8; }
 }
+
+if (!customElements.get("haus-raum-card-inhalt")) customElements.define("haus-raum-card-inhalt", HausRaumCard);
+if (!customElements.get("haus-hausschnitt-card-inhalt")) customElements.define("haus-hausschnitt-card-inhalt", HausHausschnittCard);
 
 export { HausHausschnittCard, HausRaumCard };

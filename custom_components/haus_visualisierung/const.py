@@ -12,6 +12,8 @@ STATIC_URL = "/haus_visualisierung_static"
 # Update neu geladen werden: relative Importe übernehmen den Pfad, aber keine ?v=-Angabe.
 FRONTEND_URL = f"{STATIC_URL}/{VERSION}"
 MODULE_URL = f"{FRONTEND_URL}/haus-visualisierung.js"
+# Kleiner Lader für die Dashboard-Karten: läuft auf jeder Seite, der Rest kommt erst bei Bedarf
+CARDS_URL = f"{FRONTEND_URL}/karten-loader.js"
 
 STORAGE_KEY = DOMAIN
 STORAGE_VERSION = 1

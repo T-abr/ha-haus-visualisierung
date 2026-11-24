@@ -4,6 +4,18 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Verbessert – Home Assistant lädt schneller
+- **Panel-Code nur noch bei Bedarf**: Bisher lud jeder Browser auf jeder Seite von Home Assistant das ganze Panel (rund 680 KB in 38 Dateien), nur damit die Dashboard-Karten bekannt sind. Jetzt läuft dort nur ein kleiner Lader (`karten-loader.js`, knapp 3 KB mit Versionsdatei). Das Panel lädt Home Assistant erst beim Öffnen, den Code der Karten (`haus-raum-card`, `haus-hausschnitt-card`) erst, wenn eine davon auf einem Dashboard steht. Für bestehende Dashboards ändert sich nichts.
+- **Vorgepackte Dateien im Release-ZIP**: Neben jeder JavaScript-Datei liegt eine `.js.gz`, die Home Assistant an Browser ausliefert, die gzip annehmen (rund 215 KB statt 680 KB für das Panel). Ist eine `.js` neuer als ihre `.gz` (z. B. Dateien von Hand kopiert), räumt die Integration die alte `.gz` beim Start weg.
+
+### Performance
+- Auf jeder HA-Seite: 2 statt 38 Frontend-Dateien, rund 3 KB statt 680 KB. Panel und Karten unverändert schnell, sobald geladen (kein Code darin geändert).
+- Bündeln und Verkleinern im Release geprüft und bewusst weggelassen: Mit gzip bleibt fast derselbe Gewinn ohne Build-Schritt, und die Module bleiben im Browser lesbar.
+
+### Tests
+- Bedienprüfung `karten`: ohne Karte lädt nur der Lader, mit Karte kommt `karten.js`, aber nicht das Panel; Karten zeigen Raum bzw. Hausschnitt und bekommen Zustandsänderungen.
+- `test_frontend.py`: Lader statt Panel als zusätzliches Modul auf jeder Seite, Lader bleibt klein, veraltete `.gz` werden entfernt.
+
 ## 1.18.1 – 2026-11-24
 
 Mitgelieferte Firmware **0.6.1** – Update im Reiter Displays über „Update auf 0.6.1“.

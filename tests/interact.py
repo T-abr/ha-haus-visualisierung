@@ -2310,6 +2310,29 @@ def wetterwarnungen():
     pg.evaluate("window.__api.set('sensor.haus_wetter', '0', { warnungen: [], regen: null, wind: null, meldungen: [] })")
 
 
+@gruppe("karten")
+def karten_bei_bedarf():
+    # ---------- Dashboard-Karten: kleiner Lader auf jeder Seite, Kartencode erst bei Bedarf ----------
+    res = "performance.getEntriesByType('resource').map(e => new URL(e.name).pathname).filter(n => n.endsWith('.js'))"
+    pg.goto(f"{ORIGIN}/mock-hass.js"); pg.wait_for_timeout(100)
+    files = pg.evaluate(f"import('/karten-loader.js').then(() => new Promise(r => setTimeout(r, 200))).then(() => {res})")
+    check("K: ohne Karte nur Lader und Version geladen", sorted(files) == ["/karten-loader.js", "/modules/version.js"])
+    check("K: Karten angemeldet und im Kartenwähler", pg.evaluate("!!customElements.get('haus-raum-card') && !!customElements.get('haus-hausschnitt-card') && window.customCards.filter(c => c.type.startsWith('haus-')).length === 2"))
+    check("K: Vorschlag und Größe vor dem Laden", pg.evaluate("[customElements.get('haus-raum-card').getStubConfig({ areas: { kueche: {} } }).area, document.createElement('haus-hausschnitt-card').getCardSize()]") == ["kueche", 8])
+    pg.goto(f"{ORIGIN}/cards.html"); pg.wait_for_timeout(800)
+    files = pg.evaluate(res)
+    check("K: mit Karte kommt karten.js, aber nicht das Panel", "/modules/karten.js" in files and "/modules/panel.js" not in files and "/haus-visualisierung.js" not in files)
+    raum = "document.querySelector('haus-raum-card').card"
+    check("K: Raumkarte zeigt den Raum", pg.evaluate(f"!!{raum} && !!{raum}.shadowRoot.querySelector('.room') && {raum}.getCardSize() === 2"))
+    check("K: Hausschnitt-Karte mit Titel", "Unser Haus" in pg.evaluate("document.querySelector('haus-hausschnitt-card').card.shadowRoot.textContent"))
+    # hass wird weitergereicht: neue Temperatur erscheint in der Kachel
+    pg.evaluate("window.__api.set('sensor.wohnzimmer_temperatur', '25.7')"); pg.wait_for_timeout(300)
+    check("K: Zustandsänderung erreicht die Karte", "25,7" in pg.evaluate(f"{raum}.shadowRoot.textContent"))
+    # Panel und Lader gemeinsam: keine doppelte Anmeldung, Panel-Einstieg lädt den Lader mit
+    pg.goto(dense); pg.wait_for_timeout(500)
+    check("K: Panel lädt den Lader mit", pg.evaluate("!!customElements.get('haus-raum-card') && !!customElements.get('haus-visualisierung-panel')"))
+
+
 def auswahl(args):
     """Abschnitte zu den Namen (Gruppe oder Abschnitt) auf der Kommandozeile; ohne Namen alle."""
     if not args:
