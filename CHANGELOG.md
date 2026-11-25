@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **PIN am Wanddisplay eingeben.** Geschützte Aktionen (Tür öffnen im Klingel-Overlay, verriegeltes Schloss, Zuhause aus Nacht/Abwesend/Urlaub, Abwesend/Urlaub einschalten) öffnen am 4"-Display ein Tastenfeld wie im Panel, statt nur gesperrt zu sein. Bei richtiger PIN läuft die Aktion und das Display bleibt 30 s entsperrt; nach 5 Fehlversuchen ist es eine Minute gesperrt. Die Eingabe geht mit einem Einmalschlüssel verschleiert an Home Assistant, damit die PIN nicht lesbar in der Datenbank landet. Braucht Firmware 0.7.0; ältere Firmware zeigt weiter den Hinweis „mit PIN geschützt“. Neuer Bereich `pin` und Ziel `pin:<code>` im Display-Protokoll (Version bleibt 1).
+
+### Tests
+- Tastenfeld am Display: Öffnen, Abbrechen, falsche PIN mit neuem Schlüssel, Klartext wird abgelehnt, richtige PIN führt die Aktion aus und entsperrt, Sperre nach 5 Fehlversuchen.
+
 ## 1.19.1 – 2026-11-24
 
 Mitgelieferte Firmware unverändert **0.6.1**.

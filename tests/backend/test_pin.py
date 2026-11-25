@@ -93,3 +93,64 @@ async def test_display_gesperrt(hass: HomeAssistant) -> None:
     await hass.data[DOMAIN]["store"].async_save({**hass.data[DOMAIN]["store"].data, "pin": {"disarm": False}})
     await tap("modus:zuhause")
     assert monitor.house.mode == "zuhause"
+
+
+def _code(pin: str, key: str) -> str:
+    """So verschleiert die Firmware die Eingabe: (Ziffer + Schlüsselziffer) mod 10."""
+    return "".join(str((int(c) + int(key[i])) % 10) for i, c in enumerate(pin))
+
+
+async def test_display_tastenfeld(hass: HomeAssistant) -> None:
+    async_mock_service(hass, "esphome", "haus_display_a1b2c3_haus_daten")
+    unlock = async_mock_service(hass, "lock", "unlock")
+    reg = er.async_get(hass)
+    flur = ar.async_get(hass).async_create("Flur").id
+    _ent(hass, reg, flur, "lock", "haustuer", "locked", {"friendly_name": "Haustür"})
+    monitor = await _setup(hass)
+    hub = hass.data[DOMAIN]["displays"]
+    await hass.data[DOMAIN]["store"].async_save({"displays": [{"name": "Flur", "device": "haus-display-a1b2c3", "tiles": ["entity:lock.haustuer"]}]})
+    monitor.book.pin = pn.make_hash("2580")
+    monitor.house.set_mode("abwesend", "Test", "manual")
+    await _tick(hass)
+
+    async def tap(ziel: str) -> None:
+        await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": ziel}, blocking=True)
+        await hass.async_block_till_done()
+
+    def ask() -> dict | None:
+        return json.loads(hub.payloads["flur"]["pin"])
+
+    assert ask() is None
+    # geschützter Tipp öffnet das Tastenfeld
+    await tap("kachel:0")
+    req = ask()
+    assert req["t"] == "Tür öffnen" and req["f"] == "" and len(req["k"]) == 8 and not unlock
+    # Abbrechen schließt es
+    await tap("pin:")
+    assert ask() is None and not unlock
+    # falsche PIN: Fehler, neuer Schlüssel, nichts ausgeführt
+    await tap("kachel:0")
+    n, key = ask()["n"], ask()["k"]
+    await tap("pin:" + _code("1111", key))
+    req = ask()
+    assert req["f"] == "Falsche PIN" and req["n"] == n and req["k"] != key and not unlock
+    # Klartext-PIN gilt nicht (verschleiert mit dem Schlüssel)
+    if _code("2580", req["k"]) != "2580":
+        await tap("pin:2580")
+        assert ask() is not None and not unlock
+    # richtige PIN: Aktion läuft, Tastenfeld zu, 30 s entsperrt
+    await tap("pin:" + _code("2580", ask()["k"]))
+    assert ask() is None and len(unlock) == 1
+    await tap("modus:zuhause")
+    assert monitor.house.mode == "zuhause" and ask() is None
+    # nach Ablauf wieder gesperrt
+    hub._unlocked.clear()
+    monitor.house.set_mode("nacht", "Test", "manual")
+    await tap("modus:zuhause")
+    assert monitor.house.mode == "nacht" and ask()["t"] == "Alarm aus"
+    # 5 Fehlversuche sperren das Display
+    for _ in range(5):
+        await tap("pin:" + _code("0000", ask()["k"]))
+    assert "gesperrt" in ask()["f"]
+    await tap("pin:" + _code("2580", ask()["k"]))
+    assert monitor.house.mode == "nacht"
