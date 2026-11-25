@@ -415,6 +415,10 @@ details[open]>summary.shead{padding-bottom:2px}
 .only-on .rgroup:not(:has(.tile.light.on)){display:none}
 .only-on .rlist:not(:has(.tile.light.on)){display:none}
 .only-on .fhead:has(+ .rlist:not(:has(.tile.light.on))){display:none}
+/* Breite Monitore: Räume im Raster statt Mehrspaltensatz (der stapelte wenige Räume in 2 Spalten), große Räume doppelt breit */
+@media (min-width:1200px){.rlist{columns:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start}
+.rgroup.big{grid-column:span 2}.rgroup.big .rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.sgrid>.section.big{grid-column:span 2}}
 .ktable{padding:2px 0}
 .ktable.withspark .khead,.ktable.withspark .krow{grid-template-columns:minmax(150px,230px) 70px 96px minmax(170px,440px) minmax(250px,1fr)}
 .kspark{position:relative;display:flex;align-items:center;gap:8px;height:44px;min-width:0;cursor:crosshair;touch-action:pan-y}

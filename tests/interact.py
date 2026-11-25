@@ -184,6 +184,26 @@ def kompakt():
     check("K: Umschalten auf Komfort", pg.locator(f"{P} .roof").count() == 1 and pg.locator(f"{P} .roofc").count() == 0)
 
 @gruppe("basis")
+def breite_monitore():
+    # ---------- Gewerke-Seiten auf breiten Monitoren: Räume im Raster, große Räume doppelt breit ----------
+    pg.set_viewport_size({"width": 2560, "height": 1300})
+    pg.goto(dense + "?view=licht"); pg.wait_for_timeout(500)
+    xs = pg.evaluate(f"[...{R}.querySelector('.rlist').children].map(g => Math.round(g.getBoundingClientRect().x))")
+    check("BM: Räume nebeneinander", len(xs) >= 3 and len(set(xs)) == len(xs))
+    big = pg.evaluate(f"""(() => {{ const l = {R}.querySelector('.rlist'), g = l.firstElementChild.cloneNode(true); g.classList.add('big'); l.prepend(g);
+      const w = g.getBoundingClientRect().width, n = l.children[1].getBoundingClientRect().width, c = getComputedStyle(g.querySelector('.rows')).gridTemplateColumns.split(' ').length;
+      g.remove(); return [w / n, c]; }})()""")
+    check("BM: großer Raum doppelt breit, Leuchten zweispaltig", big[0] > 1.9 and big[1] == 2)
+    pg.goto(base + "&view=licht"); pg.wait_for_timeout(500)
+    big = pg.evaluate(f"""(() => {{ const l = {R}.querySelector('.sgrid'), g = l.firstElementChild.cloneNode(true); g.classList.add('big'); l.prepend(g);
+      const r = g.getBoundingClientRect().width / l.children[1].getBoundingClientRect().width; g.remove(); return r; }})()""")
+    check("BM: Komfort großer Raum doppelt breit", big > 1.9)
+    pg.set_viewport_size({"width": 1100, "height": 900})
+    pg.goto(dense + "?view=licht"); pg.wait_for_timeout(500)
+    check("BM: schmaler Bildschirm unverändert (Spaltensatz)", pg.evaluate(f"getComputedStyle({R}.querySelector('.rlist')).display") == "block")
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+
+@gruppe("basis")
 def uebersicht_varianten():
     # ---------- Übersicht-Varianten ----------
     pg.goto(dense + "?ov=fokus"); pg.wait_for_timeout(500)
