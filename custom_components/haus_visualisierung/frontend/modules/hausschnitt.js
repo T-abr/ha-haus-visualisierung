@@ -20,7 +20,7 @@ function sectionHTML(h, a, kind, eids, title, ic, roomMode) {
   const head = roomMode
     ? `<div class="shead"${counted ? ` data-u="gcount" data-kind="${kind}" data-eids="${esc(eids.join(","))}"` : ""}>${icon(i)}<span class="st" data-act="go" data-to="raum/${esc(a.id)}" style="cursor:pointer">${esc(t)}</span><span class="gc"></span><span class="sp"></span>${actions}</div>`
     : `<div class="shead"${counted ? ` data-u="gcount" data-kind="${kind}" data-eids="${esc(eids.join(","))}"` : ""}>${icon(i)}<span class="st">${esc(t)}</span><span class="gc"></span><span class="sp"></span>${actions}</div>`;
-  return `<div class="section glass">${head}<div class="tiles">${eids.map((e) => tileHTML(h, e, a)).join("")}</div></div>`;
+  return `<div class="section glass${roomMode && eids.length > 4 ? " big" : ""}">${head}<div class="tiles">${eids.map((e) => tileHTML(h, e, a)).join("")}</div></div>`;
 }
 
 function houseHTML(m, L, h, opts = {}) {

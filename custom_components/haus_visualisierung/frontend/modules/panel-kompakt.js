@@ -65,7 +65,7 @@ const KompaktMixin = (Base) => class extends Base {
           const list = esc(e.join(","));
           const acts = kind === "light" ? `<button class="gbtn" data-act="list-lights" data-eids="${list}">${icon("mdi:lightbulb-group")}<span></span></button>`
             : kind === "cover" ? `<button class="gbtn" data-act="list-covers" data-svc="open_cover" data-eids="${list}">${icon("mdi:arrow-up")}</button><button class="gbtn" data-act="list-covers" data-svc="close_cover" data-eids="${list}">${icon("mdi:arrow-down")}</button>` : "";
-          return `<div class="rgroup"><div class="rsub" data-u="gcount" data-kind="${kind}" data-eids="${list}">${icon(a.icon)}<span class="st" data-act="go" data-to="raum/${esc(a.id)}">${esc(a.name)}</span><span class="gc"></span><span class="sp"></span>${acts}</div>
+          return `<div class="rgroup${e.length > 4 ? " big" : ""}"><div class="rsub" data-u="gcount" data-kind="${kind}" data-eids="${list}">${icon(a.icon)}<span class="st" data-act="go" data-to="raum/${esc(a.id)}">${esc(a.name)}</span><span class="gc"></span><span class="sp"></span>${acts}</div>
             <div class="rows">${e.map((x) => rowHTML(h, x, a)).join("")}</div></div>`;
         }).join("")}</div>`;
     }

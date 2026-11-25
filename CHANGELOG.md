@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Verbessert
+- **Gewerke-Seiten nutzen breite Monitore aus.** Auf Licht und Beschattung standen die Räume einer Etage im Kompakt-Modus nur in zwei Spalten übereinander, rechts blieb Platz frei. Ab 1200 px Fensterbreite stehen die Räume jetzt im Raster nebeneinander, so viele wie passen. Räume mit mehr als vier Geräten werden zwei Spalten breit und zeigen ihre Leuchten bzw. Rollläden zweispaltig (im Komfort-Modus ebenso doppelt breit). Handy und Tablet bleiben unverändert.
+
+### Tests
+- Neuer Abschnitt `breite_monitore` (Räume nebeneinander, großer Raum doppelt breit in Kompakt und Komfort, unter 1200 px unverändert).
+
 ## 1.20.1 – 2026-11-25
 
 ### Neu
