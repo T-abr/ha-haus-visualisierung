@@ -38,7 +38,7 @@ jobs:
       - name: Version erhöhen und committen
         if: github.event_name == 'workflow_dispatch' && inputs.sprung != 'keiner'
         run: |
-          python3 scripts/bump_version.py "${{ inputs.sprung }}"
+          python3 scripts/bump_version.py "${{ inputs.sprung }}" --immer
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           VERSION=$(python3 -c 'import json; print(json.load(open("custom_components/haus_visualisierung/manifest.json"))["version"])')
