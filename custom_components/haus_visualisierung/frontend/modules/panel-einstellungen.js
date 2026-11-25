@@ -17,6 +17,7 @@ import { defaultSettingsHTML } from "./standard.js";
 import { pinSettingsHTML } from "./pin.js";
 import { wxSettingsHTML } from "./wetterwarnung.js";
 import { problems, systemFile, systemSettingsHTML } from "./system.js";
+import { advanced, allLabel, markDirty, openSec, searchHTML, sectionize } from "./einstellungen.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["energie", "Energie", "mdi:solar-power-variant"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Wandpanel & Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"], ["system", "Prüfen & Sichern", "mdi:clipboard-check-outline"]];
@@ -41,20 +42,44 @@ const sortIds = (list) => [...list.children].filter((c) => c.classList.contains(
 const EinstellungenMixin = (Base) => class extends Base {
   /* ---------- Einstellungen ---------- */
   _vSettings() {
-    const h = this._hass;
     // Ausgangsstand merken: Beim Speichern gehen nur die Unterschiede dazu an den Server
     if (!this._draft) { this._draft = structuredClone(this._layout); this._draftBase = structuredClone(this._layout); }
-    const D = this._draft;
+    const D = this._draft, tab = this._settingsTab();
+    const nProb = problems(this._hass, this._layout);
+    const tabs = SET_TABS.map(([k, t, i]) => `<button class="altab stab${tab === k ? " on" : ""}${this._tabDirty(k) ? " dirty" : ""}" data-act="s-tab" data-tab="${k}">${icon(i)}<span>${t}</span>${k === "system" && nProb ? `<b class="tprob" title="${nProb} wichtige Punkte im Einrichtungs-Check" style="margin-left:4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--hv-warm);color:#1a1205;font-size:11px;line-height:18px">${nProb}</b>` : ""}<i></i></button>`).join("");
+    // Abschnitte klappbar, mit Kurzinfo und Markierungen; Sprungleiste ab drei Abschnitten
+    const { html: body, jumps } = sectionize(this, this._setBody(tab), D);
+    const anyClosed = /<div class="set glass[^"]* zu"/.test(body);
+    const q = this._setQuery || "";
+    const tools = `<div class="stools"><label class="ssearch">${icon("mdi:magnify")}<input class="inp" type="search" data-set-search="1" value="${esc(q)}" placeholder="Einstellung suchen, z. B. Batterie" aria-label="Einstellungen durchsuchen" autocomplete="off"></label>
+        ${jumps.length > 1 ? `<button class="pbtn sm sall" data-act="s-all">${allLabel(anyClosed)}</button>` : ""}</div>
+      <div class="sresbox">${q ? searchHTML(this, q, SET_TABS) : ""}</div>`;
+    // am Handy eine Auswahl statt der Knöpfe – sonst stünden dort mehrere Zeilen vor dem ersten Abschnitt
+    const jumpBar = jumps.length < 3 ? "" : `<nav class="sjump" aria-label="Abschnitte">${jumps.map((h2, i) => `<button class="altab sm" data-act="s-jump" data-jump-to="${i}">${h2}</button>`).join("")}</nav>
+      <select class="inp sjumpsel" data-jump-sel="1" aria-label="Zum Abschnitt springen"><option value="">Zum Abschnitt springen …</option>${jumps.map((h2, i) => `<option value="${i}">${h2.replace(/<span class="instant"[\s\S]*?<\/span>/g, "").replace(/<[^>]+>/g, "").trim()}</option>`).join("")}</select>`;
+
+    return `<div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span><span class="sp"></span></div>
+      <div class="altabs stabs" role="tablist">${tabs}</div>
+      <p class="hint savehint">Änderungen gelten erst nach „Speichern“ unten. Was mit ${instant()} gekennzeichnet ist, wirkt direkt.</p>
+      ${tools}
+      ${jumpBar}
+      ${body}
+      <div class="savebar glass${this._dirtySettings ? " dirty" : ""}"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>${this._dirtySettings ? this._dirtyWhere() : ""}
+        <button class="pbtn" data-act="s-reset"${this._dirtySettings ? "" : " disabled"}>${icon("mdi:undo")}Verwerfen</button>
+        <button class="pbtn primary" data-act="s-save">${icon("mdi:content-save")}Speichern</button></div>`;
+  }
+
+  /** Inhalt eines Reiters (auch für die Suche, die alle Reiter durchgeht). */
+  _setBody(tab) {
+    const h = this._hass, D = this._draft;
     const m = buildModel(h, { ...D, hidden_areas: [] });
     const allIds = Object.keys(h.states).sort();
     const opt = (e) => `<option value="${esc(e)}">${esc(h.states[e].attributes.friendly_name || "")}</option>`;
-    const tab0 = this._settingsTab();
-    const dlAll = tab0 === "raeume" || tab0 === "alarme" || tab0 === "technik" || tab0 === "energie" ? `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>` : "";
-    const dlSensor = tab0 === "energie" ? `<datalist id="dl-sensor">${allIds.filter((e) => e.startsWith("sensor.")).map(opt).join("")}</datalist>` : "";
+    const dlAll = tab === "raeume" || tab === "alarme" || tab === "technik" || tab === "energie" ? `<datalist id="dl-all">${allIds.map(opt).join("")}</datalist>` : "";
+    const dlSensor = tab === "energie" ? `<datalist id="dl-sensor">${allIds.filter((e) => e.startsWith("sensor.")).map(opt).join("")}</datalist>` : "";
     const chip = (e, del) => `<span class="pin sitem" data-sort-id="${esc(e)}" data-drag title="Ziehen zum Sortieren">${esc(h.states[e] ? entName(h, e) : e)}<button ${del} data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`;
     const pinChips = (list, area) => list.map((e) => chip(e, `data-act="s-pin-del" data-area="${esc(area)}"`)).join("");
 
-    const tab = this._settingsTab();
     const floorBlock = (f) => {
       const many = f.areas.length > 1;
       const rows = f.areas.map((a) => {
@@ -94,8 +119,6 @@ const EinstellungenMixin = (Base) => class extends Base {
       <input class="inp w" list="dl-sensor" data-set="header.${key}" value="${esc(D.header[key] || "")}" placeholder="sensor.…"></div>`;
     const views = [["overview", "Übersicht"], ...NAV.slice(1).map(([k, t]) => [k, t])];
 
-    const nProb = problems(h, this._layout);
-    const tabs = SET_TABS.map(([k, t, i]) => `<button class="altab stab${tab === k ? " on" : ""}${this._tabDirty(k) ? " dirty" : ""}" data-act="s-tab" data-tab="${k}">${icon(i)}<span>${t}</span>${k === "system" && nProb ? `<b class="tprob" title="${nProb} wichtige Punkte im Einrichtungs-Check" style="margin-left:4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--hv-warm);color:#1a1205;font-size:11px;line-height:18px">${nProb}</b>` : ""}<i></i></button>`).join("");
     let body = "";
     if (tab === "raeume") body = `${dlAll}
       <div class="set glass"><h2>${icon("mdi:floor-plan")}Etagen & Bereiche</h2>
@@ -125,10 +148,10 @@ const EinstellungenMixin = (Base) => class extends Base {
         ${ent("battery", "Akku-Ladestand", "in %")}
         ${ent("power", "Hausverbrauch", "z. B. dein AC-seitig berechneter Verbrauch")}
         ${ent("grid", "Netz", "positiv = Bezug, negativ = Einspeisung")}
-        <div class="srow"><span class="lbl">Speicher-Leistung<small>positiv = Laden, negativ = Entladen; leer = automatisch</small></span>
+        ${advanced(`<div class="srow"><span class="lbl">Speicher-Leistung<small>positiv = Laden, negativ = Entladen; leer = automatisch</small></span>
           <input class="inp w" list="dl-sensor" data-set="energy.battery_power" value="${esc(D.energy.battery_power || "")}" placeholder="sensor.…"></div>
         <div class="srow"><span class="lbl">Netz: Vorzeichen umkehren<small>wenn dein Zähler Einspeisung positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.grid_invert" data-bool="1" ${D.energy.grid_invert ? "checked" : ""}><span></span></label></div>
-        <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>
+        <div class="srow"><span class="lbl">Speicher: Vorzeichen umkehren<small>wenn dein Wechselrichter Entladen positiv meldet</small></span><label class="tgl"><input type="checkbox" data-set="energy.battery_invert" data-bool="1" ${D.energy.battery_invert ? "checked" : ""}><span></span></label></div>`)}
         <div class="srow"><span class="lbl">Seite „Energie“ zeigen<small>in der Navigation, sobald Energiedaten da sind</small></span><label class="tgl"><input type="checkbox" data-set="energy.enabled" data-bool="1" ${D.energy.enabled !== false ? "checked" : ""}><span></span></label></div></div>
       ${this._setForecast(D)}
       ${this._setPrice(D)}
@@ -141,44 +164,29 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${this._setBell(D)}`;
     else body = `
       ${defaultSettingsHTML(this)}
-      <div class="set glass"><h2>${icon("mdi:tune-variant")}Darstellung</h2>
-        ${sw("confirm_quick", "Schnellzugriff bestätigen", "Abfrage vor „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff")}
-        ${sw("glass", "Glas-Effekt", "Weichzeichner hinter Karten; auf schwachen Tablets ausschalten")}
-        ${sw("show_trends", "Verläufe (Raumseiten und Klima)", "Temperatur und Luftfeuchte der letzten 24 Stunden aus dem Recorder")}
-        ${sw("show_energy_sensors", "Energie-Sensoren in Räumen", "Leistung, Energie, Strom, Spannung")}
-        ${sw("show_other", "Bereich „Weitere“", "Auswahlen, Zahlen und Tasten")}
+      <div class="set glass"><h2>${icon("mdi:palette-outline")}Aussehen</h2>
         <div class="srow"><span class="lbl">Darstellung<small>Kompakt: mehr auf einen Blick · Komfort: große Kacheln fürs Wandpanel</small></span><select class="inp" data-set="density"><option value="kompakt" ${D.density !== "komfort" ? "selected" : ""}>Kompakt</option><option value="komfort" ${D.density === "komfort" ? "selected" : ""}>Komfort</option></select></div>
         <div class="srow"><span class="lbl">Kopfzeile<small>nur in „Kompakt“</small></span><select class="inp" data-set="header_style">${[["kompakt", "Kompakt (Symbol + Zahl)"], ["chips", "Chips mit Text"], ["satz", "Satz + Hinweise"], ["leiste", "Kennzahlen-Leiste"]].map(([k, t]) => `<option value="${k}" ${(D.header_style || "kompakt") === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
         <div class="srow"><span class="lbl">Übersicht<small>nur in „Kompakt“ · Automatisch: Cockpit ab 760 px Breite, darunter Aktiv-Fokus</small></span><select class="inp" data-set="overview_style">${[["auto", "Automatisch (Cockpit / Aktiv-Fokus)"], ["haus", "Hausschnitt"], ["cockpit", "Cockpit"], ["spalten", "Etagen-Spalten"], ["fokus", "Aktiv-Fokus"]].map(([k, t]) => `<option value="${k}" ${(D.overview_style || "auto") === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+        ${sw("glass", "Glas-Effekt", "Weichzeichner hinter Karten; auf schwachen Tablets ausschalten")}</div>
+      <div class="set glass"><h2>${icon("mdi:home-outline")}Startseite und Inhalte</h2>
         <div class="srow"><span class="lbl">Startseite</span><select class="inp" data-set="start_view">${views.map(([k, t]) => `<option value="${k}" ${D.start_view === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+        ${sw("show_trends", "Verläufe (Raumseiten und Klima)", "Temperatur und Luftfeuchte der letzten 24 Stunden aus dem Recorder")}
+        ${sw("show_energy_sensors", "Energie-Sensoren in Räumen", "Leistung, Energie, Strom, Spannung")}
+        ${sw("show_other", "Bereich „Weitere“", "Auswahlen, Zahlen und Tasten")}
+        ${sw("confirm_quick", "Schnellzugriff bestätigen", "Abfrage vor „Alle Lichter aus“, „Rollos auf/zu“ und Szenen im Schnellzugriff")}</div>
+      <div class="set glass"><h2>${icon("mdi:cctv")}Kameras und Batterien</h2>
         <div class="srow"><span class="lbl">Kamera-Standbilder<small>Sekunden zwischen zwei Bildern, nur sichtbare Kameras</small></span><input class="inp s" type="number" min="3" max="120" data-set="camera_interval" data-num="1" value="${D.camera_interval}"></div>
         <div class="srow"><span class="lbl">Batterie kritisch / schwach<small>in %</small></span>
           <input class="inp s" type="number" min="1" max="99" data-set="battery_critical" data-num="1" value="${D.battery_critical}">
           <input class="inp s" type="number" min="1" max="99" data-set="battery_low" data-num="1" value="${D.battery_low}"></div>
-        <div class="srow"><span class="lbl">Ausblende-Labels<small>Label-IDs, durch Komma getrennt</small></span><input class="inp w" data-set="hide_labels" data-csv="1" value="${esc((D.hide_labels || []).join(", "))}"></div></div>
+        ${advanced(`<div class="srow"><span class="lbl">Ausblende-Labels<small>Label-IDs, durch Komma getrennt</small></span><input class="inp w" data-set="hide_labels" data-csv="1" value="${esc((D.hide_labels || []).join(", "))}"></div>`)}</div>
       ${this._setTermine(D)}
       <div class="set glass"><h2>${icon("mdi:link-variant")}Verknüpfungen</h2>
         <p class="hint">Erscheinen in der Navigation, z. B. Solar Visualisierung, Protect Visualisierung oder Solarthermie. Die Seiten öffnen sich innerhalb der Haus Visualisierung, die Navigation links bleibt. Layout und Inhalt bleiben wie im Original. „Haus-Farben“ übernimmt Hintergrund, Karten- und Textfarben der Haus Visualisierung, „Original-Farben“ lässt das Design der Seite unverändert, „Eigene Seite“ öffnet sie außerhalb. Funktioniert für eigene Panels (z. B. Solar, Protect, Solarthermie) und für Dashboards (z. B. <code>/dashboard-kameras</code>).</p>
         <div class="sortl" data-sort="links">${links}</div><div class="srow"><button class="pbtn" data-act="s-link-add">${icon("mdi:plus")}Verknüpfung hinzufügen</button></div></div>`;
 
-    // Sprungleiste: ab drei Abschnitten führt eine Zeile oben zu jeder Überschrift des Reiters
-    const jumps = [];
-    body = body.replace(/<div class="set glass([^"]*)"([^>]*)><h2>([\s\S]*?)<\/h2>/g, (all, cls, attrs, h2) => {
-      jumps.push(h2);
-      return `<div class="set glass${cls}"${attrs} data-jump="${jumps.length - 1}"><h2>${h2}</h2>`;
-    });
-    // am Handy eine Auswahl statt der Knöpfe – sonst stünden dort mehrere Zeilen vor dem ersten Abschnitt
-    const jumpBar = jumps.length < 3 ? "" : `<nav class="sjump" aria-label="Abschnitte">${jumps.map((h2, i) => `<button class="altab sm" data-act="s-jump" data-jump-to="${i}">${h2}</button>`).join("")}</nav>
-      <select class="inp sjumpsel" data-jump-sel="1" aria-label="Zum Abschnitt springen"><option value="">Zum Abschnitt springen …</option>${jumps.map((h2, i) => `<option value="${i}">${h2.replace(/<[^>]+>/g, "").trim()}</option>`).join("")}</select>`;
-
-    return `<div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span><span class="sp"></span></div>
-      <div class="altabs stabs" role="tablist">${tabs}</div>
-      <p class="hint savehint">Änderungen gelten erst nach „Speichern“ unten. Was mit ${instant()} gekennzeichnet ist, wirkt direkt.</p>
-      ${jumpBar}
-      ${body}
-      <div class="savebar glass${this._dirtySettings ? " dirty" : ""}"><span class="msg">${this._dirtySettings ? "Ungespeicherte Änderungen" : "Alles gespeichert"}</span>${this._dirtySettings ? this._dirtyWhere() : ""}
-        <button class="pbtn" data-act="s-reset"${this._dirtySettings ? "" : " disabled"}>${icon("mdi:undo")}Verwerfen</button>
-        <button class="pbtn primary" data-act="s-save">${icon("mdi:content-save")}Speichern</button></div>`;
+    return body;
   }
 
   /** Strompreis: Preissensor (automatisch erkannt oder gewählt) und feste Preise in ct/kWh. */
@@ -193,8 +201,8 @@ const EinstellungenMixin = (Base) => class extends Base {
       <p class="hint">Karte „Vorhersage“ auf der Übersicht: kompakt mit dem Wetter der nächsten Tage${wid ? ` (${esc(wid)}, wie im Wandpanel eingestellt)` : ""}, dem erwarteten PV-Ertrag und dem wichtigsten Beschattungshinweis. Die Solarprognose kommt automatisch aus Forecast.Solar oder Solcast (${esc(found)}); eigene Sensoren in kWh oder Wh hier eintragen.</p>
       <div class="srow"><span class="lbl">Karte „Vorhersage“ zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.enabled" data-bool="1" ${F.enabled !== false ? "checked" : ""}><span></span></label></div>
       <div class="srow"><span class="lbl">Solarprognose zeigen</span><label class="tgl"><input type="checkbox" data-set="forecast.solar" data-bool="1" ${F.solar !== false ? "checked" : ""}><span></span></label></div>
-      ${inp("solar_today", "PV-Prognose heute", "Energie in kWh; leer = automatisch")}
-      ${inp("solar_tomorrow", "PV-Prognose morgen", "Energie in kWh; leer = automatisch")}
+      ${advanced(`${inp("solar_today", "PV-Prognose heute", "Energie in kWh; leer = automatisch")}
+      ${inp("solar_tomorrow", "PV-Prognose morgen", "Energie in kWh; leer = automatisch")}`)}
     </div>`;
   }
 
@@ -215,8 +223,9 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${tg("enabled", "Müllabfuhr und Termine zeigen")}
       ${tg("header", "In der Kopfzeile", "der wichtigste nächste Eintrag; am Handy nur die Abfuhr am Vorabend")}
       ${tg("saver", "Im Bildschirmschoner", "Abfuhr und bis zu drei Termine von heute und morgen")}
+      ${advanced(`
       <div class="srow"><span class="lbl">Abfuhr hervorheben ab<small>Uhr am Vorabend; am Morgen der Abfuhr bis 10 Uhr</small></span><input class="inp s" type="number" min="12" max="23" data-set="termine.evening" data-num="1" value="${esc(String(T.evening ?? 17))}"><span class="rl">Uhr</span></div>
-      <div class="srow"><span class="lbl">Vorausschau<small>Tage, für den Tooltip in der Kopfzeile</small></span><input class="inp s" type="number" min="1" max="14" data-set="termine.days" data-num="1" value="${esc(String(T.days ?? 7))}"><span class="rl">Tage</span></div>
+      <div class="srow"><span class="lbl">Vorausschau<small>Tage, für den Tooltip in der Kopfzeile</small></span><input class="inp s" type="number" min="1" max="14" data-set="termine.days" data-num="1" value="${esc(String(T.days ?? 7))}"><span class="rl">Tage</span></div>`)}
       <div class="fl-title">Kalender</div>
       ${cals.length ? cals.map(row).join("") : '<p class="hint">Keine Kalender gefunden. Waste Collection Schedule oder eine andere Kalender-Integration in Home Assistant einrichten.</p>'}
     </div>`;
@@ -233,8 +242,9 @@ const EinstellungenMixin = (Base) => class extends Base {
           <input class="inp w" list="dl-sensor" data-set="price.sensor" value="${esc(P.sensor || "")}" placeholder="sensor.…"></div>
         ${ct("surcharge_ct", "Aufschlag auf den Sensorpreis", "wenn der Sensor nur den Börsenpreis liefert: Netzentgelt, Steuern, Umlagen", -50, 100)}
         ${ct("fixed_ct", "Fester Preis", "ohne Preissensor", 0, 200)}
+        ${advanced(`
         ${ct("feed_in_ct", "Einspeisevergütung", "für die Bilanz heute", 0, 100)}
-        <div class="srow"><span class="lbl">Günstiges Zeitfenster<small>Länge in Stunden, z. B. für eine Ladung des Autos</small></span><input class="inp s" type="number" min="1" max="12" data-set="price.window_h" data-num="1" value="${P.window_h}"><span class="rl">h</span></div></div>`;
+        <div class="srow"><span class="lbl">Günstiges Zeitfenster<small>Länge in Stunden, z. B. für eine Ladung des Autos</small></span><input class="inp s" type="number" min="1" max="12" data-set="price.window_h" data-num="1" value="${P.window_h}"><span class="rl">h</span></div>`)}</div>`;
   }
 
   _setWall(D) {
@@ -271,7 +281,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${tg("sv_shade", "Beschattungshinweis")}
       ${tg("sv_status", "Meldungen", "wichtigste Meldung oder „Alles in Ordnung“")}
       ${tg("wander", "Wandern lassen", "aus = Uhr und Infos bleiben mittig; an = jede Minute ein Stück versetzt gegen Einbrennen (bei OLED sinnvoll, LCDs wie im iPad brennen kaum ein)")}
-      <div class="srow"><span class="lbl">Wetter<small>leer = automatisch${autoW ? ` (${esc(autoW)})` : ""}</small></span><input class="inp w" list="dl-weather" data-set="wallpanel.weather" value="${esc(W.weather || "")}" placeholder="weather.…"></div>
+      ${advanced(`      <div class="srow"><span class="lbl">Wetter<small>leer = automatisch${autoW ? ` (${esc(autoW)})` : ""}</small></span><input class="inp w" list="dl-weather" data-set="wallpanel.weather" value="${esc(W.weather || "")}" placeholder="weather.…"></div>`)}
       <div class="srow"><span class="lbl">Bewegungsmelder am Panel<small>weckt wie eine Berührung, z. B. binary_sensor.flur_bewegung</small></span><input class="inp w" list="dl-motion" data-set="wallpanel.wake_entity" value="${esc(W.wake_entity || "")}" placeholder="binary_sensor.…"></div>
       <div class="srow"><button class="pbtn" data-act="s-saver-test">${icon("mdi:power-sleep")}Bildschirmschoner zeigen</button><span class="lbl"><small>Tippen beendet ihn wieder.</small></span></div>
       <datalist id="dl-weather">${ids.filter((e) => e.startsWith("weather.")).map((e) => `<option value="${esc(e)}">`).join("")}</datalist>
@@ -302,6 +312,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       <p class="hint techfound">${esc(found(ew, [ew && `Raum ${areaName(ew.area)}`, ew && ew.power && "Ladeleistung", ew && ew.mode && "Lademodus", ew && ew.soc && "Ladestand", ew && ew.limit && "Ziel"]))}</p>
       ${tg("wallbox.enabled", W.enabled !== false, "Wallbox-Karte anzeigen")}
       <div class="srow"><span class="lbl">Raum</span>${areaSel("wallbox.area", W.area, AW.area)}</div>
+      ${(ew ? advanced : (x) => x)(`
       ${fld("wallbox", "power", "Ladeleistung", "W oder kW", AW.power)}
       ${fld("wallbox", "mode", "Lademodus", "Auswahl (select)", AW.mode)}
       ${fld("wallbox", "soc", "Ladestand Auto", "%", AW.soc)}
@@ -309,7 +320,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${fld("wallbox", "energy", "Geladen (Sitzung)", "kWh", AW.energy)}
       ${fld("wallbox", "range", "Reichweite", "km", AW.range)}
       ${fld("wallbox", "connected", "Fahrzeug angesteckt", "binary_sensor", AW.connected)}
-      ${fld("wallbox", "charging", "Lädt", "binary_sensor", AW.charging)}
+      ${fld("wallbox", "charging", "Lädt", "binary_sensor", AW.charging)}`)}
     </div>`;
     return `<div class="set glass"><h2>${icon("mdi:heating-coil")}Heizung</h2>
       <p class="hint">Die Karte „Heizung“ erscheint auf der Raumseite des Heizungsraums: Speicher mit Schichtung und Ladung, Kamin mit Pumpe und die Heizkurve mit Betriebspunkt. Die Heizkurve kommt aus der Integration „Heizkurve Fußbodenheizung“ (Sensor mit Kurvenpunkten), sonst aus den Werten unten. Leere Felder = automatisch.</p>
@@ -331,12 +342,13 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="fl-title">Heizkurve</div>
       ${fld("heating", "curve", "Heizkurve (Soll-Vorlauf)", "Sensor der Integration mit Attributen slope, level, curve …", AH.curve)}
       ${fld("heating", "flow", "Vorlauf Ist", "", AH.flow)}
+      ${(eh && eh.curve ? advanced : (x) => x)(`
       ${fld("heating", "outdoor", "Außentemperatur", "nur ohne Heizkurven-Sensor nötig", AH.outdoor)}
       ${fld("heating", "mixer", "Mischer-Stellgröße", "Sensor der Mischerregelung", AH.mixer)}
       ${tg("heating.manual_curve", H.manual_curve, "Heizkurve selbst berechnen", "ohne Integration: Werte unten, Formel wie in der Integration")}
       ${H.manual_curve || !(eh && eh.curve) ? `<div class="srow sub techman">
         ${[["slope", "Steilheit", 0.1, 3, 0.05], ["level", "Niveau K", -15, 15, 0.5], ["room", "Raum °C", 15, 28, 0.5], ["min", "Min °C", 15, 45, 1], ["max", "Max °C", 25, 70, 1], ["limit", "Heizgrenze °C", 5, 25, 1]]
-          .map(([k, t, mn, mx, st]) => `<label class="tml"><small>${t}</small><input class="inp xs" type="number" min="${mn}" max="${mx}" step="${st}" data-set="heating.manual.${k}" data-num="1" value="${M[k]}"></label>`).join("")}</div>` : ""}
+          .map(([k, t, mn, mx, st]) => `<label class="tml"><small>${t}</small><input class="inp xs" type="number" min="${mn}" max="${mx}" step="${st}" data-set="heating.manual.${k}" data-num="1" value="${M[k]}"></label>`).join("")}</div>` : ""}`)}
     </div>`;
   }
 
@@ -408,8 +420,9 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="srow"><span class="lbl">Klingel<small>Ereignis- oder Binär-Entität; leer = automatisch${autoBell ? `: ${esc(autoBell)}` : " (nichts gefunden)"}</small></span><input class="inp w" list="dl-bell" data-set="doorbell.entity" value="${esc(B.entity)}" placeholder="${esc(autoBell || "event.…_doorbell")}"></div>
       <div class="srow"><span class="lbl">Kamera<small>leer = Kamera am selben Gerät${autoCam ? `: ${esc(autoCam)}` : ""}</small></span><input class="inp w" list="dl-cam" data-set="doorbell.camera" value="${esc(B.camera)}" placeholder="${esc(autoCam || "camera.…")}"></div>
       <div class="srow"><span class="lbl">Türöffner für „Tür öffnen“<small>optional; Schloss, Schalter (z. B. KNX-Türöffner), Taste oder Skript; muss zweimal getippt werden</small></span><input class="inp w" list="dl-lock" data-set="doorbell.lock" value="${esc(B.lock)}" placeholder="kein Türöffner"></div>
+      ${advanced(`
       ${B.lock && /^(switch|input_boolean)\./.test(B.lock) ? `<div class="srow"><span class="lbl">Impuls<small>Sekunden, nach denen der Schalter wieder ausgeschaltet wird; 0 = nur einschalten (z. B. bei Treppenhausfunktion)</small></span><input class="inp s" type="number" min="0" max="30" data-set="doorbell.pulse" data-num="1" value="${B.pulse ?? 2}"></div>` : ""}
-      <div class="srow"><span class="lbl">Automatisch schließen nach<small>Sekunden; nach „Live“ oder „Tür öffnen“ bleibt es offen</small></span><input class="inp s" type="number" min="10" max="600" data-set="doorbell.timeout" data-num="1" value="${B.timeout}"></div>
+      <div class="srow"><span class="lbl">Automatisch schließen nach<small>Sekunden; nach „Live“ oder „Tür öffnen“ bleibt es offen</small></span><input class="inp s" type="number" min="10" max="600" data-set="doorbell.timeout" data-num="1" value="${B.timeout}"></div>`)}
       <div class="srow"><button class="pbtn" data-act="s-bell-test">${icon("mdi:bell-ring-outline")}Overlay testen</button><span class="lbl"><small>nutzt auch noch nicht gespeicherte Angaben; „Tür öffnen“ löst im Test wirklich aus</small></span></div>
     </div>`;
   }
@@ -439,8 +452,9 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="fl-title">Verhalten</div>
       <div class="srow"><span class="lbl">Wenn eine Warnung behoben ist<small>gilt für Warnungen, die gemeldet wurden</small></span>
         <select class="inp" data-set="push.resolved">${[["clear", "Meldung vom Handy entfernen"], ["notify", "Entwarnung senden"], ["none", "nichts tun"]].map(([k, t]) => `<option value="${k}" ${P.resolved === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+      ${advanced(`
       <div class="srow"><span class="lbl">Sperrzeit<small>Minuten, bevor dieselbe Warnung erneut gemeldet wird (Alarme immer)</small></span><input class="inp s" type="number" min="0" max="1440" data-set="push.cooldown" data-num="1" value="${P.cooldown}"></div>
-      ${tg("push.persistent", "Zusätzlich als Benachrichtigung in Home Assistant", "erscheint unter der Glocke in der Seitenleiste und verschwindet, wenn behoben")}
+      ${tg("push.persistent", "Zusätzlich als Benachrichtigung in Home Assistant", "erscheint unter der Glocke in der Seitenleiste und verschwindet, wenn behoben")}`)}
       <div class="srow"><button class="pbtn" data-act="s-push-test">${icon("mdi:send")}Testmeldung senden</button>
         <span class="lbl"><small>${info ? (info.active.length ? `Im Hintergrund aktiv: ${info.active.map((a) => esc(a.title)).join(", ")}` : "Im Hintergrund ist gerade keine Warnung aktiv.") : ""} Einstellungen erst speichern, dann testen.</small></span></div>
     </div>`;
@@ -457,7 +471,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="srow"><span class="lbl">Hausmodus verwenden<small>aus = immer „Zuhause“, alle Regeln gelten</small></span>${tg("house_mode.enabled", H.enabled !== false)}</div>
       <div class="fl-title">Automatik</div>
       <div class="srow"><span class="lbl">Abwesend, wenn alle Personen weg sind<small>Zurück auf „Zuhause“, sobald jemand heimkommt (Personen-Entitäten)</small></span>${tg("house_mode.auto_away", H.auto_away)}</div>
-      <div class="srow"><span class="lbl">Verzögerung bis Abwesend<small>Minuten – verhindert Umschalten bei kurzen Wegen</small></span><input class="inp s" type="number" min="0" max="240" data-set="house_mode.away_delay" data-num="1" value="${H.away_delay}"></div>
+      ${advanced(`<div class="srow"><span class="lbl">Verzögerung bis Abwesend<small>Minuten – verhindert Umschalten bei kurzen Wegen</small></span><input class="inp s" type="number" min="0" max="240" data-set="house_mode.away_delay" data-num="1" value="${H.away_delay}"></div>`)}
       <div class="srow"><span class="lbl">Nacht nach Uhrzeit<small>nur aus „Zuhause“; morgens zurück auf „Zuhause“</small></span>
         <input class="inp s" type="time" data-set="house_mode.night_start" value="${esc(H.night_start)}"><span class="rl">bis</span><input class="inp s" type="time" data-set="house_mode.night_end" value="${esc(H.night_end)}">${tg("house_mode.auto_night", H.auto_night)}</div>
       <div class="fl-title">Alarmanlage</div>
@@ -559,9 +573,10 @@ const EinstellungenMixin = (Base) => class extends Base {
       <p class="hint">Die Symbole je Regel legen fest, in welchen Hausmodi sie gilt. Beispiel: Bewegung ist nur bei Abwesend und Urlaub ein Alarm.</p>
       ${modeLegend("Regel gilt in den markierten Hausmodi")}
       ${bi.map(([k, t, l]) => `<div class="srow"><span class="lbl">${t}<small>${l}</small></span>${mchips(`alerts.modes.${k}`, bmodes(k))}<label class="tgl"><input type="checkbox" data-set="alerts.builtin.${k}" data-bool="1" ${B[k] ? "checked" : ""}><span></span></label></div>`).join("")}
+      ${advanced(`
       <div class="srow"><span class="lbl">Fenster und Türen erst melden nach<small>Minuten offen; 0 = sofort</small></span><input class="inp s" type="number" min="0" max="240" data-set="alerts.contacts_min" data-num="1" value="${A.contacts_min || 0}"></div>
       <div class="srow"><span class="lbl">Schimmelrisiko ab<small>% relative Raumfeuchte; Entwarnung 3 Prozentpunkte darunter</small></span><input class="inp s" type="number" min="50" max="90" data-set="alerts.mold_hum" data-num="1" value="${A.mold_hum || 65}"></div>
-      <div class="srow"><span class="lbl">Schimmelrisiko erst melden nach<small>Minuten über der Grenze, damit kurzes Duschen oder Kochen nicht meldet; nicht bei offenem Fenster im Raum</small></span><input class="inp s" type="number" min="0" max="240" data-set="alerts.mold_min" data-num="1" value="${A.mold_min ?? 30}"></div>
+      <div class="srow"><span class="lbl">Schimmelrisiko erst melden nach<small>Minuten über der Grenze, damit kurzes Duschen oder Kochen nicht meldet; nicht bei offenem Fenster im Raum</small></span><input class="inp s" type="number" min="0" max="240" data-set="alerts.mold_min" data-num="1" value="${A.mold_min ?? 30}"></div>`)}
       <div class="fl-title">Eigene Regeln</div>
       ${rules ? modeLegend("Regel gilt in den markierten Hausmodi") : ""}
       ${rules || '<p class="hint">Noch keine eigenen Regeln. Beispiele: Speicher oben unter 45 °C, Kamin über 85 °C, Akku unter 15 %, Waschmaschine seit 3 Stunden an.</p>'}
@@ -721,9 +736,19 @@ const EinstellungenMixin = (Base) => class extends Base {
     super._onChange(e);
     const t = e.target;
     if (t.dataset && t.dataset.bkFile && e.type === "change") { systemFile(this, t); return; }
+    if (t.dataset && t.dataset.setSearch) {
+      // Suche: Ergebnisliste neu füllen, ohne die Seite neu aufzubauen (Fokus bleibt im Feld)
+      if (e.type !== "input") return;
+      if (!this._setQuery) this._setIdx = null;
+      this._setQuery = t.value;
+      const box = this.shadowRoot.querySelector(".sresbox");
+      if (box) box.innerHTML = t.value ? searchHTML(this, t.value, SET_TABS) : "";
+      return;
+    }
     if (t.dataset && t.dataset.jumpSel && e.type === "change") {
       const sec = t.value !== "" && this.shadowRoot.querySelector(`.set[data-jump="${t.value}"]`);
       t.value = "";
+      if (sec) openSec(this, sec);
       if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
@@ -739,6 +764,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       this._dirtySettings = true;
       const msg = this.shadowRoot.querySelector(".savebar .msg");
       if (msg) msg.textContent = "Ungespeicherte Änderungen";
+      markDirty(this, (k) => this._tabDirty(k));
       return;
     }
     if (t.dataset && (t.dataset.dispTile || t.dataset.dispEnt) && e.type === "change" && this._draft) {
@@ -747,6 +773,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       if (redraw) { this._rerenderSettings(); return; }
       const msg = this.shadowRoot.querySelector(".savebar .msg");
       if (msg) msg.textContent = "Ungespeicherte Änderungen";
+      markDirty(this, (k) => this._tabDirty(k));
       return;
     }
     if (t.dataset && t.dataset.dispName && e.type === "change" && this._draft) displayInput(this._draft, t, this._layout.displays);
@@ -761,6 +788,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       this._dirtySettings = true;
       const msg = this.shadowRoot.querySelector(".savebar .msg");
       if (msg) msg.textContent = "Ungespeicherte Änderungen";
+      markDirty(this, (k) => this._tabDirty(k));
       return;
     }
     if (!t.dataset || !t.dataset.set || !this._draft) return;
@@ -776,6 +804,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     if ((/^(heating|wallbox)\./.test(t.dataset.set) && e.type === "change" && !/\.manual\./.test(t.dataset.set)) || (/^displays\.\d+\.saver$/.test(t.dataset.set) && e.type === "change") || (/^displays\.\d+\.custom\.\d+\.(icon|tiles\.\d+\.(icon|entity))$/.test(t.dataset.set) && e.type === "change") || /^alerts\.rules\.\d+\.op$/.test(t.dataset.set) || /^alarm_actions\.\d+\.type$/.test(t.dataset.set) || (t.dataset.set === "doorbell.lock" && e.type === "change")) { this._rerenderSettings(); return; }
     const msg = this.shadowRoot.querySelector(".savebar .msg");
     if (msg) msg.textContent = "Ungespeicherte Änderungen";
+    markDirty(this, (k) => this._tabDirty(k));
   }
 };
 

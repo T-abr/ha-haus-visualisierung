@@ -4,6 +4,20 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Einstellungen übersichtlicher: Abschnitte zum Auf- und Zuklappen.** Jeder Abschnitt (z. B. Strompreis, Hausmodus, Klingel) klappt mit einem Tipp auf die Überschrift auf und zu; beim ersten Öffnen sind alle zu. Welche offen sind, merkt sich jedes Gerät. Daneben „Alle aufklappen“/„Alle zuklappen“, die Sprungleiste klappt ihr Ziel automatisch auf.
+- **Kurzinfo in jeder Überschrift**, damit man ohne Aufklappen sieht, was eingerichtet ist, z. B. „Preissensor automatisch“, „4 von 4 Sensoren“, „Eskalation nach 5 min · 3 Aktionen“, „aus“.
+- **Markierungen am Abschnitt:** ein Punkt bei ungespeicherten Änderungen (genau am geänderten Abschnitt, auch die Reiter-Punkte folgen jetzt sofort) und ein Warnzeichen, wenn der Einrichtungs-Check dort etwas meldet (z. B. eine gelöschte Entität), mit dem Grund als Tooltip.
+- **Suche über alle Einstellungen** oben auf der Seite: findet Einstellungen nach Name, Überschrift oder Erklärung (z. B. „Batterie“, „Sperrzeit“), wechselt in den richtigen Reiter, klappt den Abschnitt (und ggf. „Erweitert“) auf und hebt die Zeile hervor.
+
+### Geändert
+- **Lange Erklärtexte gekürzt:** sichtbar bleibt der erste Satz, der Rest steht hinter „Mehr …“.
+- **„Darstellung“ aufgeteilt** in „Aussehen“, „Startseite und Inhalte“ sowie „Kameras und Batterien“.
+- **„Erweitert“ je Abschnitt:** selten gebrauchte Zeilen sind eingeklappt, z. B. Vorzeichen umkehren und Speicher-Leistung (Energie), eigene PV-Prognose-Sensoren, Einspeisevergütung und Zeitfenster (Strompreis), Wallbox-Entitäten (nur wenn eine Wallbox erkannt wurde), Heizkurve selbst berechnen (nur mit Heizkurven-Sensor), Wetter-Entität des Wandpanels, Impuls und Schließzeit der Klingel, Sperrzeit von Push, Verzögerung bis Abwesend, Schwellen der Warnungen, Termine-Vorausschau und Ausblende-Labels.
+
+### Tests
+- Neuer Abschnitt `einstellungen_uebersicht` (Zuklappen und Merken, Alle auf/zu, Sprungleiste, Erweitert, Punkte, Warnzeichen, gekürzte Hinweise, Aufteilung, Suche). Die übrigen Prüfungen klappen in den Einstellungen vorher alles auf (`auf(pg)`, steckt auch in `stab()`).
+
 ## 1.20.0 – 2026-11-25
 
 Mitgelieferte Firmware **0.7.0** (PIN-Tastenfeld; Update über Einstellungen → Displays bzw. die Update-Entität je Display).
