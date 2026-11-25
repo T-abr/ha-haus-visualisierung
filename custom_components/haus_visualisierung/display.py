@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import secrets
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -34,8 +35,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .alerts import UNAV, is_on, num
+from .const import DEFAULT_LAYOUT
 from .pin import KIND_TXT as PIN_TXT
-from .pin import mode_kind
+from .pin import LOCK_S as PIN_LOCK_S
+from .pin import Throttle, mode_kind, verify
 from .pin import needs as pin_needs
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,6 +47,9 @@ PROTOCOL = 1
 SERVICE_TAP = "display_tap"
 SERVICE_DATA = "haus_daten"  # API-Aktion der Firmware (ab 0.2.0)
 LOCKED_NOTE_S = 8            # so lange zeigt ein Display „Mit PIN geschützt“ nach einem gesperrten Tipp
+PIN_ASK_S = 60               # so lange wartet ein Display-Tastenfeld auf die PIN (Firmware ab 0.7.0)
+PIN_UNLOCK_S = 30            # nach richtiger PIN bleibt das Display so lange entsperrt (wie das Panel)
+PIN_KEY_LEN = 8              # Länge des Einmalschlüssels = größte PIN-Länge
 DEVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 # Kacheln der Startseite (Schlüssel im Layout → Name in den Einstellungen)
@@ -351,6 +357,11 @@ class DisplayHub:
         self._bell_eid: str | None = None
         # gesperrte Tipps (PIN): Display → (bis, Aktion) für den Hinweis
         self._locked: dict[str, tuple[float, str]] = {}
+        # PIN-Tastenfeld am Display: offene Abfrage je Display, entsperrt bis, Fehlversuche je Display
+        self._pin_ask: dict[str, dict[str, Any]] = {}
+        self._pin_n = 0
+        self._unlocked: dict[str, float] = {}
+        self._pin_throttle = Throttle()
 
     # ---------- Lebenszyklus ----------
     async def async_start(self) -> None:
@@ -424,6 +435,7 @@ class DisplayHub:
         c = self.energy_cfg()
         ents = {v for v in (c or {}).values() if isinstance(v, str) and "." in v}
         ents |= set(self.monitor._all)
+        ents |= {e for k, e in self.monitor._outdoor.items() if k == "temperature"}
         ents |= {e for d in self.displays for t in d["tiles"] if t.startswith("entity:") for e in [t[7:]]}
         ents |= {t["entity"] for d in self.displays for pg in d.get("custom", []) for t in pg["tiles"]}
         return ents
@@ -822,7 +834,10 @@ class DisplayHub:
         eid = self.weather_eid()
         if eid and (st := get(eid)) is not None:
             txt, ic = W_COND.get(st.state, (st.state, "weather-partly-cloudy"))
-            t = st.attributes.get("temperature")
+            # Temperatur jetzt vom Außenfühler (wie im Panel), sonst von der Wetter-Entität
+            t = num(get(self.monitor._outdoor.get("temperature", "")))
+            if t is None:
+                t = st.attributes.get("temperature")
             days = self._weather["days"] if self._weather["eid"] == eid else []
             tomorrow = days[1] if len(days) > 1 else None
             out["wetter"] = {"i": ic, "t": f"{de(float(t), 0)}°" if isinstance(t, (int, float)) else "–", "txt": txt,
@@ -910,31 +925,48 @@ class DisplayHub:
 
     def schoner(self) -> dict:
         """Bildschirmschoner wie am Wandpanel: Wetter, PV, morgen, Hausmodus; Müll und Termine; fertige Geräte; Meldungen."""
+        W = {**DEFAULT_LAYOUT["wallpanel"], **(self.layout.get("wallpanel") or {})}
         K = self.kopf()
         zeile = []
-        if w := K.get("wetter"):
+        w = K.get("wetter")
+        if w and W["sv_weather"]:
             zeile.append({"i": w["i"], "t": w["t"]})
-        F = self.energy_now()
+        if (inn := self._indoor_temp(W["sv_indoor"])) is not None:
+            zeile.append({"i": "home-thermometer", "t": f"{de(inn, 1)}°"})
+        F = self.energy_now() if W["sv_pv"] else None
         if F and F["pv"] is not None and F["pv"] > 50:
             zeile.append({"i": "solar-power-variant", "t": kw(F["pv"])})
-        if w and w["morgen"]:
+        if w and w["morgen"] and W["sv_forecast"]:
             zeile.append({"i": "calendar", "t": w["morgen"][:1].upper() + w["morgen"][1:]})
-        zeile.append({"i": K["modus"]["i"], "t": K["modus"]["n"]})
+        if W["sv_mode"]:
+            zeile.append({"i": K["modus"]["i"], "t": K["modus"]["n"]})
         termine = []
-        if T := self.termine():
+        T = self.termine() if (self.layout.get("termine") or {}).get("saver", True) is not False else None
+        if T:
             if T["waste"]:
                 color, ic = bin_of(T["waste"][0])
                 termine.append({"i": ic, "f": color, "t": f"{T['waste_word']}: {', '.join(T['waste'])}", "hot": T["hot"]})
             termine += [{"i": "calendar-clock", "f": C_DIM, "t": e, "hot": False} for e in T["events"][:3 - len(termine)]]
-        done = self._done_appliances()
+        done = self._done_appliances() if W["sv_appl"] else []
         al = self._alerts()
         lvl = al[0].get("level") if al else None
-        status = ({"i": "alarm-light" if lvl == "alarm" else "bell-alert", "f": C_ALERT if lvl == "alarm" else C_WARM,
+        status = None if not W["sv_status"] else ({"i": "alarm-light" if lvl == "alarm" else "bell-alert", "f": C_ALERT if lvl == "alarm" else C_WARM,
                    "t": str(al[0].get("title", "")) if len(al) == 1 else f"{len(al)} Meldungen · {al[0].get('title', '')}"}
                   if al else {"i": "shield-check", "f": C_OK, "t": "Alles in Ordnung"})
         return {"zeile": zeile[:4], "termine": termine,
                 "hinweis": {"i": "check-circle-outline", "t": " · ".join(f"{x} fertig" for x in done[:2])} if done else None,
                 "status": status}
+
+    def _indoor_temp(self, which: str) -> float | None:
+        """Innentemperatur für den Schoner: "avg" = Haus Ø (Innenräume), sonst Bereichs-ID; "" = aus."""
+        if not which:
+            return None
+        get = self.hass.states.get
+        if which == "avg":
+            ts = [t for r in self.monitor._rooms if r.indoor and r.temp_id and (t := num(get(r.temp_id))) is not None]
+            return sum(ts) / len(ts) if ts else None
+        r = next((r for r in self.monitor._rooms if r.area_id == which), None)
+        return num(get(r.temp_id)) if r and r.temp_id else None
 
     def custom_tile(self, t: dict) -> dict:
         """Kachel einer eigenen Seite: wie eine entity:-Kachel, mit eigenem Namen und Symbol."""
@@ -994,6 +1026,7 @@ class DisplayHub:
                                      "schoner": d["saver_min"] if d["saver"] else 0, "schoner_hell": d["saver_bright"]}),
             "kopf": _dumps(self.kopf()),
             "kacheln": _dumps([self.tile(t) for t in d["tiles"]]),
+            "pin": _dumps(self.pin_ask(d["id"])),
             "hinweis": _dumps(self.locked_note(d["id"]) or (self.hinweis(items) if d["hint"] else None)),
             "energie": _dumps(self.energie()),
             "klima": _dumps([{"n": r["n"], "t": f"{de(r['t'], 1)}°", "h": f"{round(r['h'])} %" if r["h"] is not None else "", "w": r["w"]} for r in K["rooms"][:8]]),
@@ -1093,12 +1126,92 @@ class DisplayHub:
         if until <= time.time():
             self._locked.pop(did, None)
             return None
-        return {"i": "lock", "f": C_WARM, "n": f"{what}: mit PIN geschützt", "s": "Am Wandpanel oder Handy mit PIN freigeben",
+        return {"i": "lock", "f": C_WARM, "n": f"{what}: mit PIN geschützt", "s": "Am Display, Wandpanel oder Handy mit PIN freigeben",
                 "knopf": "", "ziel": ""}
+
+    def pin_ask(self, did: str) -> dict | None:
+        """Bereich `pin`: offene PIN-Abfrage des Displays (Tastenfeld) oder None."""
+        req = self._pin_ask.get(did)
+        if req is None:
+            return None
+        if req["bis"] <= time.time():
+            self._pin_ask.pop(did, None)
+            return None
+        return {"n": req["n"], "t": req["t"], "k": req["k"], "f": req["f"]}
+
+    def _pin_wait_txt(self, wait: int) -> str:
+        return f"Zu viele Versuche – noch {wait} s gesperrt"
+
+    def _pin_new_key(self, req: dict) -> None:
+        req["k"] = "".join(secrets.choice("0123456789") for _ in range(PIN_KEY_LEN))
+
+    def _pin_start(self, d: dict, did: str, ziel: str, kind: str) -> None:
+        """Geschützter Tipp: Tastenfeld am Display öffnen (neue Firmware), ältere zeigen den Hinweis."""
+        self._pin_n += 1
+        wait = self._pin_throttle.locked_for(f"display:{d['id']}")
+        req = {"n": self._pin_n, "t": PIN_TXT.get(kind, "Aktion"), "f": self._pin_wait_txt(wait) if wait else "",
+               "ziel": ziel, "did": did, "bis": time.time() + PIN_ASK_S}
+        self._pin_new_key(req)
+        self._pin_ask[d["id"]] = req
+        self._locked[d["id"]] = (time.time() + LOCKED_NOTE_S, req["t"])
+        _LOGGER.info("Display %s: %s braucht die PIN", did, ziel)
+        self.update()
+        async_call_later(self.hass, LOCKED_NOTE_S + 0.5, callback(lambda _now: self.update()))
+        async_call_later(self.hass, PIN_ASK_S + 0.5, callback(lambda _now: self.update()))
+
+    async def _pin_answer(self, d: dict, code: str) -> None:
+        """Ziel `pin:<code>` vom Tastenfeld; leer = abgebrochen. Ziffer = (PIN-Ziffer + Schlüsselziffer) mod 10."""
+        did = d["id"]
+        req = self._pin_ask.get(did)
+        if req is None or req["bis"] <= time.time():
+            self._pin_ask.pop(did, None)
+            self.update()
+            return
+        if not code:
+            self._pin_ask.pop(did, None)
+            self._locked.pop(did, None)
+            self.update()
+            return
+        src = f"display:{did}"
+        if wait := self._pin_throttle.locked_for(src):
+            req["f"] = self._pin_wait_txt(wait)
+        else:
+            key = req["k"]
+            pin = "".join(str((int(c) - int(key[i])) % 10) for i, c in enumerate(code)) \
+                if code.isdigit() and len(code) <= len(key) else ""
+            ok = bool(pin) and await self.hass.async_add_executor_job(verify, self.monitor.book.pin, pin)
+            if ok:
+                self._pin_throttle.ok(src)
+                self._unlocked[did] = time.time() + PIN_UNLOCK_S
+                self._pin_ask.pop(did, None)
+                self._locked.pop(did, None)
+                self.update()
+                await self._tap(req["did"], req["ziel"])
+                return
+            self._pin_throttle.fail(src)
+            wait = self._pin_throttle.locked_for(src)
+            req["f"] = self._pin_wait_txt(wait) if wait else "Falsche PIN"
+            _LOGGER.info("Display %s: falsche PIN", req["did"])
+        # neuer Schlüssel je Versuch: Das Tastenfeld leert sich und zeigt den Fehler
+        self._pin_new_key(req)
+        req["bis"] = time.time() + PIN_ASK_S
+        self.update()
+        if wait:
+            async_call_later(self.hass, min(wait, PIN_LOCK_S) + 0.5, callback(lambda _now: self._pin_unlock_txt(did)))
+
+    @callback
+    def _pin_unlock_txt(self, did: str) -> None:
+        """Sperre vorbei: Fehlertext im offenen Tastenfeld entfernen."""
+        if (req := self._pin_ask.get(did)) and not self._pin_throttle.locked_for(f"display:{did}"):
+            req["f"] = ""
+            self._pin_new_key(req)
+            self.update()
 
     # ---------- Tippen ----------
     async def async_tap(self, call: ServiceCall) -> None:
-        did, ziel = str(call.data.get("display", "")), str(call.data.get("ziel", ""))
+        await self._tap(str(call.data.get("display", "")), str(call.data.get("ziel", "")))
+
+    async def _tap(self, did: str, ziel: str) -> None:
         # Firmware ab 0.2 meldet ihren Gerätenamen, 0.1 die Kennung
         d = next((x for x in self.displays if x["id"] == did), None) or next((x for x in self.displays if did and x.get("device") == did), None)
         if ziel == "hallo":
@@ -1112,12 +1225,13 @@ class DisplayHub:
         if d is None:
             _LOGGER.warning("Display %s ist nicht eingerichtet", did)
             return
-        if (kind := self._pin_kind(d, ziel)) and pin_needs(self.layout.get("pin") or {}, kind, True) and self.monitor.book.pin.get("hash"):
-            # Mit PIN geschützt: am Display gibt es (noch) kein Tastenfeld → nicht ausführen, kurz Hinweis zeigen
-            self._locked[d["id"]] = (time.time() + LOCKED_NOTE_S, PIN_TXT.get(kind, "Aktion"))
-            _LOGGER.info("Display %s: %s ist mit PIN geschützt", did, ziel)
-            self.update()
-            async_call_later(self.hass, LOCKED_NOTE_S + 0.5, callback(lambda _now: self.update()))
+        if ziel.startswith("pin:"):
+            await self._pin_answer(d, ziel[4:])
+            return
+        if (kind := self._pin_kind(d, ziel)) and pin_needs(self.layout.get("pin") or {}, kind, True) \
+                and self.monitor.book.pin.get("hash") and self._unlocked.get(d["id"], 0.0) <= time.time():
+            # Mit PIN geschützt: nicht ausführen, sondern das Tastenfeld am Display öffnen (bzw. Hinweis bei alter Firmware)
+            self._pin_start(d, did, ziel, kind)
             return
         if ziel.startswith("gn:") or ziel == "gn_alle":
             items = self.check_items("nacht")

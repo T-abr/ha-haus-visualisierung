@@ -68,7 +68,7 @@ Palette der Visualisierung.
  "modus": {"k": "zuhause", "n": "Zuhause", "i": "home-account", "f": "#4fd18b"}}
 ```
 
-`wetter` fehlt ohne Wetter-Entität. Die Uhrzeit nimmt die Firmware von Home Assistant (Zeitquelle).
+`wetter` fehlt ohne Wetter-Entität; `t` ist die Außentemperatur vom Außenfühler (Einstellungen → Heizung → Außentemperatur, sonst nach Namen), ohne Fühler die der Wetter-Entität. Die Uhrzeit nimmt die Firmware von Home Assistant (Zeitquelle).
 
 ### `schoner`
 
@@ -81,6 +81,11 @@ Inhalt des Bildschirmschoners (nur wenn eingeschaltet, sonst `null`), wie am Wan
  "hinweis": {"i": "check-circle-outline", "t": "Waschmaschine fertig"},
  "status": {"i": "shield-check", "f": "#4fd18b", "t": "Alles in Ordnung"}}
 ```
+
+Welche Elemente kommen, stellt man unter Einstellungen → Wandpanel → Bildschirmschoner ein (gilt für Panel und
+Displays): abgeschaltete Teile fehlen in `zeile`, `hinweis` bzw. `status` ist dann `null`. Optional steht in `zeile`
+die Innentemperatur (`home-thermometer`). Die Temperatur bei `weather-*` ist die des Außenfühlers, sonst der
+Wetter-Entität (wie `kopf.wetter.t`).
 
 ### `klingel`
 
@@ -99,6 +104,26 @@ verkleinertes JPEG-Standbild der Kamera (leer ohne Kamera oder ohne interne Adre
 Overlay offen ist, alle paar Sekunden neu. `tuer`: Türöffner eingerichtet, Knopf „Tür öffnen“ zeigen (muss zweimal
 getippt werden, dann Ziel `klingel:tuer`); `offen`: Türöffner wurde ausgelöst. `bis`: Unix-Zeit, zu der das Overlay
 schließt (für die Anzeige „schließt in … s“ und als Sicherung ohne Verbindung).
+
+### `pin`
+
+PIN-Tastenfeld (Firmware ab 0.7.0), `null`, solange nichts abgefragt wird. Tippt man am Display eine Aktion, die laut
+Einstellungen → PIN geschützt ist (Tür öffnen, Alarm aus, Abwesend/Urlaub), führt die Integration sie nicht aus,
+sondern schickt:
+
+```json
+{"n": 7, "t": "Tür öffnen", "k": "38201957", "f": ""}
+```
+
+`n` zählt jede Abfrage: Ein neues `n` öffnet das Tastenfeld als Overlay (über allem, auch über der Klingel) und weckt
+das Display. `t` ist die geschützte Aktion, `f` ein Fehlertext („Falsche PIN“, „Zu viele Versuche – noch 45 s gesperrt“),
+sonst leer. `k` ist ein Einmalschlüssel aus 8 Ziffern: Die Firmware schickt die Eingabe nicht im Klartext, sondern je
+Stelle `(PIN-Ziffer + k[Stelle]) mod 10` als Ziel `pin:<ziffern>` (4–8 Stellen); leeres `pin:` = abgebrochen. So steht
+die PIN nicht lesbar in der Datenbank von Home Assistant (Dienstaufrufe werden aufgezeichnet). Nach jedem Versuch kommt
+ein neues `k` (gleiches `n`): Die Firmware leert dann die Eingabe und zeigt `f`. Bei richtiger PIN führt die Integration
+die gemerkte Aktion aus, schickt `null` und lässt das Display 30 s entsperrt. Nach 5 Fehlversuchen ist es 60 s
+gesperrt; nach 60 s ohne Eingabe schließt die Integration die Abfrage. Ältere Firmware ignoriert den Bereich und zeigt
+den Hinweis „mit PIN geschützt“ (`hinweis`).
 
 ### `eigene`
 
@@ -202,6 +227,7 @@ data: {display: haus-display-a1b2c3, ziel: "gn:light.kueche"}
 | `eigen:<seite>:<kachel>` | Kachel einer eigenen Seite angetippt (Seite 0–2, Kachel 0–5): schaltet wie eine `entity:`-Kachel |
 | `wert:<kachel:N\|eigen:p:k>:<0–100>` | Regler nach langem Druck auf eine stellbare Kachel: Licht auf diese Helligkeit (0 = aus), Rollo auf diese Position |
 | `klingel:tuer` | „Tür öffnen“ im Klingel-Overlay (nur während es klingelt): Türöffner aus Einstellungen → Klingel auslösen wie im Panel (Schloss öffnen, Schalter mit Impuls, Taste, Skript) |
+| `pin:<ziffern>` | Eingabe im PIN-Tastenfeld, verschleiert mit `k` aus dem Bereich `pin`; `pin:` = abgebrochen |
 | `geraet_ok` | fertige Haushaltsgeräte quittieren |
 | `hallo` | Gerät ist (neu) verbunden: alle Bereiche neu schicken; nicht zugeordnetes Gerät bekommt `protokoll` = `""` |
 
@@ -214,6 +240,7 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
+| 1 (PIN-Tastenfeld) | ab 1.20.0 | ab 0.7.0 |
 | 1 (Stellen per langem Tippen, Rückmeldung beim Tippen, Wischen, Verbindungsanzeige) | ab 1.18.0 | ab 0.6.0 |
 | 1 (Klingel-Overlay) | ab 1.16.0 | ab 0.5.0 |
 | 1 (eigene Seiten, Bildschirmschoner, farbige Werte, Kacheln antippbar) | ab 1.15.0 | ab 0.4.0 |

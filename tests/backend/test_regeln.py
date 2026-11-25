@@ -247,3 +247,27 @@ async def test_spaet_gemeldeter_bewegungsmelder(hass: HomeAssistant, vorher: str
     await _tick(hass)
     assert f"presence:{e.entity_id}" in monitor.book.alarms
     assert "🏠 Flur: Bewegung erkannt" in _titles(calls)
+
+
+async def test_nach_neustart(hass: HomeAssistant) -> None:
+    """Integration lädt, bevor Home Assistant fertig gestartet ist (echter Neustart): Der Start-Abgleich
+    läuft beim Ereignis „gestartet“ und danach müssen Regeln greifen. Früher lief er in einem
+    Hintergrund-Thread, brach ab, und der Alarmmanager blieb bis zum nächsten Neustart stumm."""
+    from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+    from homeassistant.core import CoreState
+
+    calls = async_mock_service(hass, "notify", "mobile_app_handy")
+    ids = await _haus(hass)
+    hass.set_state(CoreState.not_running)
+    monitor = await _setup(hass)
+    assert not monitor._baseline_done
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+    assert monitor._baseline_done
+    store = hass.data[DOMAIN]["store"]
+    await _alerts(hass, store, rules=[{"title": "Licht an", "entity": ids["lampe"], "op": "on", "level": "alarm"}])
+    _set(hass, ids["lampe"], "on")
+    await _tick(hass)
+    assert f"rule:0:{ids['lampe']}" in monitor.book.alarms
+    assert "🏠 Licht an" in _titles(calls)

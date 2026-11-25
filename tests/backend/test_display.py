@@ -251,7 +251,7 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     assert sent["protokoll"] == str(PROTOCOL) and json.loads(sent["einstellungen"])["name"] == "Flur"
     # leeres Haus ohne Meldungen: ruhige Hinweiszeile statt leerer Fläche
     assert json.loads(sent["hinweis"]) == {"i": "shield-check", "f": "#4fd18b", "n": "Alles in Ordnung", "s": "Keine offenen Meldungen", "knopf": "", "ziel": ""}
-    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "schoner", "klingel", "eigene", "haus"}
+    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "schoner", "klingel", "pin", "eigene", "haus"}
     assert json.loads(sent["schoner"]) is None
     assert json.loads(sent["eigene"]) == []
     assert json.loads(sent["klingel"]) is None
@@ -265,7 +265,7 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     # „hallo“ nach dem Verbinden → alles neu; Tipp mit Gerätenamen wirkt auf das zugeordnete Display
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "hallo"}, blocking=True)
     await hass.async_block_till_done()
-    assert len(calls) == n + 12
+    assert len(calls) == n + 13
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "modus:abwesend"}, blocking=True)
     await _tick(hass)
     assert monitor.house.mode == "abwesend"
@@ -499,3 +499,40 @@ async def test_display_push_gedrosselt(hass: HomeAssistant) -> None:
     assert len(kacheln()) == n + 2 and "23,5" in json.dumps(kacheln()[-1], ensure_ascii=False)
     await _tick(hass, 11)
     assert len(kacheln()) == n + 2                  # kein zweiter Push hinterher
+
+
+def test_sanitize_wallpanel_saver() -> None:
+    wp = sanitize({"wallpanel": {"night_from": "22:30", "night_to": "7:05", "clock_size": "xl", "sv_indoor": "<b>",
+                                 "sv_date": False, "sv_status": "nein"}})["wallpanel"]
+    assert wp["night_from"] == "22:30" and wp["night_to"] == "07:05" and wp["clock_size"] == "l" and wp["sv_indoor"] == ""
+    assert wp["sv_date"] is False and wp["sv_status"] is True and wp["sv_weather"] is True
+    wp = sanitize({"wallpanel": {"night_from": "25:00", "clock_size": "s", "sv_indoor": "avg"}})["wallpanel"]
+    assert wp["night_from"] == "23:00" and wp["clock_size"] == "s" and wp["sv_indoor"] == "avg"
+
+
+async def test_schoner_einstellungen_und_aussentemperatur(hass: HomeAssistant) -> None:
+    """Außentemperatur vom Außenfühler (nicht Wintergarten), Elemente des Schoners abschaltbar, Innentemperatur."""
+    await _house(hass)
+    hass.states.async_set("sensor.wintergarten_temperatur", "24.0", {"device_class": "temperature", "unit_of_measurement": "°C"})
+    hass.states.async_set("sensor.aussen_temperatur", "3.6", {"device_class": "temperature", "unit_of_measurement": "°C"})
+    hass.states.async_set("sensor.pv", "3240", {**PWR, "friendly_name": "PV Leistung"})
+    hass.states.async_set("weather.home", "partlycloudy", {"temperature": 7.2, "friendly_name": "Zuhause"})
+    async_mock_service(hass, "weather", "get_forecasts", supports_response=SupportsResponse.ONLY,
+                       response={"weather.home": {"forecast": [{"temperature": 9}, {"temperature": 15.4}]}})
+    monitor = await _setup(hass)
+    store = hass.data[DOMAIN]["store"]
+    await store.async_save({"header": {"pv": "sensor.pv"}, "displays": [{"name": "Flur", "saver": True}]})
+    await _tick(hass)
+    await _tick(hass)
+    eid = "sensor.haus_display_flur"
+    assert monitor._outdoor["temperature"] == "sensor.aussen_temperatur"
+    assert _attr(hass, eid, "kopf")["wetter"]["t"] == "4°"
+    assert _attr(hass, eid, "schoner")["zeile"][0] == {"i": "weather-partly-cloudy", "t": "4°"}
+
+    await store.async_save({"header": {"pv": "sensor.pv"}, "displays": [{"name": "Flur", "saver": True}],
+                            "wallpanel": {"sv_weather": False, "sv_pv": False, "sv_status": False, "sv_indoor": "avg"}})
+    await _tick(hass)
+    await _tick(hass)
+    sv = _attr(hass, eid, "schoner")
+    assert sv["zeile"] == [{"i": "home-thermometer", "t": "20,0°"}, {"i": "calendar", "t": "Morgen 15°"}, {"i": "home-account", "t": "Zuhause"}]
+    assert sv["status"] is None

@@ -18,7 +18,9 @@ const DEFAULT_LAYOUT = {
   confirm_quick: true, show_trends: true,
   heating: { enabled: true, area: "", tank: [], tank_min: 30, tank_max: 65, stove: "", stove_pump: "", stove_hot: 50, curve: "", mixer: "", flow: "", outdoor: "",
     manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 } },
-  wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "" },
+  wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "",
+    night_from: "23:00", night_to: "06:00", clock_size: "l", sv_indoor: "",
+    sv_date: true, sv_weather: true, sv_forecast: true, sv_pv: true, sv_mode: true, sv_appl: true, sv_shade: true, sv_status: true },
   shading: { enabled: true, hot: 26, facing: {} },
   forecast: { enabled: true, solar: true, solar_today: "", solar_tomorrow: "" },
   weather_alerts: { enabled: true, dwd: [], dwd_min: 2, rain: true, rain_min: 60, rain_mm: 0.3, rain_sensor: "", wind: true, wind_kmh: 50, awnings: [] },
@@ -333,6 +335,14 @@ const areaIcon = (a) => a.icon || (AREA_ICON_RULES.find(([re]) => re.test(a.name
 // Technische Temperaturen taugen nicht als Raumtemperatur
 const TECH_RE = /(vorlauf|r(ü|ue)cklauf|speicher|puffer|kessel|kamin|solar|kollektor|boiler|warmwasser|abgas|cpu)/i;
 const OUTDOOR_RE = /(au(ß|ss)en|garten|drau(ß|ss)en|outdoor|grundst(ü|ue)ck)/i;
+// Fühler im Wintergarten oder Gartenhaus messen nicht die Außentemperatur
+const NOT_OUTDOOR_SENSOR_RE = /(winter ?garten|garten ?haus|gartenh(ü|ue)tte)/i;
+/** Erster Außenfühler einer Geräteklasse nach Namen (Entitäts-ID + Anzeigename), wie im Backend (alerts.py). */
+const outdoorSensor = (h, cls) => Object.keys(h.states).find((e) => {
+  if (!e.startsWith("sensor.") || dc(h.states[e]) !== cls) return false;
+  const l = `${e} ${h.states[e].attributes.friendly_name || ""}`;
+  return OUTDOOR_RE.test(l) && !NOT_OUTDOOR_SENSOR_RE.test(l);
+}) || "";
 
 /* ---------- DOM-Helfer ---------- */
 const icon = (i, cls = "") => `<ha-icon icon="${esc(i)}"${cls ? ` class="${cls}"` : ""}></ha-icon>`;
@@ -371,4 +381,4 @@ const NAV = [
  *  ohne Ringabhängigkeit nachladen können. */
 const UPD = {};
 
-export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, instant, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, withDefaults };
+export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, instant, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, outdoorSensor, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, withDefaults };

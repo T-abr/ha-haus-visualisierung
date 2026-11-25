@@ -407,9 +407,18 @@ def _wallpanel(raw: dict) -> dict:
     out["saver_min"] = _int(raw.get("saver_min"), 0, 240, out["saver_min"])
     out["black_min"] = _int(raw.get("black_min"), 0, 600, out["black_min"])
     out["return_min"] = _int(raw.get("return_min"), 0, 240, out["return_min"])
-    for key in ("fullscreen", "hide_sidebar", "wake_alarm", "night_dim", "wander"):
+    for key in ("fullscreen", "hide_sidebar", "wake_alarm", "night_dim", "wander",
+                "sv_date", "sv_weather", "sv_forecast", "sv_pv", "sv_mode", "sv_appl", "sv_shade", "sv_status"):
         if isinstance(raw.get(key), bool):
             out[key] = raw[key]
+    for key in ("night_from", "night_to"):
+        v = str(raw.get(key) or "")
+        if re.fullmatch(r"([01]?\d|2[0-3]):[0-5]\d", v):
+            out[key] = v.zfill(5)
+    if raw.get("clock_size") in ("l", "m", "s"):
+        out["clock_size"] = raw["clock_size"]
+    ind = str(raw.get("sv_indoor") or "")[:100]
+    out["sv_indoor"] = ind if re.fullmatch(r"[a-z0-9_]*", ind) else ""
     w = _entity(raw.get("weather"))
     out["weather"] = w if w.startswith("weather.") else ""
     out["wake_entity"] = _entity(raw.get("wake_entity"))

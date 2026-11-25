@@ -60,6 +60,8 @@ ENERGY_DC = {"power", "energy", "current", "voltage", "power_factor", "apparent_
 UNAV = {"unavailable", "unknown"}
 STATELESS = {"scene", "button", "input_button", "event"}
 OUTDOOR_RE = re.compile(r"(au(ß|ss)en|garten|drau(ß|ss)en|outdoor|grundst(ü|ue)ck)", re.IGNORECASE)
+# Fühler im Wintergarten oder Gartenhaus messen nicht die Außentemperatur (wie NOT_OUTDOOR_SENSOR_RE im Frontend)
+NOT_OUTDOOR_SENSOR_RE = re.compile(r"(winter ?garten|garten ?haus|gartenh(ü|ue)tte)", re.IGNORECASE)
 TECH_RE = re.compile(r"(vorlauf|r(ü|ue)cklauf|speicher|puffer|kessel|kamin|solar|kollektor|boiler|warmwasser|abgas|cpu)", re.IGNORECASE)
 LEVEL_ORDER = {"alarm": 3, "warn": 2, "info": 1}
 LEVEL_NAME = {"alarm": "Alarm", "warn": "Warnung", "info": "Hinweis"}
@@ -270,7 +272,7 @@ class AlertMonitor:
         if hass.is_running:
             self._start_baseline()
         else:
-            self._unsubs.append(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, lambda _e: self._start_baseline()))
+            self._unsubs.append(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, self._on_started))
 
     @callback
     def async_stop(self) -> None:
@@ -283,6 +285,13 @@ class AlertMonitor:
         if self._eval_pending:
             self._eval_pending()
             self._eval_pending = None
+
+    @callback
+    def _on_started(self, _event: Event) -> None:
+        # Muss ein @callback sein: Eine einfache lambda führt Home Assistant in einem Hintergrund-Thread aus.
+        # Dort brach der Start-Abgleich ab (Sensor-Update außerhalb der Event-Loop), und der Alarmmanager
+        # wertete nach einem Neustart keine einzige Regel mehr aus.
+        self._start_baseline()
 
     @callback
     def _start_baseline(self) -> None:
@@ -393,7 +402,8 @@ class AlertMonitor:
         pick = (layout.get("heating") or {}).get("outdoor")
         for st in hass.states.async_all("sensor"):
             dc = st.attributes.get("device_class")
-            if dc in ("temperature", "humidity") and dc not in out and OUTDOOR_RE.search(f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"):
+            label = f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"
+            if dc in ("temperature", "humidity") and dc not in out and OUTDOOR_RE.search(label) and not NOT_OUTDOOR_SENSOR_RE.search(label):
                 out[dc] = st.entity_id
         if pick and hass.states.get(pick):
             out["temperature"] = pick

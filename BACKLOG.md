@@ -29,7 +29,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 18 | ~~Unwetter und „Regen kommt, Fenster offen“~~ | hoch | M | umgesetzt |
 | 19 | ~~Einstellungen sichern und wiederherstellen~~ | hoch | S | umgesetzt |
 | 20 | ~~Einrichtungs-Check~~ | hoch | S–M | umgesetzt |
-| 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt (Rest offen) |
+| 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt |
 | 22 | Zeitleiste „Was war los?“ | mittel | M | neu |
 | 23 | Szenen je Raum (auch als Display-Kachel) | mittel | M | neu |
 | 24 | Display: Alarm-Vollbild mit Quittieren | mittel | M | neu |
@@ -39,7 +39,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 28 | Display: Raumbezug je Display | mittel | M | neu |
 | 29 | Display: Wetter-/PV-Seite mit Stundenverlauf | niedrig | M | neu |
 | 30 | Display-Speicher: Schriften, gemeinsame Stile, interner Puffer | später | M–L | zurückgestellt |
-| 31 | Display-Firmware in kleinere Dateien aufteilen | mittel | M | neu |
+| 31 | ~~Display-Firmware in kleinere Dateien aufteilen~~ | mittel | M | umgesetzt |
 
 „Umgesetzt“: seit Version 1.11.0 (1–10) bzw. 1.17.0 (18–21) enthalten. „Neu“: im Backlog, noch nicht
 ausgewählt. „Vorgemerkt“: gute Idee, aber im Moment nicht spannend (Tobias, 2026-11-23). „Zurückgestellt“: erst
@@ -114,8 +114,8 @@ geladene Firmware ohne Internet.
 Einstellungen hinterlegen oder das Firmware-Repo öffentlich machen (dann ohne Token).
 
 ### 18.–21. ~~Wetterwarnungen, Sicherungen, Einrichtungs-Check, PIN~~ (umgesetzt, siehe CHANGELOG 1.17.0)
-Offen bei 21: Tastenfeld für die PIN am Wanddisplay (braucht neue Firmware); bis dahin sind geschützte Aktionen dort
-gesperrt.
+~~Offen bei 21: Tastenfeld für die PIN am Wanddisplay~~ (umgesetzt, Firmware ab 0.7.0; ältere Firmware sperrt
+geschützte Aktionen weiter mit Hinweis).
 
 ### 22. Zeitleiste „Was war los?“
 Tür, Klingel mit Standbild, Bewegung, Moduswechsel und Alarme als Verlauf auf der Seite Sicherheit, nach Tag
@@ -164,7 +164,7 @@ ganzen Bildschirms, im Alltag nicht spürbar).
 etwa 20 KB fällt oder das Display spürbar träge wird. Die Ursache langer Loops zeigt das USB-Log als Warnung
 „took a long time“ mit dem Namen des Bausteins (auch bei Stufe INFO).
 
-### 31. Display-Firmware in kleinere Dateien aufteilen
+### 31. ~~Display-Firmware in kleinere Dateien aufteilen~~ (umgesetzt, Display-PR #10)
 `haus-display/basis.yaml` im Repo ha-haus-display hat über 4.400 Zeilen in einer Datei. Aufgeteilt nach Themen
 (z. B. Seiten, Kacheln, Kopfzeile, Schoner, Einrichtung, Sensoren) per ESPHome-`packages`/`!include` müssen Threads
 nur den passenden Teil lesen; das spart Verlauf und Nutzung. Verhalten und Firmware bleiben gleich; Aufbau-Abschnitt

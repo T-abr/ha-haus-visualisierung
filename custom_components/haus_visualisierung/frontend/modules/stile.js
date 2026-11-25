@@ -889,6 +889,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .saver{position:fixed;inset:0;z-index:40;background:#05070c;display:flex;align-items:center;justify-content:center;cursor:none;animation:mfade .6s ease;user-select:none}
 .svbox{display:flex;flex-direction:column;align-items:center;gap:10px;transition:transform 2s ease;color:#e9eef7;text-align:center;padding:24px}
 .svclock{font-size:clamp(72px,18vw,180px);font-weight:200;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.saver[data-clock=m] .svclock{font-size:clamp(56px,13vw,130px)}.saver[data-clock=s] .svclock{font-size:clamp(40px,8vw,84px)}
 .svdate{font-size:clamp(16px,2.6vw,26px);color:rgba(233,238,247,.7)}
 .svrow{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;margin-top:14px;font-size:clamp(16px,2.4vw,24px);color:rgba(233,238,247,.85)}
 .svrow span,.svstat span{display:inline-flex;align-items:center;gap:8px}

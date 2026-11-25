@@ -4,6 +4,29 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.20.0 – 2026-11-25
+
+Mitgelieferte Firmware **0.7.0** (PIN-Tastenfeld; Update über Einstellungen → Displays bzw. die Update-Entität je Display).
+
+### Neu
+- **Bildschirmschoner einstellbar** (Einstellungen → Wandpanel & Displays → Wandpanel → „Bildschirmschoner“): Datum, Wetter mit Außentemperatur, Vorhersage morgen, PV-Leistung, Hausmodus, Müll und Termine, fertige Geräte, Beschattungshinweis und Meldungen einzeln ein- und ausschaltbar; neu wählbar ist die Innentemperatur (Haus Ø oder ein Raum). Uhrgröße groß/mittel/klein. Die Auswahl gilt auch für die Wanddisplays (dort ohne Datum und Uhrgröße, keine neue Firmware nötig).
+- **Nachtzeit für „Nachts dunkler“** einstellbar (bisher fest 23–6 Uhr), auch über Mitternacht.
+- **PIN am Wanddisplay eingeben.** Geschützte Aktionen (Tür öffnen im Klingel-Overlay, verriegeltes Schloss, Zuhause aus Nacht/Abwesend/Urlaub, Abwesend/Urlaub einschalten) öffnen am 4"-Display ein Tastenfeld wie im Panel, statt nur gesperrt zu sein. Bei richtiger PIN läuft die Aktion und das Display bleibt 30 s entsperrt; nach 5 Fehlversuchen ist es eine Minute gesperrt. Die Eingabe geht mit einem Einmalschlüssel verschleiert an Home Assistant, damit die PIN nicht lesbar in der Datenbank landet. Braucht Firmware 0.7.0; ältere Firmware zeigt weiter den Hinweis „mit PIN geschützt“. Neuer Bereich `pin` und Ziel `pin:<code>` im Display-Protokoll (Version bleibt 1).
+
+### Behoben
+- **Alarmmanager nach einem Neustart komplett stumm.** Nach jedem Neustart von Home Assistant reagierte der Alarmmanager auf keine Regel mehr: keine Meldung im Panel, kein Push, auch nicht bei eigenen Regeln. Der Abgleich beim Start lief in einem Hintergrund-Thread und brach dort ab (Wetter-Sensor durfte von dort nicht schreiben), danach wurde nichts mehr ausgewertet. Nur direkt nach dem Einrichten der Integration funktionierte alles, deshalb fiel es in den Tests nicht auf. Der Abgleich läuft jetzt in der Event-Loop von Home Assistant. Geprüft mit einem echten Home Assistant (Neustart, eigene Regel „Licht an“, Bewegung bei Abwesend und Urlaub).
+- **Außentemperatur überall aus derselben Quelle.** Kopfzeile, Vorhersage-Karte und Wanddisplay zeigten immer den Wert der Wetter-Entität (Wetterdienst), der Bildschirmschoner den Außenfühler nur, wenn die Heizungskarte erkannt war. Jetzt gilt überall wie auf Klimaseite, im Rückblick und bei den Warnungen: Einstellung Heizung → Außentemperatur, sonst der erste Fühler mit „außen/Garten …“ im Namen, erst ohne Fühler die Wetter-Entität. Fühler im Wintergarten, Gartenhaus oder in der Gartenhütte zählen bei der automatischen Suche nicht mehr als Außenfühler.
+- Wanddisplay: Der Schalter „Müll und Termine im Bildschirmschoner“ galt bisher nur am Wandpanel.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 17–23 ms, Klima 41 ms, Licht 39 ms, übrige 6–19 ms; hass-Setter Übersicht 20–37 µs, Unterseiten 0,3–22 µs; Aktualisierer auf der Übersicht 480 pro Minute. Im Rahmen der Messschwankung wie 1.19.1.
+- Alarmmanager (Backend-Test): Auswertung 0,09 ms, Neuaufbau des Modells 0,96 ms bei 312 beobachteten Entitäten.
+
+### Tests
+- Bildschirmschoner: Elemente abschaltbar, Innentemperatur, Uhrgröße, Nachtzeit (auch über Mitternacht), Speichern der Auswahl; Außentemperatur vom Außenfühler statt Wetter-Entität (Panel und Wanddisplay), Wintergarten-Fühler wird übergangen.
+- Integration lädt vor dem Ende des Starts (wie bei einem echten Neustart): Start-Abgleich läuft, eine eigene Regel löst danach Alarm und Push aus.
+- Tastenfeld am Display: Öffnen, Abbrechen, falsche PIN mit neuem Schlüssel, Klartext wird abgelehnt, richtige PIN führt die Aktion aus und entsperrt, Sperre nach 5 Fehlversuchen.
+
 ## 1.19.1 – 2026-11-24
 
 Mitgelieferte Firmware unverändert **0.6.1**.

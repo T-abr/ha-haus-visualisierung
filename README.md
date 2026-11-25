@@ -1,4 +1,4 @@
-# Haus Visualisierung 1.19.1
+# Haus Visualisierung 1.20.0
 
 Eigenes Home-Assistant-Panel, das sich wie eine Dashboard-Strategy aus Etagen, Bereichen und Geräten
 selbst aufbaut – mit eigenem Design, Alarmmanager und Hausmodus. Läuft auf einem Raspberry Pi ohne Last:
@@ -35,7 +35,8 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Tipps über den Dienst `haus_visualisierung.display_tap`. Firmware: [ha-haus-display](https://github.com/T-abr/ha-haus-display),
   Schnittstelle: [DISPLAY_PROTOKOLL.md](DISPLAY_PROTOKOLL.md) (Protokoll 1; Push und Einrichten ab 1.13.0 mit Firmware 0.2.0).
 - **Wandpanel-Modus** je Gerät (auch per `?wandpanel=1`): Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr,
-  Wetter, Hausmodus und Meldungen, automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
+  Wetter, Hausmodus und Meldungen (Elemente, Innentemperatur, Uhrgröße und Nachtzeit einstellbar, gilt auch für die
+  Wanddisplays), automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
 - **Als Standard-Dashboard** (Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“): Home Assistant öffnet
   statt der Übersicht die Visualisierung, für den eigenen Benutzer, für alle oder nur auf diesem Gerät.
 - **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Energie, Technik, Wandpanel & Displays, Darstellung, Prüfen & Sichern) mit Sprungleiste und Sortieren per Ziehen.
@@ -43,7 +44,7 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   Sicherungen der Einstellungen – automatisch vor Updates und täglich vor dem Speichern, wiederherstellen, als Datei
   herunterladen und einspielen.
 - **PIN für heikle Aktionen**: Tür öffnen, Alarm aus, Abwesend/Urlaub nur mit PIN – an Wandpanels und Wanddisplays oder
-  überall; die PIN bleibt in Home Assistant.
+  überall; die PIN bleibt in Home Assistant. Wanddisplays (Firmware ab 0.7.0) fragen sie mit einem Tastenfeld ab.
 - **Eingebettete Panels** (Solar, Protect, Dashboards) mit fester Navigation und Haus-Farben.
 - **Klingel-Overlay** mit Kamera, Live-Bild und Türöffner (Schalter, Taste, Schloss).
 - **Alarmmanager**: Warnregeln (fest und eigene), Leitstelle, Quittieren, Stummschalten, Protokoll,

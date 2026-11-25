@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "haus_visualisierung"
-VERSION = "1.19.1"
+VERSION = "1.20.0"
 
 PANEL_URL_PATH = "haus-visualisierung"
 PANEL_COMPONENT = "haus-visualisierung-panel"
@@ -147,6 +147,12 @@ DEFAULT_LAYOUT: dict = {
     "wallpanel": {                 # Wandpanel (welches Gerät eins ist, merkt sich der Browser)
         "saver_min": 5, "black_min": 0, "return_min": 2, "fullscreen": True, "hide_sidebar": True,
         "wake_alarm": True, "night_dim": True, "wander": False, "weather": "", "wake_entity": "",
+        "night_from": "23:00", "night_to": "06:00",  # „Nachts dunkler“
+        "clock_size": "l",                           # Bildschirmschoner: Uhr l/m/s
+        "sv_indoor": "",                             # Innentemperatur im Schoner: "" | "avg" | Bereichs-ID
+        # Elemente des Bildschirmschoners (Wandpanel und Wanddisplays)
+        "sv_date": True, "sv_weather": True, "sv_forecast": True, "sv_pv": True, "sv_mode": True,
+        "sv_appl": True, "sv_shade": True, "sv_status": True,
     },
     "shading": {                   # Beschattung: Hinweise nach Vorhersage, Sonnenstand und Ausrichtung
         "enabled": True, "hot": 26,    # heißer Tag ab °C (Vorhersage)
