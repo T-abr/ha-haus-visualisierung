@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Behoben
+- **Alarmmanager nach einem Neustart komplett stumm.** Nach jedem Neustart von Home Assistant reagierte der Alarmmanager auf keine Regel mehr: keine Meldung im Panel, kein Push, auch nicht bei eigenen Regeln. Der Abgleich beim Start lief in einem Hintergrund-Thread und brach dort ab (Wetter-Sensor durfte von dort nicht schreiben), danach wurde nichts mehr ausgewertet. Nur direkt nach dem Einrichten der Integration funktionierte alles, deshalb fiel es in den Tests nicht auf. Der Abgleich läuft jetzt in der Event-Loop von Home Assistant. Geprüft mit einem echten Home Assistant (Neustart, eigene Regel „Licht an“, Bewegung bei Abwesend und Urlaub).
+
+### Tests
+- Integration lädt vor dem Ende des Starts (wie bei einem echten Neustart): Start-Abgleich läuft, eine eigene Regel löst danach Alarm und Push aus.
+
 ## 1.19.1 – 2026-11-24
 
 Mitgelieferte Firmware unverändert **0.6.1**.
