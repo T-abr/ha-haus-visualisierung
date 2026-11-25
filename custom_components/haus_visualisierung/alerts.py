@@ -270,7 +270,7 @@ class AlertMonitor:
         if hass.is_running:
             self._start_baseline()
         else:
-            self._unsubs.append(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, lambda _e: self._start_baseline()))
+            self._unsubs.append(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, self._on_started))
 
     @callback
     def async_stop(self) -> None:
@@ -283,6 +283,13 @@ class AlertMonitor:
         if self._eval_pending:
             self._eval_pending()
             self._eval_pending = None
+
+    @callback
+    def _on_started(self, _event: Event) -> None:
+        # Muss ein @callback sein: Eine einfache lambda führt Home Assistant in einem Hintergrund-Thread aus.
+        # Dort brach der Start-Abgleich ab (Sensor-Update außerhalb der Event-Loop), und der Alarmmanager
+        # wertete nach einem Neustart keine einzige Regel mehr aus.
+        self._start_baseline()
 
     @callback
     def _start_baseline(self) -> None:
