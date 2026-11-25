@@ -7,9 +7,10 @@ Tests, Version und ZIP: Abschnitt „Entwicklung“ in `README.md`. Hier steht n
 ## Arbeitsweise
 - Entscheidungen (auch kleine) bei Tobias erfragen, nicht selbst treffen. Firmware nie ungefragt bauen.
 - Keine Screenshots oder Mockups, außer sie sind ausdrücklich gewünscht.
-- Kein Release aus einem Thread: keine Tags pushen. Release macht Tobias über Actions → „Release“ → „Run workflow“.
+- Kein Release aus einem Thread: keine Tags pushen. Release macht Tobias über Actions → „Release“ → „Run workflow“;
+  der Workflow setzt dabei die Version (Eingabe patch/minor/major), Threads ändern die Versionsnummer nicht.
 - Änderungen ins CHANGELOG unter `## Unveröffentlicht`, gegliedert mit `### Neu`, `### Behoben`, `### Geändert`/`### Verbessert`, `### Tests`.
-  Versionssprung nur auf Wunsch: `scripts/bump_version.py` verlangt dort einen Abschnitt `### Performance`
+  Vor einem Release braucht der Abschnitt `### Performance` (`bump_version.py` im Workflow bricht sonst ab)
   (Ergebnis von `python3 tests/perf/measure.py`, siehe `PERFORMANCE.md`).
 - Sparsam arbeiten: ein Thread pro Anforderung, danach schließen. Nach dem Öffnen eines PRs nicht auf die CI warten
   und nicht selbst mergen; gemergt wird gesammelt im Release-Thread. Keine Zwischenstände melden, nur Ergebnis oder

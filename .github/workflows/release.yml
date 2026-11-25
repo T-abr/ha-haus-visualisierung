@@ -1,7 +1,9 @@
 # Release erstellen, auf zwei Wegen:
 #  - Tag pushen: git tag v1.4.0 && git push origin v1.4.0
-#  - Knopf: GitHub → Actions → „Release“ → „Run workflow“ (Branch main). Der Tag v<Version aus manifest.json>
-#    wird dabei angelegt.
+#  - Knopf: GitHub → Actions → „Release“ → „Run workflow“ (Branch main). Dabei „Versionssprung“ wählen:
+#    patch/minor/major erhöht die Version mit scripts/bump_version.py (manifest.json, const.py, version.js,
+#    README, CHANGELOG-Abschnitt „Unveröffentlicht“ → neue Version), committet „Version X.Y.Z“ auf den Zweig und
+#    legt den Tag v<Version> an. „keiner“ übernimmt die Version aus manifest.json unverändert.
 # Prüft, dass der Tag zur Version in manifest.json passt, baut das ZIP mit scripts/build_zip.py
 # und veröffentlicht ein GitHub-Release mit dem CHANGELOG-Abschnitt als Beschreibung.
 name: Release
@@ -11,6 +13,12 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      sprung:
+        description: "Versionssprung (keiner = Version aus manifest.json übernehmen)"
+        type: choice
+        options: [patch, minor, major, keiner]
+        default: patch
 
 permissions:
   contents: write
@@ -27,6 +35,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Version erhöhen und committen
+        if: github.event_name == 'workflow_dispatch' && inputs.sprung != 'keiner'
+        run: |
+          python3 scripts/bump_version.py "${{ inputs.sprung }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          VERSION=$(python3 -c 'import json; print(json.load(open("custom_components/haus_visualisierung/manifest.json"))["version"])')
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::Tag v$VERSION gibt es schon."
+            exit 1
+          fi
+          git commit -am "Version $VERSION"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+
       - name: Version und Tag bestimmen
         run: |
           MANIFEST=$(python3 -c 'import json; print(json.load(open("custom_components/haus_visualisierung/manifest.json"))["version"])')
@@ -39,11 +61,12 @@ jobs:
           else
             TAG="v$MANIFEST"
             if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-              echo "::error::Tag $TAG gibt es schon. Erst die Version erhöhen (scripts/bump_version.py)."
+              echo "::error::Tag $TAG gibt es schon. Mit Versionssprung patch/minor/major starten."
               exit 1
             fi
           fi
           echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "VERSION=$MANIFEST" >> "$GITHUB_ENV"
 
       - name: Release-Beschreibung aus CHANGELOG.md
@@ -56,7 +79,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ env.SHA }}
           name: Haus Visualisierung ${{ env.TAG }}
           body_path: release_notes.md
           files: dist/haus_visualisierung_${{ env.TAG }}.zip
