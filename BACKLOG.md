@@ -29,7 +29,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 18 | ~~Unwetter und „Regen kommt, Fenster offen“~~ | hoch | M | umgesetzt |
 | 19 | ~~Einstellungen sichern und wiederherstellen~~ | hoch | S | umgesetzt |
 | 20 | ~~Einrichtungs-Check~~ | hoch | S–M | umgesetzt |
-| 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt (Rest offen) |
+| 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt |
 | 22 | Zeitleiste „Was war los?“ | mittel | M | neu |
 | 23 | Szenen je Raum (auch als Display-Kachel) | mittel | M | neu |
 | 24 | Display: Alarm-Vollbild mit Quittieren | mittel | M | neu |
@@ -114,8 +114,8 @@ geladene Firmware ohne Internet.
 Einstellungen hinterlegen oder das Firmware-Repo öffentlich machen (dann ohne Token).
 
 ### 18.–21. ~~Wetterwarnungen, Sicherungen, Einrichtungs-Check, PIN~~ (umgesetzt, siehe CHANGELOG 1.17.0)
-Offen bei 21: Tastenfeld für die PIN am Wanddisplay (braucht neue Firmware); bis dahin sind geschützte Aktionen dort
-gesperrt.
+~~Offen bei 21: Tastenfeld für die PIN am Wanddisplay~~ (umgesetzt, Firmware ab 0.7.0; ältere Firmware sperrt
+geschützte Aktionen weiter mit Hinweis).
 
 ### 22. Zeitleiste „Was war los?“
 Tür, Klingel mit Standbild, Bewegung, Moduswechsel und Alarme als Verlauf auf der Seite Sicherheit, nach Tag
