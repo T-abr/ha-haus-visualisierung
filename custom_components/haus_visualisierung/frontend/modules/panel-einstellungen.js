@@ -255,8 +255,22 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${tg("fullscreen", "Vollbild", "beim ersten Tippen; Kiosk-Browser wie Fully Kiosk erledigen das selbst")}
       ${tg("hide_sidebar", "Seitenleiste von Home Assistant ausblenden", "nur auf Wandpanels; wird beim Ausschalten zurückgesetzt")}
       ${tg("wake_alarm", "Bei neuem Alarm aufwecken", "Klingel weckt immer")}
-      ${tg("night_dim", "Nachts dunkler", "im Hausmodus Nacht und von 23 bis 6 Uhr")}
-      ${tg("wander", "Bildschirmschoner wandern lassen", "aus = Uhr und Infos bleiben mittig; an = jede Minute ein Stück versetzt gegen Einbrennen (bei OLED sinnvoll, LCDs wie im iPad brennen kaum ein)")}
+      ${tg("night_dim", "Nachts dunkler", "im Hausmodus Nacht und in der Nachtzeit")}
+      <div class="srow"><span class="lbl">Nachtzeit<small>von – bis, auch über Mitternacht</small></span><input class="inp s" type="time" data-set="wallpanel.night_from" value="${esc(W.night_from || "23:00")}"><input class="inp s" type="time" data-set="wallpanel.night_to" value="${esc(W.night_to || "06:00")}"></div>
+      <div class="fl-title">Bildschirmschoner</div>
+      <p class="hint">Was der Schoner zeigt. Gilt auch für die Wanddisplays (dort ohne Datum und Uhrgröße).</p>
+      <div class="srow"><span class="lbl">Uhrgröße</span><select class="inp" data-set="wallpanel.clock_size">${[["l", "Groß"], ["m", "Mittel"], ["s", "Klein"]].map(([k, t]) => `<option value="${k}" ${(W.clock_size || "l") === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+      ${tg("sv_date", "Datum")}
+      ${tg("sv_weather", "Wetter und Außentemperatur", "Außenfühler, sonst Wetter-Entität")}
+      <div class="srow"><span class="lbl">Innentemperatur</span><select class="inp" data-set="wallpanel.sv_indoor"><option value="" ${!W.sv_indoor ? "selected" : ""}>Aus</option><option value="avg" ${W.sv_indoor === "avg" ? "selected" : ""}>Haus Ø</option>${((this._model && this._model.visibleAreas) || []).filter((a) => a.tempId).map((a) => `<option value="${esc(a.id)}" ${W.sv_indoor === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div>
+      ${tg("sv_forecast", "Vorhersage morgen")}
+      ${tg("sv_pv", "PV-Leistung", "ab 50 W")}
+      ${tg("sv_mode", "Hausmodus")}
+      <div class="srow"><span class="lbl">Müll und Termine<small>wie unter Termine → „Im Bildschirmschoner“</small></span><label class="tgl"><input type="checkbox" data-set="termine.saver" data-bool="1" ${D.termine && D.termine.saver !== false ? "checked" : ""}><span></span></label></div>
+      ${tg("sv_appl", "Fertige Geräte")}
+      ${tg("sv_shade", "Beschattungshinweis")}
+      ${tg("sv_status", "Meldungen", "wichtigste Meldung oder „Alles in Ordnung“")}
+      ${tg("wander", "Wandern lassen", "aus = Uhr und Infos bleiben mittig; an = jede Minute ein Stück versetzt gegen Einbrennen (bei OLED sinnvoll, LCDs wie im iPad brennen kaum ein)")}
       <div class="srow"><span class="lbl">Wetter<small>leer = automatisch${autoW ? ` (${esc(autoW)})` : ""}</small></span><input class="inp w" list="dl-weather" data-set="wallpanel.weather" value="${esc(W.weather || "")}" placeholder="weather.…"></div>
       <div class="srow"><span class="lbl">Bewegungsmelder am Panel<small>weckt wie eine Berührung, z. B. binary_sensor.flur_bewegung</small></span><input class="inp w" list="dl-motion" data-set="wallpanel.wake_entity" value="${esc(W.wake_entity || "")}" placeholder="binary_sensor.…"></div>
       <div class="srow"><button class="pbtn" data-act="s-saver-test">${icon("mdi:power-sleep")}Bildschirmschoner zeigen</button><span class="lbl"><small>Tippen beendet ihn wieder.</small></span></div>

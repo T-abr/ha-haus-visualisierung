@@ -1,6 +1,6 @@
 /* Haus Visualisierung – Technik: Heizung (Speicher, Kamin, Heizkurve) und Wallbox (EVCC). */
 
-import { dc, dom, entName, esc, icon, isOn, NF0, NF1, num, OUTDOOR_RE, powerW, setText } from "./grundlagen.js";
+import { dc, dom, entName, esc, icon, isOn, NF0, NF1, num, outdoorSensor, powerW, setText } from "./grundlagen.js";
 import { finite } from "./verlauf.js";
 import { wbPriceHTML } from "./strompreis.js";
 
@@ -46,7 +46,7 @@ function techCfg(h, L, areas) {
     const stove = pick(H.stove) || temps.find((e) => STOVE_RE.test(label(e))) || "";
     const pump = pick(H.stove_pump) || ids.find((e) => /^(sensor|switch|fan|binary_sensor|number)\./.test(e) && STOVE_RE.test(label(e)) && /pump/i.test(label(e))) || "";
     const flow = pick(H.flow) || temps.find((e) => /vorlauf|flow/i.test(label(e)) && !/soll|target|prim/i.test(label(e))) || "";
-    const outdoor = pick(H.outdoor) || temps.find((e) => OUTDOOR_RE.test(label(e))) || "";
+    const outdoor = pick(H.outdoor) || outdoorSensor(h, "temperature");
     if (tank.length || stove || curve || H.manual_curve) {
       const area = (H.area && areas.get(H.area)) || byAreaName(HEAT_AREA_RE) || areas.get(entArea(h, tank[0] || curve || flow));
       heat = { area: area ? area.id : null, tank, stove, pump, curve, mixer, flow, outdoor };

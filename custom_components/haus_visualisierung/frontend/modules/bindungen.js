@@ -30,7 +30,7 @@ Object.assign(UPD, {
   floor: { watch: (el, c) => (c._model.floors.find((f) => f.id === el.dataset.floor) || { watch: [] }).watch, run: updateFloor },
   chip: { watch: chipWatch, run: updateChip },
   roof: { watch: (el, c) => Object.values(c._layout.header).filter(Boolean), run: updateRoof },
-  weather: { watch: (el) => [el.dataset.eid], run: updateWeather },
+  weather: { watch: (el, c) => [el.dataset.eid, c._model && c._model._oc && c._model._oc.tId].filter(Boolean), run: updateWeather },
   termin: { watch: (el, c) => termWatch(c._hass, c._layout), run: updateTermin },
   shade: { watch: shadeWatch, run: updateShade },
   fcast: { watch: fcastWatch, run: updateFcast },

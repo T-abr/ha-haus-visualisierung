@@ -1,6 +1,6 @@
 /* Haus Visualisierung – Klimaseite: Temperaturen und Feuchte 24 h, Taupunkt, absolute Feuchte, Lüftungshinweis. */
 
-import { dc, esc, icon, NF0, NF1, num, OUTDOOR_RE, setHidden, setHtml, setText, UPD } from "./grundlagen.js";
+import { esc, icon, NF0, NF1, num, OUTDOOR_RE, outdoorSensor, setHidden, setHtml, setText, UPD } from "./grundlagen.js";
 import { DAY_MS, finite, longEnsure, longSeries, rangeAxis, rangeChips, rangeClock, rangeGap, rangeGet, RANGES, TREND, TREND_BUCKET, TREND_GAP, TREND_MS, TREND_TTL, trendAt, trendFetch, trendPath, trendPush, trendScale } from "./verlauf.js";
 
 /* ---------- Klimaseite: Temperaturen 24 h (Haus Ø und Außen) und Verlauf je Raum ---------- */
@@ -28,7 +28,7 @@ function ventAdvice(tIn, rhIn, tOut, rhOut) {
   const d = a - b;
   return d >= 2 ? { k: "gut", t: "Lüften lohnt sich", d } : d >= 0.5 ? { k: "wenig", t: "Lüften bringt wenig", d } : { k: "nicht", t: "Draußen feuchter", d };
 }
-const outdoorHumId = (h) => Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "humidity" && OUTDOOR_RE.test(`${e} ${h.states[e].attributes.friendly_name || ""}`)) || "";
+const outdoorHumId = (h) => outdoorSensor(h, "humidity");
 const weatherId = (h, L) => { const w = L.wallpanel && L.wallpanel.weather; return w && h.states[w] ? w : Object.keys(h.states).find((e) => e.startsWith("weather.")) || ""; };
 /** Außen jetzt: Temperatur und Feuchte aus den Fühlern, sonst aus der Wetter-Entität. Die IDs merkt sich das Modell. */
 function outdoorClim(h, m) {
@@ -67,10 +67,20 @@ function trendSeries(h, eid) {
   return pts;
 }
 
+/** Außenfühler für alle Stellen (Kopfzeile, Schoner, Klima, Rückblick, Technik; Backend: alerts.py _find_outdoor):
+ *  Einstellung Heizung → Außentemperatur, sonst der erste Fühler mit „außen/Garten …“ im Namen. */
 function outdoorTempId(h, m, L) {
-  const pick = (L.heating && L.heating.outdoor) || (m.tech && m.tech.heat && m.tech.heat.outdoor);
+  const pick = L && L.heating && L.heating.outdoor;
   if (pick && h.states[pick]) return pick;
-  return Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "temperature" && OUTDOOR_RE.test(`${e} ${h.states[e].attributes.friendly_name || ""}`)) || "";
+  return outdoorSensor(h, "temperature");
+}
+
+/** Außentemperatur jetzt: Fühler, sonst Wetter-Entität (wId); null, wenn beides fehlt. */
+function outdoorTemp(h, m, L, wId) {
+  const t = num(h.states[(m && m._oc && m._oc.tId) || outdoorTempId(h, m, L)]);
+  if (t !== null) return t;
+  const w = h.states[wId || (m && m._oc && m._oc.wId) || weatherId(h, L || {})];
+  return w && finite(w.attributes.temperature) ? w.attributes.temperature : null;
 }
 
 const climRooms = (m) => m.visibleAreas.filter((a) => a.tempId && isIndoor(m, a));
@@ -374,4 +384,4 @@ function sparkHover(el, frac) {
   tip.classList.add("on");
 }
 
-export { absHum, climHover, climRooms, climTrendHTML, dewPoint, humRooms, MOLD_HYST, outdoorClim, outdoorHumId, outdoorTempId, sparkHover, sparkHTML, trendEnsure, trendSeries, updateClimTrend, updateSpark, ventAdvice, weatherId };
+export { absHum, climHover, climRooms, climTrendHTML, dewPoint, humRooms, MOLD_HYST, outdoorClim, outdoorHumId, outdoorTemp, outdoorTempId, sparkHover, sparkHTML, trendEnsure, trendSeries, updateClimTrend, updateSpark, ventAdvice, weatherId };

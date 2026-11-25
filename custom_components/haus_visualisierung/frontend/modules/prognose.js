@@ -4,6 +4,7 @@
 
 import { esc, icon, NF0, NF1, num, setHtml } from "./grundlagen.js";
 import { condIcon, condName, fcDays, shadeHeadline, shadeHints, weatherIdOf } from "./wetter.js";
+import { outdoorTemp } from "./klima.js";
 
 const fin = (v) => typeof v === "number" && Number.isFinite(v);
 
@@ -101,7 +102,7 @@ function updateFcast(el, ctx) {
   const h = ctx._hass, L = ctx._layout, wid = el.dataset.eid, st = wid && h.states[wid];
   // jetzt
   if (wid) {
-    const now = el.querySelector(".fcnow"), t = st && st.attributes.temperature;
+    const now = el.querySelector(".fcnow"), t = st ? outdoorTemp(h, ctx._model, L, wid) : null;
     const ic = now.querySelector("ha-icon"), want = condIcon(st ? st.state : "");
     if (ic.getAttribute("icon") !== want) ic.setAttribute("icon", want);
     now.querySelector(".fct").textContent = st && t != null ? `${NF0.format(t)}°` : "–";
@@ -136,6 +137,6 @@ function updateFcast(el, ctx) {
   setHtml(el.querySelector(".fchint"), hl ? `<button class="fchb" data-act="go" data-to="beschattung">${icon("mdi:sun-angle-outline")}<span>${esc(hl)}</span>${icon("mdi:chevron-right")}</button>` : "");
 }
 /** Watch-Liste: Wetter, Solarsensoren und Rollos (für den Beschattungshinweis). */
-const fcastWatch = (el, c) => [el.dataset.eid, ...solarWatch(solarCfg(c._hass, c._layout)), ...((c._model && c._model.agg.covers) || [])].filter(Boolean);
+const fcastWatch = (el, c) => [el.dataset.eid, c._model && c._model._oc && c._model._oc.tId, ...solarWatch(solarCfg(c._hass, c._layout)), ...((c._model && c._model.agg.covers) || [])].filter(Boolean);
 
 export { fcastCardHTML, fcastShown, fcastWatch, kwh, solarCfg, solarVals, updateFcast };
