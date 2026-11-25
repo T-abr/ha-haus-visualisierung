@@ -15,6 +15,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Neuer Abschnitt `solar_verzahnt` (Gruppe energie): automatische Sensoren, Live-Wert, Sprung auf „Technik“; Energie- und Einbettungsprüfungen auf die neuen Sprungknöpfe angepasst.
 - Neuer Abschnitt `breite_monitore` (Räume nebeneinander, großer Raum doppelt breit in Kompakt und Komfort, unter 1200 px unverändert).
 
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 17–19 ms, Klima 27–29 ms, Licht 37–50 ms, Energie 37–49 ms (main zum Vergleich 27 ms, die neuen Solar-Sprungknöpfe kosten etwas), übrige 10–18 ms; hass-Setter Übersicht 21–36 µs, Unterseiten 0,5–32 µs; Aktualisierer auf der Übersicht 480 pro Minute. Sonst im Rahmen der Messschwankung wie 1.20.0.
+
 ## 1.20.1 – 2026-11-25
 
 ### Neu
