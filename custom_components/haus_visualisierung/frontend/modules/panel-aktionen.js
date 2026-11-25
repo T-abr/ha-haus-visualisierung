@@ -11,6 +11,7 @@ import { simAction } from "./anwesenheit.js";
 import { defaultAction } from "./standard.js";
 import { modeKind, pinOk, pinSave } from "./pin.js";
 import { systemAction } from "./system.js";
+import { openSec, settingsNavAction } from "./einstellungen.js";
 import { applList } from "./geraete.js";
 import { maintCall, newTask } from "./wartung.js";
 import { adoptDevice, customAction, displaysForSave, newDisplay, togglePage, testBell, updateDevice } from "./wanddisplay.js";
@@ -240,9 +241,10 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-jump": {
         // Sprungleiste: zum Abschnitt im aktuellen Reiter
         const sec = this.shadowRoot.querySelector(`.set[data-jump="${t.dataset.jumpTo}"]`);
-        if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (sec) { openSec(this, sec); sec.scrollIntoView({ behavior: "smooth", block: "start" }); }
         return;
       }
+      case "s-sec": case "s-all": case "s-adv": case "s-more": case "s-find": settingsNavAction(this, act, t); return;
       case "s-reset": this._draft = null; this._dirtySettings = false; this._dirty = true; this._flush(); return;
       case "s-save": {
         try {

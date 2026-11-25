@@ -52,10 +52,19 @@ function layoutRefs(L) {
   return out;
 }
 
-/** Einrichtungs-Check: [{ lvl: "warn"|"info", icon, title, detail, tab }] – je Punkt ein Satz, was fehlt und wo. */
+/* Abschnitt der Einstellungen zu einer Fundstelle aus layoutRefs (Schlüssel wie secKey in einstellungen.js) */
+const WHERE_SEC = [["Energie", "energie"], ["Strompreis", "strompreis"], ["Vorhersage", "vorhersage-und-pv-prognose"], ["Wandpanel", "wandpanel"],
+  ["Heizung", "heizung"], ["Wallbox", "wallbox"], ["Haushaltsgerät", "haushaltsgeraete"], ["Wetterwarnungen", "wetterwarnungen"], ["Klingel", "klingel"],
+  ["Hausmodus", "hausmodus"], ["Gute-Nacht", "gute-nacht-und-verlassen-check"], ["Anwesenheits", "anwesenheits-simulation"], ["Eigene Regel", "warnungen"],
+  ["Aktion", "eskalation-und-aktionen"], ["Raum-Pin", "etagen-bereiche"], ["Favorit", "favoriten"], ["Display", "wanddisplays"]];
+const whereSec = (w) => (WHERE_SEC.find(([p]) => w.startsWith(p)) || [])[1];
+
+/** Einrichtungs-Check: [{ lvl: "warn"|"info", icon, title, detail, tab, sec }] – je Punkt ein Satz, was fehlt und wo
+ *  (sec = Abschnitt(e) der Einstellungen, dort erscheint ein Warnzeichen in der Überschrift). */
 function setupChecks(h, L) {
   const S = h.states, out = [];
-  const push = (lvl, ic, title, detail, tab) => out.push({ lvl, icon: ic, title, detail, tab });
+  const push = (lvl, ic, title, detail, tab, sec) => out.push({ lvl, icon: ic, title, detail, tab, sec });
+  const secs = (l) => [...new Set(l.map((r) => whereSec(r.where)).filter(Boolean))];
   const short = (l, n = 4) => `${l.slice(0, n).join(", ")}${l.length > n ? ` und ${l.length - n} weitere` : ""}`;
 
   // Entitäten aus den Einstellungen, die es nicht (mehr) gibt oder die nicht erreichbar sind
@@ -63,62 +72,62 @@ function setupChecks(h, L) {
   const byTab = (l) => [...new Set(l.map((r) => r.tab))];
   for (const tab of byTab(missing)) {
     const l = missing.filter((r) => r.tab === tab);
-    push("warn", "mdi:link-variant-off", `${l.length} ${l.length === 1 ? "Entität gibt" : "Entitäten gibt"} es nicht mehr`, short(l.map((r) => `${r.where}: ${r.e}`), 3), tab);
+    push("warn", "mdi:link-variant-off", `${l.length} ${l.length === 1 ? "Entität gibt" : "Entitäten gibt"} es nicht mehr`, short(l.map((r) => `${r.where}: ${r.e}`), 3), tab, secs(l));
   }
-  if (unav.length) push("info", "mdi:lan-disconnect", `${unav.length} eingetragene ${unav.length === 1 ? "Entität ist" : "Entitäten sind"} nicht erreichbar`, short(unav.map((r) => `${r.where}: ${r.e}`), 3), byTab(unav)[0]);
+  if (unav.length) push("info", "mdi:lan-disconnect", `${unav.length} eingetragene ${unav.length === 1 ? "Entität ist" : "Entitäten sind"} nicht erreichbar`, short(unav.map((r) => `${r.where}: ${r.e}`), 3), byTab(unav)[0], secs(unav));
 
   // Räume
   const m = buildModel(h, L);
   const indoor = m.floors.filter((f) => !f.outdoor).flatMap((f) => f.areas);
   const noTemp = indoor.filter((a) => !a.tempId);
-  if (noTemp.length) push("info", "mdi:thermometer-off", `${noTemp.length} ${noTemp.length === 1 ? "Raum hat" : "Räume haben"} keinen Temperaturfühler`, `${short(noTemp.map((a) => a.name))} – fehlen im Klima-Durchschnitt und in den Verläufen; Fühler dem Bereich zuordnen (Home Assistant → Bereiche)`, "raeume");
+  if (noTemp.length) push("info", "mdi:thermometer-off", `${noTemp.length} ${noTemp.length === 1 ? "Raum hat" : "Räume haben"} keinen Temperaturfühler`, `${short(noTemp.map((a) => a.name))} – fehlen im Klima-Durchschnitt und in den Verläufen; Fühler dem Bereich zuordnen (Home Assistant → Bereiche)`, "raeume", "etagen-bereiche");
   if (m.floors.some((f) => f.virtual && f.id !== "_out") && m.floors.some((f) => !f.virtual)) {
     const loose = m.floors.filter((f) => f.virtual && f.id !== "_out").flatMap((f) => f.areas);
-    if (loose.length) push("info", "mdi:floor-plan", `${loose.length} ${loose.length === 1 ? "Bereich ohne" : "Bereiche ohne"} Etage`, `${short(loose.map((a) => a.name))} – stehen unter „Weitere Bereiche“; Etage in Home Assistant → Bereiche zuordnen`, "raeume");
+    if (loose.length) push("info", "mdi:floor-plan", `${loose.length} ${loose.length === 1 ? "Bereich ohne" : "Bereiche ohne"} Etage`, `${short(loose.map((a) => a.name))} – stehen unter „Weitere Bereiche“; Etage in Home Assistant → Bereiche zuordnen`, "raeume", "etagen-bereiche");
   }
 
   // Wetter, Beschattung, Wetterwarnungen
   const wid = weatherIdOf(h, L);
-  if (!wid) push("warn", "mdi:weather-cloudy-alert", "Keine Wetter-Entität", "Ohne Wetter gibt es keine Vorhersage, keine Beschattungs- und keine Regenhinweise (z. B. Integration „Met.no“ oder „DWD“ einrichten)", "displays");
+  if (!wid) push("warn", "mdi:weather-cloudy-alert", "Keine Wetter-Entität", "Ohne Wetter gibt es keine Vorhersage, keine Beschattungs- und keine Regenhinweise (z. B. Integration „Met.no“ oder „DWD“ einrichten)", "displays", "wandpanel");
   else if (L.weather_alerts && L.weather_alerts.rain !== false && !(Number(S[wid].attributes.supported_features) & 2) && !wxAuto(h).rain && !(L.weather_alerts.rain_sensor))
-    push("info", "mdi:weather-pouring", "Regenhinweis nur nach aktueller Wetterlage", `${wid} liefert keine stündliche Vorhersage und es gibt keinen Regensensor – „Regen kommt“ geht erst mit einem von beiden`, "technik");
+    push("info", "mdi:weather-pouring", "Regenhinweis nur nach aktueller Wetterlage", `${wid} liefert keine stündliche Vorhersage und es gibt keinen Regensensor – „Regen kommt“ geht erst mit einem von beiden`, "technik", "wetterwarnungen");
   if (L.weather_alerts && L.weather_alerts.enabled !== false && !wxAuto(h).dwd.length && !(L.weather_alerts.dwd || []).length)
-    push("info", "mdi:alert-outline", "Keine DWD-Warnungen eingerichtet", "Amtliche Unwetterwarnungen kommen mit der Integration „Deutscher Wetterdienst (DWD) Weather Warnings“ (Region wählen)", "technik");
+    push("info", "mdi:alert-outline", "Keine DWD-Warnungen eingerichtet", "Amtliche Unwetterwarnungen kommen mit der Integration „Deutscher Wetterdienst (DWD) Weather Warnings“ (Region wählen)", "technik", "wetterwarnungen");
   if (L.shading && L.shading.enabled !== false) {
     const covers = (m.agg.covers || []).filter((e) => !["garage", "gate", "awning"].includes(S[e] && S[e].attributes.device_class));
     const noFace = covers.filter((e) => !coverFace(h, L, e) && ((L.shading.facing || {})[e] !== "-"));
-    if (covers.length && noFace.length) push("info", "mdi:compass-off-outline", `${noFace.length} ${noFace.length === 1 ? "Rollo ohne" : "Rollos ohne"} Ausrichtung`, `${short(noFace.map((e) => (S[e] && S[e].attributes.friendly_name) || e))} – bekommen keine Beschattungshinweise; Himmelsrichtung oder „keine“ wählen`, "technik");
-    if (covers.length && !homeLoc(h)) push("warn", "mdi:map-marker-off", "Standort fehlt", "Für den Sonnenstand braucht Home Assistant den Standort (Einstellungen → System → Allgemein)", "technik");
+    if (covers.length && noFace.length) push("info", "mdi:compass-off-outline", `${noFace.length} ${noFace.length === 1 ? "Rollo ohne" : "Rollos ohne"} Ausrichtung`, `${short(noFace.map((e) => (S[e] && S[e].attributes.friendly_name) || e))} – bekommen keine Beschattungshinweise; Himmelsrichtung oder „keine“ wählen`, "technik", "beschattung");
+    if (covers.length && !homeLoc(h)) push("warn", "mdi:map-marker-off", "Standort fehlt", "Für den Sonnenstand braucht Home Assistant den Standort (Einstellungen → System → Allgemein)", "technik", "beschattung");
   }
 
   // Termine
   const T = L.termine || {};
   if (T.enabled !== false && Object.keys(S).some((e) => e.startsWith("calendar.")) && !termCals(h, L).length)
-    push("info", "mdi:calendar-question", "Kein Kalender für Müll und Termine gewählt", "Kalender sind da, aber keiner zählt – Art je Kalender wählen", "darstellung");
+    push("info", "mdi:calendar-question", "Kein Kalender für Müll und Termine gewählt", "Kalender sind da, aber keiner zählt – Art je Kalender wählen", "darstellung", "muellabfuhr-und-termine");
 
   // Meldungen
   const P = L.push || {}, notify = Object.keys((h.services && h.services.notify) || {});
   if (P.enabled !== false) {
     const mobile = notify.filter((s) => s.startsWith("mobile_app_"));
     const gone = (P.targets || []).filter((t) => !notify.includes(t));
-    if (!(P.targets || []).length && !mobile.length) push("warn", "mdi:cellphone-off", "Kein Handy für Push-Meldungen", "Es gibt keinen Dienst notify.mobile_app_… – Companion-App installieren und anmelden", "meldungen");
-    else if (gone.length) push("warn", "mdi:cellphone-remove", `${gone.length} Push-${gone.length === 1 ? "Empfänger gibt" : "Empfänger gibt"} es nicht mehr`, gone.map((g) => `notify.${g}`).join(", "), "meldungen");
+    if (!(P.targets || []).length && !mobile.length) push("warn", "mdi:cellphone-off", "Kein Handy für Push-Meldungen", "Es gibt keinen Dienst notify.mobile_app_… – Companion-App installieren und anmelden", "meldungen", "push-benachrichtigungen");
+    else if (gone.length) push("warn", "mdi:cellphone-remove", `${gone.length} Push-${gone.length === 1 ? "Empfänger gibt" : "Empfänger gibt"} es nicht mehr`, gone.map((g) => `notify.${g}`).join(", "), "meldungen", "push-benachrichtigungen");
   }
 
   // Hausmodus und Alarmanlage
   const HM = L.house_mode || {}, panels = Object.keys(S).filter((e) => e.startsWith("alarm_control_panel."));
-  if (HM.alarmo_sync && !panels.length) push("warn", "mdi:shield-off-outline", "Kopplung mit der Alarmanlage ohne Alarmanlage", "„Hausmodus und Alarmanlage koppeln“ ist an, aber es gibt kein alarm_control_panel (z. B. Alarmo)", "alarme");
+  if (HM.alarmo_sync && !panels.length) push("warn", "mdi:shield-off-outline", "Kopplung mit der Alarmanlage ohne Alarmanlage", "„Hausmodus und Alarmanlage koppeln“ ist an, aber es gibt kein alarm_control_panel (z. B. Alarmo)", "alarme", "hausmodus");
   const persons = Object.keys(S).filter((e) => e.startsWith("person."));
-  if (HM.enabled !== false && HM.auto_away && !persons.length) push("info", "mdi:account-off-outline", "Automatik „Abwesend“ ohne Personen", "Es gibt keine Personen-Entitäten; Abwesend schaltet dann nie automatisch", "alarme");
+  if (HM.enabled !== false && HM.auto_away && !persons.length) push("info", "mdi:account-off-outline", "Automatik „Abwesend“ ohne Personen", "Es gibt keine Personen-Entitäten; Abwesend schaltet dann nie automatisch", "alarme", "hausmodus");
 
   // PIN
   const PN = L.pin || {}, M = (ALARMS && ALARMS.mode) || {};
   if ((L.displays || []).length && !M.pin && (PN.door || PN.disarm || PN.arm))
-    push("info", "mdi:dialpad", "Keine PIN gesetzt", "Am Wandpanel und Display kann jeder die Tür öffnen und den Alarm ausschalten – PIN unter Alarme setzen", "alarme");
+    push("info", "mdi:dialpad", "Keine PIN gesetzt", "Am Wandpanel und Display kann jeder die Tür öffnen und den Alarm ausschalten – PIN unter Alarme setzen", "alarme", "pin-fuer-heikle-aktionen");
 
   // Displays
   const noDev = (L.displays || []).filter((d) => !d.device);
-  if (noDev.length) push("info", "mdi:tablet-dashboard", `${noDev.length} ${noDev.length === 1 ? "Display ohne" : "Displays ohne"} Gerät`, `${short(noDev.map((d) => d.name || d.id))} – im Reiter „Wandpanel & Displays“ ein Gerät zuordnen`, "displays");
+  if (noDev.length) push("info", "mdi:tablet-dashboard", `${noDev.length} ${noDev.length === 1 ? "Display ohne" : "Displays ohne"} Gerät`, `${short(noDev.map((d) => d.name || d.id))} – im Reiter „Wandpanel & Displays“ ein Gerät zuordnen`, "displays", "wanddisplays");
 
   return out.sort((a, b) => (a.lvl === b.lvl ? 0 : a.lvl === "warn" ? -1 : 1));
 }

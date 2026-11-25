@@ -32,6 +32,10 @@ Backend, je Datei ein Thema (der Docstring am Dateianfang erklärt es):
 Frontend (`frontend/`):
 - `karten-loader.js` läuft auf jeder HA-Seite (klein halten!), meldet `haus-raum-card`/`haus-hausschnitt-card` an
   und lädt `modules/karten.js` erst bei Bedarf. Neue Dashboard-Karten dort anmelden, nicht im Panel.
+- Einstellungsseite: `panel-einstellungen.js` (Reiter, Formulare) plus `einstellungen.js` (Abschnitte klappbar mit Kurzinfo
+  je Schlüssel aus der Überschrift, Punkte ungespeichert, Warnzeichen aus `sec` des Einrichtungs-Checks, „Erweitert“ per
+  `advanced()`, gekürzte Hinweise, Suche). Neue Abschnitte: Kurzinfo in `secSummary`, Daten in `SEC_DATA` eintragen.
+  Bedienprüfungen klappen mit `auf(pg)` (steckt in `stab()`) alles auf.
 - `haus-visualisierung.js` Einstieg des Panels (nur beim Öffnen geladen). Panel = `modules/panel.js` plus Mixins
   `panel-*.js` (Ansichten, Einstellungen, Alarmseite, Wandpanel, Klingel, Aktionen, Kompakt).
 - Fachmodule je Thema: `energie`, `klima`, `verlauf`, `rueckblick`, `strompreis`, `prognose`, `wetter`,
