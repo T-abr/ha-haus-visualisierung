@@ -15,6 +15,7 @@ import { terminBtnHTML } from "./termine.js";
 import { applCardHTML } from "./geraete.js";
 import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
 import { rbCard } from "./rueckblick.js";
+import { headerOf, svJumpsHTML } from "./solar.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
 const AnsichtenMixin = (Base) => class extends Base {
@@ -228,7 +229,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     const solar = (L.links || []).find((l) => l.path && /(solar|pv|energ)/i.test(`${l.path} ${l.title}`));
     const tr = L.show_trends !== false;
     return `<div class="ptitle"><h1>Energie</h1><span class="psub ensub"><span class="ct"></span></span><span class="sp"></span>
-      ${solar ? `<button class="pbtn" data-act="link" data-path="${esc(solar.path)}">${icon(solar.icon || "mdi:solar-power-variant")}${esc(solar.title)}</button>` : ""}</div>
+      ${svJumpsHTML(this._hass) || (solar ? `<button class="pbtn" data-act="link" data-path="${esc(solar.path)}">${icon(solar.icon || "mdi:solar-power-variant")}${esc(solar.title)}</button>` : "")}</div>
       <div class="engrid">${energyFlowHTML(c)}${enDayHTML(tr)}</div>
       ${enPriceCard(c, this._model.price)}
       ${tr ? enTrendHTML(c) : ""}
@@ -297,7 +298,7 @@ const AnsichtenMixin = (Base) => class extends Base {
 
   _ovCockpit(fav) {
     const m = this._model, L = this._layout, h = this._hass;
-    const H = L.header || {};
+    const H = headerOf(h, L);
     const rows = [["pv", "mdi:solar-power-variant", "PV"], ["battery", "mdi:battery", "Akku"], ["power", "mdi:home-lightning-bolt-outline", "Haus"], ["grid", "mdi:transmission-tower", "Netz"]]
       .filter(([k]) => H[k] && h.states[H[k]]).map(([k, i, t]) => `<div class="erow ep-${k}">${icon(i)}<span class="el">${t}</span><b></b></div>`).join("");
     const other = fav.filter((e) => !["scene", "script"].includes(dom(e)));

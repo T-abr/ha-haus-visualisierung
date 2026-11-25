@@ -13,6 +13,7 @@ import { energyIds, energyWatch, updateEnDay, updateEnergy, updateEnPriceCard, u
 import { priceWatch, updateWbPrice } from "./strompreis.js";
 import { termWatch, updateTermin } from "./termine.js";
 import { updateRback } from "./rueckblick.js";
+import { headerOf } from "./solar.js";
 
 Object.assign(UPD, {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
@@ -29,7 +30,7 @@ Object.assign(UPD, {
   hero: { watch: (el, c) => (c._model.areas.get(el.dataset.area) || { watch: [] }).watch, run: updateHero },
   floor: { watch: (el, c) => (c._model.floors.find((f) => f.id === el.dataset.floor) || { watch: [] }).watch, run: updateFloor },
   chip: { watch: chipWatch, run: updateChip },
-  roof: { watch: (el, c) => Object.values(c._layout.header).filter(Boolean), run: updateRoof },
+  roof: { watch: (el, c) => Object.values(headerOf(c._hass, c._layout)).filter((e) => typeof e === "string" && e), run: updateRoof },
   weather: { watch: (el, c) => [el.dataset.eid, c._model && c._model._oc && c._model._oc.tId].filter(Boolean), run: updateWeather },
   termin: { watch: (el, c) => termWatch(c._hass, c._layout), run: updateTermin },
   shade: { watch: shadeWatch, run: updateShade },

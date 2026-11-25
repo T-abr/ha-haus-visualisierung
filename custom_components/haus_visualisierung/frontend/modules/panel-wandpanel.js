@@ -7,6 +7,7 @@ import { curMode, evalAlerts, LEVEL_ICON, LEVELS } from "./warnungen.js";
 import { finite } from "./verlauf.js";
 import { dayOf, fcDays, shadeHeadline, shadeHints } from "./wetter.js";
 import { saverTermHTML } from "./termine.js";
+import { headerOf } from "./solar.js";
 import { outdoorTemp } from "./klima.js";
 import { applSaverHint } from "./geraete.js";
 
@@ -182,7 +183,7 @@ const WandpanelMixin = (Base) => class extends Base {
     }
     const inT = W.sv_indoor ? indoorTemp(h, this._model, W.sv_indoor) : null;
     if (inT) parts.push(`<span class="svin">${icon("mdi:home-thermometer")}${inT.name ? `${esc(inT.name)} ` : ""}${NF1.format(inT.t)}°</span>`);
-    const pv = W.sv_pv ? powerW(h.states[this._layout.header.pv || ""]) : null;
+    const pv = W.sv_pv ? powerW(h.states[headerOf(h, this._layout).pv || ""]) : null;
     if (pv !== null && pv > 50) parts.push(`<span>${icon("mdi:solar-power-variant")}${pv >= 1000 ? `${NF1.format(pv / 1000)} kW` : `${NF0.format(pv)} W`}</span>`);
     // Vorhersage morgen
     const tm = W.sv_forecast && wid ? dayOf(fcDays(h, wid), 1) : null;

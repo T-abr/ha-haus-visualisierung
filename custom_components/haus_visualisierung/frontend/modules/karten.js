@@ -61,7 +61,7 @@ class HausHausschnittCard extends HvCardBase {
   _render() {
     this._config = this._config || {};
     const L = { ...this._layout };
-    if (this._config.show_energy === false) L.header = {};
+    if (this._config.show_energy === false) L.header = { auto: false };
     const body = this._model.visibleAreas.length ? houseHTML(this._model, L, this._hass) : `<div class="empty">Keine Bereiche gefunden.</div>`;
     const title = this._config.title ? `<div class="secttitle" style="margin:4px 4px 10px">${esc(this._config.title)}</div>` : "";
     this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card style="padding:12px">${title}${body}</ha-card>`;

@@ -4,6 +4,7 @@ import { batteryIcon, dc, esc, icon, isOn, NF0, NF1, num, powerW, setHidden, set
 import { axisCut, axisKey, DAY_MS, finite, longEnsure, longSeries, rangeChips, rangeGet, RANGES, TREND_BUCKET, TREND_GAP, TREND_MS, trendAt, trendPath } from "./verlauf.js";
 import { trendEnsure, trendSeries } from "./klima.js";
 import { enPriceHTML, priceInfo, unitFactor, updateEnPrice } from "./strompreis.js";
+import { headerOf } from "./solar.js";
 
 /* ---------- Energie-Seite: Fluss, Kennzahlen, Bilanz heute, Verlauf 24 h bzw. Energie je Tag/Monat ---------- */
 /* Quellen: „Energie auf dem Dach“ (PV, Akku-Ladestand, Hausverbrauch, Netz), Speicher-Leistung und Wallbox.
@@ -18,8 +19,9 @@ const EN_POS = { pv: [50, 14], grid: [12, 50], bat: [88, 50], wb: [50, 86] };
 
 /** Welche Sensoren die Energie-Seite nutzt; null = keine Energiedaten. */
 function energyCfg(h, L, tech, price) {
-  const H = L.header || {}, E = L.energy || {};
+  const E = L.energy || {};
   if (E.enabled === false) return null;
+  const H = headerOf(h, L);
   const S = (e) => (e && h.states[e] ? e : "");
   const pv = S(H.pv), grid = S(H.grid), house = S(H.power), soc = S(H.battery);
   const wb = (tech && tech.wb && tech.wb.power) || "";

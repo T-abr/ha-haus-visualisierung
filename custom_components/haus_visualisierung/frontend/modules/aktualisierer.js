@@ -3,6 +3,7 @@
 import { batteryIcon, dc, dom, entIcon, entName, esc, fmtPower, fmtState, icon, isDense, isOn, isUnav, NF0, NF1, num, powerW, relTime, setHidden, setIcon, setText, setWidth, UNAV } from "./grundlagen.js";
 import { CONTACT_DC, PRESENCE_DC, SAFETY_DC } from "./modell.js";
 import { roomActive } from "./bausteine.js";
+import { headerOf } from "./solar.js";
 import { alertsByArea, alertWatch, CHIP_WATCH, CHIPS } from "./warnungen.js";
 import { dewPoint, outdoorTemp } from "./klima.js";
 import { condIcon, condName, dayOf, fcDays, shadeHeadline, shadeHints, W_COND } from "./wetter.js";
@@ -228,7 +229,7 @@ function updateChip(el, ctx) {
 }
 
 function updateRoof(el, ctx) {
-  const h = ctx._hass, H = ctx._layout.header;
+  const h = ctx._hass, H = headerOf(h, ctx._layout);
   for (const k of ["pv", "battery", "power", "grid"]) {
     const p = el.querySelector(`.ep-${k}`);
     if (!p) continue;

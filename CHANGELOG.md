@@ -4,6 +4,20 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Mit der Solar-Visualisierung verzahnt** (falls installiert): Leere Energie-Felder (PV-Leistung, Akku-Ladestand, Hausverbrauch) füllt sie automatisch, der Hausverbrauch kommt dann aus ihrem AC-seitig berechneten Sensor (über die Entitäts-Registry, auch nach Umbenennen). Eingetragene Sensoren gehen weiter vor; der Netz-Sensor bleibt von Hand (Growatt meldet Bezug und Einspeisung getrennt). Gilt für Dach, Energie-Seite, Rückblick, Cockpit und Bildschirmschoner; die Einstellungen zeigen den automatischen Sensor als Platzhalter.
+- **Energie-Seite springt direkt in die Solar-Visualisierung:** statt eines Knopfs „Solar“ gibt es Knöpfe für Übersicht, Technik, Auswertung und Steuerung, die die Ansicht eingebettet öffnen (braucht Solar Visualisierung mit Ansicht-Adressen, PR im Solar-Repo; ältere Versionen öffnen den zuletzt gewählten Reiter). Verknüpfungen mit Unterseite (z. B. `/solar-visualisierung/technik`) reichen diese generell ans eingebettete Panel weiter.
+
+### Verbessert
+- **Gewerke-Seiten nutzen breite Monitore aus.** Auf Licht und Beschattung standen die Räume einer Etage im Kompakt-Modus nur in zwei Spalten übereinander, rechts blieb Platz frei. Ab 1200 px Fensterbreite stehen die Räume jetzt im Raster nebeneinander, so viele wie passen. Räume mit mehr als vier Geräten werden zwei Spalten breit und zeigen ihre Leuchten bzw. Rollläden zweispaltig (im Komfort-Modus ebenso doppelt breit). Handy und Tablet bleiben unverändert.
+
+### Tests
+- Neuer Abschnitt `solar_verzahnt` (Gruppe energie): automatische Sensoren, Live-Wert, Sprung auf „Technik“; Energie- und Einbettungsprüfungen auf die neuen Sprungknöpfe angepasst.
+- Neuer Abschnitt `breite_monitore` (Räume nebeneinander, großer Raum doppelt breit in Kompakt und Komfort, unter 1200 px unverändert).
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 17–19 ms, Klima 27–29 ms, Licht 37–50 ms, Energie 37–49 ms (main zum Vergleich 27 ms, die neuen Solar-Sprungknöpfe kosten etwas), übrige 10–18 ms; hass-Setter Übersicht 21–36 µs, Unterseiten 0,5–32 µs; Aktualisierer auf der Übersicht 480 pro Minute. Sonst im Rahmen der Messschwankung wie 1.20.0.
+
 ## 1.20.1 – 2026-11-25
 
 ### Neu
