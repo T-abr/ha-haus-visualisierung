@@ -1,7 +1,7 @@
 # Performance-Prüfliste
 
 Jede Version bekommt eine Performance-Runde. Ergebnis gehört ins CHANGELOG unter „### Performance“ –
-ohne diesen Abschnitt setzt `scripts/bump_version.py` keine neue Version.
+ohne diesen Abschnitt setzt `scripts/bump_version.py` lokal keine neue Version (der Release-Workflow warnt nur).
 
 ## Messen
 

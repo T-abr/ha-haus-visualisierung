@@ -5,6 +5,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ## Unveröffentlicht
 
 ### Neu
+- **Release-Workflow erzeugt die Versionsnummer selbst.** Beim Start über „Run workflow“ wählt man patch, minor oder major; der Workflow erhöht die Version (manifest.json, const.py, Frontend, README, CHANGELOG), committet sie auf `main`, taggt und veröffentlicht. Der Workflow läuft immer durch: Fehlt „### Performance“ oder „## Unveröffentlicht“ im CHANGELOG, gibt es nur eine Warnung. „keiner“ übernimmt wie bisher die Version aus manifest.json. Der Firmware-Build im Display-Repo zählt seine Version ebenso selbst hoch.
 - **Einstellungen übersichtlicher: Abschnitte zum Auf- und Zuklappen.** Jeder Abschnitt (z. B. Strompreis, Hausmodus, Klingel) klappt mit einem Tipp auf die Überschrift auf und zu; beim ersten Öffnen sind alle zu. Welche offen sind, merkt sich jedes Gerät. Daneben „Alle aufklappen“/„Alle zuklappen“, die Sprungleiste klappt ihr Ziel automatisch auf.
 - **Kurzinfo in jeder Überschrift**, damit man ohne Aufklappen sieht, was eingerichtet ist, z. B. „Preissensor automatisch“, „4 von 4 Sensoren“, „Eskalation nach 5 min · 3 Aktionen“, „aus“.
 - **Markierungen am Abschnitt:** ein Punkt bei ungespeicherten Änderungen (genau am geänderten Abschnitt, auch die Reiter-Punkte folgen jetzt sofort) und ein Warnzeichen, wenn der Einrichtungs-Check dort etwas meldet (z. B. eine gelöschte Entität), mit dem Grund als Tooltip.
