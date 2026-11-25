@@ -4,6 +4,13 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Mit der Solar-Visualisierung verzahnt** (falls installiert): Leere Energie-Felder (PV-Leistung, Akku-Ladestand, Hausverbrauch) füllt sie automatisch, der Hausverbrauch kommt dann aus ihrem AC-seitig berechneten Sensor (über die Entitäts-Registry, auch nach Umbenennen). Eingetragene Sensoren gehen weiter vor; der Netz-Sensor bleibt von Hand (Growatt meldet Bezug und Einspeisung getrennt). Gilt für Dach, Energie-Seite, Rückblick, Cockpit und Bildschirmschoner; die Einstellungen zeigen den automatischen Sensor als Platzhalter.
+- **Energie-Seite springt direkt in die Solar-Visualisierung:** statt eines Knopfs „Solar“ gibt es Knöpfe für Übersicht, Technik, Auswertung und Steuerung, die die Ansicht eingebettet öffnen (braucht Solar Visualisierung mit Ansicht-Adressen, PR im Solar-Repo; ältere Versionen öffnen den zuletzt gewählten Reiter). Verknüpfungen mit Unterseite (z. B. `/solar-visualisierung/technik`) reichen diese generell ans eingebettete Panel weiter.
+
+### Tests
+- Neuer Abschnitt `solar_verzahnt` (Gruppe energie): automatische Sensoren, Live-Wert, Sprung auf „Technik“; Energie- und Einbettungsprüfungen auf die neuen Sprungknöpfe angepasst.
+
 ## 1.20.1 – 2026-11-25
 
 ### Neu

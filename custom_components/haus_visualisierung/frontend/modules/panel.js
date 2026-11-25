@@ -339,7 +339,9 @@ class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(Einstellungen
     const up = panelPathOf(path);
     const link = (this._layout.links || []).find((l) => panelPathOf(l.path) === up);
     const mode = link ? linkMode(link) : "theme";
-    if (up !== panelPathOf(this._base) && this._embeddable(up) && mode !== "open") this._go(`extern/${encodeURIComponent(up)}`);
+    // Unterseite (z. B. /solar-visualisierung/technik) wird ans eingebettete Panel weitergereicht
+    const sub = String(path).replace(/^\/+/, "").split(/[?#]/)[0].split("/").slice(1).filter(Boolean).join("/");
+    if (up !== panelPathOf(this._base) && this._embeddable(up) && mode !== "open") this._go(`extern/${encodeURIComponent(up)}${sub ? `/${sub}` : ""}`);
     else this._navigate(path);
   }
 

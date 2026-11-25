@@ -281,7 +281,7 @@ def eingebettete_panels():
     check("E: Beim Verlassen getrennt (Panel pausiert)", d == [1, 1])
     # 1.5.0: Die Energie-Karte führt zur Energie-Seite, deren Solar-Knopf zum eingebetteten Panel
     pg.locator(f"{P} .ecard").click(); pg.wait_for_timeout(400)
-    pg.locator(f'{P} .ptitle .pbtn[data-path="/solar-visualisierung"]').click(); pg.wait_for_timeout(400)
+    pg.locator(f'{P} .ptitle .pbtn[data-path="/solar-visualisierung/uebersicht"]').click(); pg.wait_for_timeout(400)
     d = pg.evaluate("[window.__solar.connects, window.__solar.isConnected]")
     check("E: Energie-Karte → Energie-Seite → Solar, gleiche Instanz", d == [2, True])
     pg.goto(dense + "?view=sicherheit"); pg.wait_for_timeout(400)
@@ -1564,7 +1564,8 @@ def energie():
     check("EN: Zeiger zeigt Uhrzeit, PV, Verbrauch und Netz", ":" in tip and "PV" in tip and "Verbrauch" in tip and ("Bezug" in tip or "Einspeisung" in tip))
     pg.mouse.move(5, 5); pg.wait_for_timeout(50)
     check("EN: Wallbox-Karte auf der Energie-Seite", pg.locator(f"{P} .tech.wb").count() == 1 and "Lädt mit 7,4 kW" in pg.locator(f"{P} .tech.wb").inner_text())
-    check("EN: Verknüpfung zum Solar-Panel", pg.locator(f'{P} .ptitle .pbtn[data-path="/solar-visualisierung"]').count() == 1)
+    check("EN: Sprünge auf die Ansichten der Solar-Visualisierung", [b.get_attribute("data-path") for b in pg.locator(f"{P} .ptitle .svjump .pbtn").all()]
+          == [f"/solar-visualisierung/{v}" for v in ("uebersicht", "technik", "auswertung", "steuerung")])
     r0 = pg.evaluate(f"{PP}._stats.renders"); n0 = len(pg.evaluate("window.__api.log"))
     pg.evaluate("(() => { const a = window.__api; a.set('binary_sensor.evcc_lp1_charging', 'off'); a.set('sensor.evcc_ladeleistung', '0'); a.set('sensor.growatt_modbus_battery_power', '-400'); a.set('sensor.netz_leistung', '-2000'); })()"); pg.wait_for_timeout(250)
     dots = pg.evaluate(f"Object.fromEntries([...{R}.querySelectorAll('.efd')].map(d => [d.classList[1], [!d.classList.contains('off'), d.classList.contains('rev')]]))")
@@ -1936,6 +1937,30 @@ def energie_zeitraum():
     mp.locator(f'{P} .entrend [data-act=range][data-r="7"]').click(); mp.wait_for_timeout(400)
     check("EZ: Handy – Woche: alle Wochentage lesbar", mp.locator(f"{P} .entrend .trx span").count() == 7 and mp.evaluate(WIDE) == [])
     mp.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hv-range-')).forEach(k => localStorage.removeItem(k))"); mp.close()
+
+
+@gruppe("energie")
+def solar_verzahnt():
+    # ---------- Solar-Visualisierung: leere Energie-Felder automatisch, Sprung auf ihre Ansichten ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=energie"); pg.wait_for_timeout(600)
+    pg.evaluate("""(() => {
+      const a = window.__api, e = 'sensor.solar_visualisierung_hausverbrauch_ac';
+      a.hass.entities = { ...a.hass.entities, [e]: { entity_id: e, platform: 'solar_visualisierung', translation_key: 'house_ac_power', area_id: null, device_id: null, labels: [] } };
+      a.set('sensor.growatt_modbus_solar_solar_total_power', 2100, { friendly_name: 'Solar Total Power', device_class: 'power', unit_of_measurement: 'W' });
+      a.set('sensor.growatt_modbus_battery_battery_soc', 64, { friendly_name: 'Battery SOC', device_class: 'battery', unit_of_measurement: '%' });
+      a.set(e, 455, { friendly_name: 'Hausverbrauch AC', device_class: 'power', unit_of_measurement: 'W' });
+      const L = structuredClone(document.querySelector('haus-visualisierung-panel')._layout);
+      L.header = { pv: '', battery: '', power: '', grid: 'sensor.netz_leistung' };
+      a.layoutCb({ layout: L });
+    })()"""); pg.wait_for_timeout(500)
+    nd = lambda k: pg.locator(f"{P} .enode.{k}").inner_text().replace("\n", " ")
+    check("SV: leere Felder aus der Solar-Integration (PV, Akku, AC-Hausverbrauch)", "2,1 kW" in nd("pv") and "64 %" in nd("bat") and "455 W" in nd("hub"))
+    pg.evaluate("window.__api.set('sensor.solar_visualisierung_hausverbrauch_ac', 530)"); pg.wait_for_timeout(200)
+    check("SV: neuer Wert live", "530 W" in nd("hub"))
+    pg.locator(f'{P} .ptitle .svjump .pbtn[data-path="/solar-visualisierung/technik"]').click(); pg.wait_for_timeout(500)
+    check("SV: Sprung bettet die Ansicht Technik ein", pg.evaluate("location.pathname") == "/haus-visualisierung/extern/solar-visualisierung/technik"
+          and pg.locator(f"{P} solar-test-panel .route").inner_text().endswith("| /technik"))
 
 
 @gruppe("energie")

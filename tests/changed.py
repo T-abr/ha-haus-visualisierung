@@ -27,6 +27,7 @@ GRUPPEN_FUER = {
     "modules/klima.js": {"klima", "energie", "warnungen", "handy"},
     "modules/verlauf.js": {"verlauf", "klima", "energie", "handy"},
     "modules/energie.js": {"energie", "panels"},
+    "modules/solar.js": {"energie", "panels", "karten"},  # Anbindung an die Solar-Visualisierung
     "modules/technik.js": {"technik"},
     "modules/strompreis.js": {"energie", "technik"},
     "modules/panel-alarmseite.js": {"alarme"},

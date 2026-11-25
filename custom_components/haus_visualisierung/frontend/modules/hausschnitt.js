@@ -2,6 +2,7 @@
 
 import { esc, icon } from "./grundlagen.js";
 import { GROUP_META } from "./modell.js";
+import { headerOf } from "./solar.js";
 import { isBigRoom, roomChipHTML, roomTileHTML, tileHTML } from "./bausteine.js";
 
 function pageEmpty(title, ic, text) {
@@ -25,7 +26,7 @@ function sectionHTML(h, a, kind, eids, title, ic, roomMode) {
 
 function houseHTML(m, L, h, opts = {}) {
   if (opts.dense) return houseDenseHTML(m, L, h, opts);
-  const H = L.header || {};
+  const H = headerOf(h, L);
   const has = (k) => H[k] && h.states[H[k]];
   const pills = [
     has("pv") ? `<span class="ep ep-pv">${icon("mdi:solar-power-variant")}PV <b></b></span>` : "",
@@ -55,7 +56,7 @@ function houseHTML(m, L, h, opts = {}) {
 }
 
 function energyPills(L, h) {
-  const H = L.header || {};
+  const H = headerOf(h, L);
   const has = (k) => H[k] && h.states[H[k]];
   return [
     has("pv") ? `<span class="ep ep-pv">${icon("mdi:solar-power-variant")}PV <b></b></span>` : "",

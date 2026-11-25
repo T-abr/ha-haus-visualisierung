@@ -18,6 +18,7 @@ import { pinSettingsHTML } from "./pin.js";
 import { wxSettingsHTML } from "./wetterwarnung.js";
 import { problems, systemFile, systemSettingsHTML } from "./system.js";
 import { advanced, allLabel, markDirty, openSec, searchHTML, sectionize } from "./einstellungen.js";
+import { headerOf } from "./solar.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["energie", "Energie", "mdi:solar-power-variant"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Wandpanel & Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"], ["system", "Prüfen & Sichern", "mdi:clipboard-check-outline"]];
@@ -115,8 +116,10 @@ const EinstellungenMixin = (Base) => class extends Base {
         <button class="sbtn danger" data-act="s-link-del" data-i="${i}" title="Entfernen">${icon("mdi:delete-outline")}</button></div>`).join("");
     const sw = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span>
       <label class="tgl"><input type="checkbox" data-set="${key}" data-bool="1" ${D[key] ? "checked" : ""}><span></span></label></div>`;
+    // Leere Felder füllt die Solar-Visualisierung (falls installiert): Vorschlag als Platzhalter zeigen
+    const autoH = headerOf(this._hass, { header: {} });
     const ent = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span>
-      <input class="inp w" list="dl-sensor" data-set="header.${key}" value="${esc(D.header[key] || "")}" placeholder="sensor.…"></div>`;
+      <input class="inp w" list="dl-sensor" data-set="header.${key}" value="${esc(D.header[key] || "")}" placeholder="${autoH[key] ? `leer = automatisch: ${esc(autoH[key])}` : "sensor.…"}"></div>`;
     const views = [["overview", "Übersicht"], ...NAV.slice(1).map(([k, t]) => [k, t])];
 
     let body = "";
@@ -143,7 +146,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${maintSettingsHTML(D)}`;
     else if (tab === "energie") body = `${dlAll}${dlSensor}
       <div class="set glass"><h2>${icon("mdi:solar-power-variant")}Energie</h2>
-        <p class="hint">Diese Werte stehen im Dach des Hausschnitts und auf der Seite „Energie“ (Energiefluss, Bilanz heute, Verlauf 24 h; die Wallbox steht weiter unten). Ein Tipp aufs Dach öffnet die Seite „Energie“; ohne Energiedaten die erste Verknüpfung.</p>
+        <p class="hint">Diese Werte stehen im Dach des Hausschnitts und auf der Seite „Energie“ (Energiefluss, Bilanz heute, Verlauf 24 h; die Wallbox steht weiter unten). Ein Tipp aufs Dach öffnet die Seite „Energie“; ohne Energiedaten die erste Verknüpfung.${autoH.pv || autoH.battery || autoH.power ? " Leere Felder füllt die Solar-Visualisierung automatisch (PV, Akku, AC-Hausverbrauch); der Netz-Sensor bleibt von Hand." : ""}</p>
         ${ent("pv", "PV-Leistung", "z. B. sensor.growatt_modbus_…_pv_power")}
         ${ent("battery", "Akku-Ladestand", "in %")}
         ${ent("power", "Hausverbrauch", "z. B. dein AC-seitig berechneter Verbrauch")}
