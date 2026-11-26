@@ -2046,6 +2046,77 @@ def strompreis():
     mp.close()
 
 
+@gruppe("szenen")
+def szenen_je_raum():
+    # ---------- Szenen je Raum: Knöpfe im Raumkopf, Editor, Speichern als scene.haus_<id> ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=raum/wohnzimmer"); pg.wait_for_timeout(600)
+    bar = f"{P} .hero"
+    chips = pg.evaluate(f"[...{R}.querySelectorAll('.hero .schip[data-act=run]')].map(b => b.dataset.eid)")
+    check("SZ: vorhandene Szenen als Knöpfe im Raumkopf", sorted(chips) == ["scene.wohnzimmer_gemutlich", "scene.wohnzimmer_kino"]
+          and "Kino" in pg.locator(bar).inner_text())
+    pg.locator(f'{bar} .schip[data-eid="scene.wohnzimmer_kino"]').click(); pg.wait_for_timeout(300)
+    check("SZ: ein Tipp schaltet ohne Rückfrage", log()[-1] == "scene.turn_on" and pg.locator(f"{P} .mbg").count() == 0)
+    # Neue Szene: ohne eigene Szenen öffnet sich gleich der Editor mit dem Ist-Zustand
+    pg.locator(f"{bar} [data-act=sz-list]").click(); pg.wait_for_timeout(300)
+    M = f"{P} .szmodal"
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.szmodal [data-sz=inc]')].map(i => i.dataset.eid)")
+    check("SZ: Editor mit Lichtern und Rollos des Raums", pg.locator(M).count() == 1 and "Neue Szene" in pg.locator(f"{M} .mt").inner_text()
+          and {"light.wohnzimmer_decke", "light.wohnzimmer_led_streifen", "cover.wohnzimmer_fenster"} <= set(rows))
+    check("SZ: Ist-Zustand übernommen (Decke an 70 %, Rollo 60 %)", pg.locator(f'{M} [data-sz=bri][data-eid="light.wohnzimmer_decke"]').input_value() == "70"
+          and pg.locator(f'{M} [data-sz=pos][data-eid="cover.wohnzimmer_fenster"]').input_value() == "60")
+    check("SZ: Speichern erst mit Namen", pg.locator(f"{M} [data-act=sz-save]").is_disabled())
+    pg.locator(f"{M} [data-sz=name]").fill("Kino")
+    pg.locator(f'{M} [data-sz=on][data-eid="light.wohnzimmer_decke"] + span').click(); pg.wait_for_timeout(150)
+    check("SZ: Licht aus → keine Helligkeit mehr", pg.locator(f'{M} [data-sz=bri][data-eid="light.wohnzimmer_decke"]').count() == 0)
+    pg.locator(f'{M} [data-sz=pos][data-eid="cover.wohnzimmer_fenster"]').fill("0"); pg.wait_for_timeout(100)
+    check("SZ: Rollo-Position mit Anzeige", pg.locator(f'{M} [data-sz=pos][data-eid="cover.wohnzimmer_fenster"] + .szv').inner_text() == "Zu")
+    pg.locator(f'{M} [data-sz=inc][data-eid="light.wohnzimmer_led_streifen"]').uncheck(); pg.wait_for_timeout(150)
+    pg.locator(f'{M} [data-act=sz-icon][data-icon="mdi:movie-open"]').click(); pg.wait_for_timeout(100)
+    pg.locator(f"{M} [data-act=sz-test]").click(); pg.wait_for_timeout(300)
+    t = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "scene_test"]
+    check("SZ: Ausprobieren schickt die Szene, ohne zu speichern", t and t[-1][2]["ents"]["light.wohnzimmer_decke"] == {"on": False}
+          and t[-1][2]["ents"]["cover.wohnzimmer_fenster"] == {"pos": 0} and "light.wohnzimmer_led_streifen" not in t[-1][2]["ents"]
+          and not pg.evaluate(f"Object.keys({PP}._layout.scenes || {{}}).length"))
+    pg.locator(f"{M} [data-sz=fav] + span").click()
+    pg.locator(f"{M} [data-act=sz-save]").click(); pg.wait_for_timeout(500)
+    L = pg.evaluate(f"{PP}._layout")
+    sc = L["scenes"].get("wohnzimmer_kino", {})
+    check("SZ: gespeichert mit Raum, Symbol und Zuständen", sc.get("area") == "wohnzimmer" and sc.get("icon") == "mdi:movie-open"
+          and sc.get("ents", {}).get("cover.wohnzimmer_fenster") == {"pos": 0} and pg.locator(M).count() == 0)
+    check("SZ: im Schnellzugriff (Favorit)", "scene.haus_wohnzimmer_kino" in L["favorites"])
+    chips = pg.evaluate(f"[...{R}.querySelectorAll('.hero .schip[data-act=run]')].map(b => b.dataset.eid)")
+    check("SZ: neue Szene erscheint als Knopf", "scene.haus_wohnzimmer_kino" in chips)
+    pg.locator(f'{bar} .schip[data-eid="scene.haus_wohnzimmer_kino"]').click(); pg.wait_for_timeout(200)
+    check("SZ: eigene Szene schalten", log()[-1] == "scene.turn_on")
+    q = pg.evaluate(f"{PP}._sceneChips({PP}._layout.favorites)")
+    check("SZ: Schnellzugriff zeigt die Szene mit ihrem Symbol", 'data-eid="scene.haus_wohnzimmer_kino"' in q and "mdi:movie-open" in q)
+    # Bearbeiten und Löschen
+    pg.locator(f"{bar} [data-act=sz-list]").click(); pg.wait_for_timeout(300)
+    check("SZ: Liste der eigenen Szenen", pg.locator(f"{M} [data-act=sz-edit]").count() == 1)
+    pg.locator(f"{M} [data-act=sz-edit]").click(); pg.wait_for_timeout(300)
+    check("SZ: Bearbeiten lädt Name und Zustand", pg.locator(f"{M} [data-sz=name]").input_value() == "Kino"
+          and not pg.locator(f'{M} [data-sz=on][data-eid="light.wohnzimmer_decke"]').is_checked()
+          and not pg.locator(f'{M} [data-sz=inc][data-eid="light.wohnzimmer_led_streifen"]').is_checked()
+          and pg.locator(f"{M} [data-sz=fav]").is_checked())
+    pg.locator(f"{M} [data-act=sz-del]").click(); pg.wait_for_timeout(150)
+    check("SZ: Löschen fragt nach", pg.locator(M).count() == 1 and "Wirklich" in pg.locator(f"{M} [data-act=sz-del]").inner_text())
+    pg.locator(f"{M} [data-act=sz-del]").click(); pg.wait_for_timeout(500)
+    L = pg.evaluate(f"{PP}._layout")
+    check("SZ: gelöscht, auch aus den Favoriten", not L["scenes"] and "scene.haus_wohnzimmer_kino" not in L["favorites"] and pg.locator(M).count() == 0)
+    check("SZ: Knopf verschwindet", pg.locator(f'{bar} .schip[data-eid="scene.haus_wohnzimmer_kino"]').count() == 0)
+    # Ohne Admin-Rechte nur schalten
+    pg.evaluate(f"(() => {{ const p = {PP}; p._hass.user.is_admin = false; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
+    check("SZ: ohne Admin kein Bearbeiten", pg.locator(f"{bar} [data-act=sz-list]").count() == 0 and pg.locator(f"{bar} .schip").count() == 2)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._hass.user.is_admin = true; }})()")
+    # Komfort-Ansicht: Leiste unter dem Raumkopf, Szenen nicht doppelt in den Abschnitten
+    pg.goto(base + "&view=raum/wohnzimmer"); pg.wait_for_timeout(600)
+    chips = pg.evaluate(f"[...{R}.querySelectorAll('.hero .szbar .schip[data-act=run]')].map(b => b.dataset.eid)")
+    check("SZ-Komfort: Szenen als Leiste im Raumkopf", sorted(chips) == ["scene.wohnzimmer_gemutlich", "scene.wohnzimmer_kino"]
+          and pg.locator(f"{P} .hero .szbar [data-act=sz-list]").count() == 1)
+    check("SZ-Komfort: nicht doppelt in den Abschnitten", pg.locator(f'{P} .sections [data-eid="scene.wohnzimmer_kino"]').count() == 0)
+
+
 @gruppe("gutenacht")
 def gute_nacht_check():
     # ---------- Gute-Nacht- und Verlassen-Check ----------

@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed, async_mock_service
 from test_push import _ent, _setup, _tick
 from test_push import _house as _house_alarm
@@ -84,6 +85,8 @@ async def test_display_flow(hass: HomeAssistant, freezer: FrozenDateTimeFactory)
                        response={"calendar.abfall": {"events": [{"summary": "Gelbe Tonne", "start": tomorrow, "end": tomorrow}]}})
     lights = async_mock_service(hass, "light", "turn_off")
     covers = async_mock_service(hass, "cover", "close_cover")
+    # Die Szenen-Plattform lädt die Kern-Integration „homeassistant“ (wie in echtem HA immer da); erst danach ersetzen
+    assert await async_setup_component(hass, "homeassistant", {})
     offs = async_mock_service(hass, "homeassistant", "turn_off")
 
     monitor = await _setup(hass)

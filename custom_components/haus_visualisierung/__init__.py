@@ -42,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 TAP_SCHEMA = vol.Schema({vol.Required("display"): vol.All(str, vol.Length(max=40)), vol.Required("ziel"): vol.All(str, vol.Length(max=200))})
-PLATFORMS = ["select", "sensor", "update"]
+PLATFORMS = ["scene", "select", "sensor", "update"]
 
 
 def _drop_stale_gz(frontend_dir: Path) -> None:

@@ -21,6 +21,7 @@ from .const import (
 )
 from .display import sanitize_displays
 from .maintenance import UNITS as MAINT_UNITS
+from .scenes import sanitize_scenes
 
 _LIST_OF_STR = (
     "area_order",
@@ -543,6 +544,8 @@ def sanitize(raw: Any) -> dict:
         result["maintenance"] = _maintenance(raw["maintenance"])
     if isinstance(raw.get("displays"), list):
         result["displays"] = sanitize_displays(raw["displays"])
+    if isinstance(raw.get("scenes"), dict):
+        result["scenes"] = sanitize_scenes(raw["scenes"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
 

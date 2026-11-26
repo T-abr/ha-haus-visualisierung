@@ -119,6 +119,10 @@ const AnsichtenMixin = (Base) => class extends Base {
         const rest = eids.filter((e) => e !== a.tempId && e !== a.humId);
         if (!rest.length) continue;
         sections.push(sectionHTML(h, a, k, rest));
+      } else if (k === "scene" && this._roomScenesHTML) {
+        // Szenen stehen als Knöpfe im Kopf, hier bleiben nur Skripte
+        const rest = eids.filter((e) => dom(e) !== "scene");
+        if (rest.length) sections.push(sectionHTML(h, a, k, rest, "Skripte", "mdi:script-text-play"));
       } else sections.push(sectionHTML(h, a, k, eids));
     }
     if (a.batteries.length) sections.push(sectionHTML(h, a, "batt", a.batteries, "Batterien", "mdi:battery-heart-variant"));
@@ -139,7 +143,7 @@ const AnsichtenMixin = (Base) => class extends Base {
           ${a.covers.length ? `<button class="pbtn" data-act="area-covers" data-svc="open_cover" data-area="${esc(a.id)}">${icon("mdi:arrow-up")}Auf</button>
             <button class="pbtn" data-act="area-covers" data-svc="close_cover" data-area="${esc(a.id)}">${icon("mdi:arrow-down")}Zu</button>` : ""}
         </div>
-      </div></div>
+      </div>${this._roomScenesHTML ? this._roomScenesHTML(a) : ""}</div>
       ${this._techCards(a)}
       ${this._layout.show_trends !== false ? trendCardHTML(a) : ""}
       ${sections.length ? `<div class="sections">${sections.join("")}</div>` : `<div class="glass empty">${icon("mdi:package-variant")}In diesem Bereich sind noch keine Geräte.</div>`}`;
@@ -288,7 +292,7 @@ const AnsichtenMixin = (Base) => class extends Base {
   }
   _sceneChips(fav) {
     const h = this._hass;
-    return fav.filter((e) => ["scene", "script"].includes(dom(e))).map((e) => `<button class="schip" data-act="run" data-confirm="1" data-eid="${esc(e)}">${icon(dom(e) === "script" ? "mdi:script-text-play" : "mdi:palette")}<span>${esc(entName(h, e))}</span></button>`).join("");
+    return fav.filter((e) => ["scene", "script"].includes(dom(e))).map((e) => `<button class="schip" data-act="run" data-confirm="1" data-eid="${esc(e)}">${icon(dom(e) === "script" ? "mdi:script-text-play" : (h.states[e].attributes.icon || "mdi:palette"))}<span>${esc(entName(h, e))}</span></button>`).join("");
   }
   _ebar(fav) {
     const pills = energyPills(this._layout, this._hass);

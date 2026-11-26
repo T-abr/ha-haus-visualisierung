@@ -14,6 +14,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Backend: `test_automations.py` (Liste mit Bereich und Beschreibung, Schalten, nur Automationen, nur Administratoren).
 - Neuer Abschnitt `grosse_monitore_ausgeklappt` (Gruppe basis): Batterie- und Sicherheitsseite ab 1200 px ohne Aufklappen, darunter klappbar, Wechsel beim Verkleinern/Vergrößern; Wetterwarnungen ab 1200 px offen, darunter zugeklappt.
 - `test_display_alarm_vollbild`: Bereich `alarm` nur für Alarme (nicht Warnungen), nur für eingeschaltete Displays, Quittieren und 1 h stumm am Display, falsche Schlüssel ändern nichts.
+- Neuer Abschnitt `szenen_je_raum` (Gruppe szenen): Knöpfe im Raumkopf (Kompakt und Komfort), Editor mit Ist-Zustand, Ausprobieren, Speichern mit Favorit, Bearbeiten, Löschen, ohne Admin nur schalten.
+- Backend `test_scenes.py`: Bereinigen der Szenen, Entität mit Bereich und Symbol, Dienstaufrufe je Gerät (Farbe, Weißton, Rollo mit und ohne Positionsfunktion), Umbenennen, Ausprobieren, Löschen.
+- `test_display.py` lädt die Kern-Integration „homeassistant“ vor dem Ersetzen von `homeassistant.turn_off` (die neue Szenen-Plattform lädt sie sonst nach und überschreibt den Ersatz).
 
 ## 1.21.0 – 2026-11-25
 

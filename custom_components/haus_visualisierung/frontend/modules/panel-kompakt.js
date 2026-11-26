@@ -41,7 +41,8 @@ const KompaktMixin = (Base) => class extends Base {
         <span class="crumb">${esc(floor ? floor.short || floor.name : "")}</span>
         <div class="hero-badges"></div>
         <span class="sp"></span>
-        ${scenes.map((e) => `<button class="schip" data-act="run" data-eid="${esc(e)}">${icon(dom(e) === "script" ? "mdi:script-text-play" : "mdi:palette")}${esc(entName(h, e, a))}</button>`).join("")}
+        ${scenes.map((e) => `<button class="schip" data-act="run" data-eid="${esc(e)}">${icon(dom(e) === "script" ? "mdi:script-text-play" : ((h.states[e] && h.states[e].attributes.icon) || "mdi:palette"))}${esc(entName(h, e, a))}</button>`).join("")}
+        ${this._szEditChip ? this._szEditChip(a) : ""}
         ${a.lights.length ? `<button class="pbtn hl" data-act="area-lights" data-area="${esc(a.id)}">${icon("mdi:lightbulb-group")}<span>Licht</span></button>` : ""}
         ${a.covers.length ? `<button class="pbtn" data-act="area-covers" data-svc="open_cover" data-area="${esc(a.id)}" title="Rollos auf">${icon("mdi:arrow-up")}</button><button class="pbtn" data-act="area-covers" data-svc="close_cover" data-area="${esc(a.id)}" title="Rollos zu">${icon("mdi:arrow-down")}</button>` : ""}
         ${prev ? `<button class="iconbtn pn" data-act="go" data-to="raum/${esc(prev.id)}" title="${esc(prev.name)}">${icon("mdi:chevron-left")}</button>` : ""}

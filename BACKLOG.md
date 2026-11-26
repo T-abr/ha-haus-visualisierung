@@ -31,7 +31,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 20 | ~~Einrichtungs-Check~~ | hoch | S–M | umgesetzt |
 | 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt |
 | 22 | Zeitleiste „Was war los?“ | mittel | M | neu |
-| 23 | Szenen je Raum (auch als Display-Kachel) | mittel | M | neu |
+| 23 | ~~Szenen je Raum (auch als Display-Kachel)~~ | mittel | M | umgesetzt |
 | 24 | ~~Display: Alarm-Vollbild mit Quittieren~~ | mittel | M | umgesetzt |
 | 25 | Display: Relais als Lichtschalter | niedrig | M | neu |
 | 26 | Display: Wecken über Bewegungsmelder im Raum | mittel | S | neu |
@@ -122,7 +122,7 @@ Tür, Klingel mit Standbild, Bewegung, Moduswechsel und Alarme als Verlauf auf d
 gruppiert und filterbar. Praktisch nach dem Urlaub oder wenn man unterwegs war. Quelle: Recorder bzw. Logbuch und
 das Protokoll des Alarmmanagers; Standbilder der Klingel bei jedem Klingeln merken.
 
-### 23. Szenen je Raum
+### 23. ~~Szenen je Raum~~ (umgesetzt)
 Stimmungen wie Kino, Essen oder Putzen im Panel anlegen (Lichter mit Helligkeit/Farbe, Rollos mit Position) und mit
 einem Tipp schalten: auf der Raumseite, im Schnellzugriff und als Kachel am Wanddisplay. Vorhandene `scene.*`
 weiter nutzbar.

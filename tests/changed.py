@@ -36,6 +36,7 @@ GRUPPEN_FUER = {
     "modules/wetter.js": {"wetter", "wandpanel", "kopfzeile", "prognose"},
     "modules/prognose.js": {"prognose"},
     "modules/gutenacht.js": {"gutenacht"},
+    "modules/szenen.js": {"szenen"},
     "modules/anwesenheit.js": {"anwesenheit"},
     "modules/termine.js": {"termine", "wandpanel", "kopfzeile"},
     "modules/rueckblick.js": {"rueckblick"},
