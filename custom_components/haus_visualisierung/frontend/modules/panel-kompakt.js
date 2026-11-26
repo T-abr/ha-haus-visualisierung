@@ -2,7 +2,7 @@
  * Wird in panel.js mit den anderen Teilen zur Klasse des Panels zusammengesetzt. */
 
 import { dom, entName, esc, icon, isOn, num, weit } from "./grundlagen.js";
-import { CTRL_DOMAINS, rowHTML, rowsSectionHTML, tileHTML, vchipHTML } from "./bausteine.js";
+import { CTRL_DOMAINS, langCls, rowHTML, rowsSectionHTML, tileHTML, vchipHTML } from "./bausteine.js";
 import { alertsCardHTML } from "./warnungen.js";
 import { trendCardHTML } from "./verlauf.js";
 import { sparkHTML } from "./klima.js";
@@ -129,7 +129,7 @@ const KompaktMixin = (Base) => class extends Base {
       collapsed = collapsed && !weit(); // große Monitore: immer offen
       const rows = `<div class="rows">${list.map(([a, e]) => rowHTML(h, e, a, { sub: a.name })).join("")}</div>`;
       const head = `${icon(ic)}<span class="st">${title}</span><span class="gc">${list.length}</span><span class="sp"></span>${collapsed ? icon("mdi:chevron-down", "chev") : ""}`;
-      return collapsed ? `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>` : `<div class="section glass"><div class="shead">${head}</div>${rows}</div>`;
+      return collapsed ? `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>` : `<div class="section glass${langCls(list)}"><div class="shead">${head}</div>${rows}</div>`;
     };
     return `<div class="ptitle"><h1>Sicherheit</h1><span class="sp"></span>
         ${camLink ? `<button class="pbtn" data-act="link" data-path="${esc(camLink.path)}">${icon(camLink.icon || "mdi:cctv")}${esc(camLink.title)}</button>` : ""}</div>
@@ -154,7 +154,7 @@ const KompaktMixin = (Base) => class extends Base {
       collapsed = collapsed && !weit(); // große Monitore: immer offen
       const rows = `<div class="rows">${items.map((b) => rowHTML(h, b.eid, m.areas.get(b.areaId), { sub: (m.areas.get(b.areaId) || {}).name || "Ohne Bereich" })).join("")}</div>`;
       const head = `${icon(ic)}<span class="st">${title}</span><span class="gc">${items.length}</span><span class="sp"></span>${collapsed ? icon("mdi:chevron-down", "chev") : ""}`;
-      return collapsed ? `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>` : `<div class="section glass"><div class="shead">${head}</div>${rows}</div>`;
+      return collapsed ? `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>` : `<div class="section glass${langCls(items)}"><div class="shead">${head}</div>${rows}</div>`;
     };
     return `<div class="ptitle"><h1>Batterien</h1><span class="psub">${list.length} Geräte · kritisch unter ${L.battery_critical} %, schwach unter ${L.battery_low} %</span></div>
       <div class="sgrid">${sec("Kritisch", "mdi:battery-alert-variant-outline", crit)}${sec("Schwach", "mdi:battery-30", low)}${sec("In Ordnung", "mdi:battery-check", ok, true)}</div>`;

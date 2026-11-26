@@ -294,6 +294,40 @@ def grosse_monitore_ausgeklappt():
     pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(500)
     check("GM: beim Vergrößern wieder offen", pg.locator(f"{P} details.section").count() == 0)
 
+@gruppe("basis")
+def lange_listen_mehrspaltig():
+    """Lange Listen (ab 8 Einträgen) nutzen ab 1200 px die ganze Breite: je nach Platz 2 oder 3 Spalten; darunter einspaltig."""
+    spalten = """(sel) => { const R = document.querySelector('haus-visualisierung-panel').shadowRoot, el = R.querySelector(sel);
+      return el ? getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length : -1; }"""
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense); pg.wait_for_timeout(500)
+    pg.evaluate("""(() => { const a = window.__api; for (let i = 1; i <= 12; i++)
+      a.set(`automation.regel_${String(i).padStart(2, '0')}`, i % 3 ? 'on' : 'off', { friendly_name: `Regel ${i}`, id: String(2000 + i), last_triggered: null }); })()""")
+    pg.locator(f'{P} .nav[data-to="automationen"]').click(); pg.wait_for_timeout(400)
+    sec = pg.locator(f"{P} .wgrid > .section.lang")
+    check("LL: Automationen ab 8 Einträgen als lange Liste", sec.count() == 1 and pg.locator(f"{P} .aurow").count() >= 12)
+    pg.set_viewport_size({"width": 1280, "height": 1000}); pg.wait_for_timeout(300)
+    check("LL: 1280 px – Automationen zweispaltig, ohne Höchstbreite", pg.evaluate(spalten, ".lang > .wlist") == 2
+          and pg.evaluate(f"{PP}.shadowRoot.querySelector('.wgrid').getBoundingClientRect().width") > 1000)
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(300)
+    check("LL: 1440 px – Automationen dreispaltig", pg.evaluate(spalten, ".lang > .wlist") == 3)
+    pg.set_viewport_size({"width": 1100, "height": 900}); pg.wait_for_timeout(300)
+    check("LL: unter 1200 px einspaltig wie bisher", pg.evaluate(spalten, ".lang > .wlist") in (0, 1)
+          and pg.evaluate(f"{PP}.shadowRoot.querySelector('.wgrid').getBoundingClientRect().width") <= 980)
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    check("LL: Handy – nichts ragt aus der Seite", not pg.evaluate(WIDE))
+    # Batterien: lange Zeilenliste über die ganze Breite des Rasters, kurze Abschnitte bleiben eine Spalte
+    pg.set_viewport_size({"width": 1920, "height": 1000})
+    pg.goto(dense + "?view=batterien"); pg.wait_for_timeout(400)
+    check("LL: wenige Batterien – keine lange Liste", pg.locator(f"{P} .sgrid > .section.lang").count() == 0)
+    pg.evaluate(f"""(() => {{ const g = {PP}.shadowRoot.querySelector('.sgrid'), row = g.querySelector('.rows > *');
+      const s = document.createElement('div'); s.className = 'section glass lang'; s.innerHTML = '<div class="shead">Test</div><div class="rows"></div>';
+      for (let i = 0; i < 12; i++) s.lastChild.appendChild(row.cloneNode(true)); g.appendChild(s); }})()""")
+    pg.wait_for_timeout(200)
+    breite = pg.evaluate(f"(() => {{ const g = {PP}.shadowRoot.querySelector('.sgrid'), s = g.querySelector('.section.lang'); return [g.getBoundingClientRect().width, s.getBoundingClientRect().width]; }})()")
+    check("LL: Batterien – lange Liste über die ganze Breite, dreispaltig", abs(breite[0] - breite[1]) < 2 and pg.evaluate(spalten, ".lang > .rows") == 3)
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(300)
+
 @gruppe("panels")
 def eingebettete_panels():
     # ---------- Eingebettete Panels ----------

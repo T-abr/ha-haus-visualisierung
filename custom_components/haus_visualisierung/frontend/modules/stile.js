@@ -420,7 +420,13 @@ details[open]>summary.shead{padding-bottom:2px}
 /* Breite Monitore: Räume im Raster statt Mehrspaltensatz (der stapelte wenige Räume in 2 Spalten), große Räume doppelt breit */
 @media (min-width:1200px){.rlist{columns:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start}
 .rgroup.big{grid-column:span 2}.rgroup.big .rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-.sgrid>.section.big{grid-column:span 2}}
+.sgrid>.section.big{grid-column:span 2}
+/* Lange Listen (Klasse lang, ab 8 Einträgen): ganze Breite, Einträge je nach Platz 2- oder 3-spaltig */
+.sgrid>.section.lang{grid-column:1/-1}.wgrid:has(>.lang){max-width:none}.wgrid>.auform{max-width:980px}
+.section.lang{container-type:inline-size}
+@container (min-width:720px){.lang>.rows,.lang>.wlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 14px;align-items:start}
+.lang>.wlist{gap:0 28px;align-items:stretch}.lang>.wlist>.wrow:nth-child(2){border-top:0}}
+@container (min-width:1200px){.lang>.rows,.lang>.wlist{grid-template-columns:repeat(3,minmax(0,1fr))}.lang>.wlist>.wrow:nth-child(3){border-top:0}}}
 .ktable{padding:2px 0}
 .ktable.withspark .khead,.ktable.withspark .krow{grid-template-columns:minmax(150px,230px) 70px 96px minmax(170px,440px) minmax(250px,1fr)}
 .kspark{position:relative;display:flex;align-items:center;gap:8px;height:44px;min-width:0;cursor:crosshair;touch-action:pan-y}

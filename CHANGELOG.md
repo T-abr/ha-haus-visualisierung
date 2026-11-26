@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Verbessert
+- **Lange Listen nutzen auf breiten Monitoren die Breite.** Ab 1200 px Fensterbreite läuft eine Liste mit 8 oder mehr Einträgen über die ganze Seitenbreite und verteilt sich je nach Platz auf 2 oder 3 Spalten (3 ab etwa 1200 px Listenbreite): Batterien („In Ordnung“ usw., Kompakt- und Normalansicht), Automationen, Sicherheit („Fenster & Türen“, Melder, Bewegung) und Wartung. Kurze Abschnitte bleiben nebeneinander wie bisher, Handy und Tablet unverändert.
+
+### Tests
+- Neuer Abschnitt `lange_listen_mehrspaltig` (Gruppe basis): 2 Spalten bei 1280 px, 3 bei 1440 px, einspaltig unter 1200 px, Handy ohne Überstand, Batterie-Liste über die ganze Breite.
+
 ## 1.22.0 – 2026-11-26
 
 ### Neu

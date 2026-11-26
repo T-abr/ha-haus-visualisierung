@@ -4,6 +4,7 @@
 
 import { DOMAIN } from "./version.js";
 import { esc, icon } from "./grundlagen.js";
+import { langCls } from "./bausteine.js";
 
 /** {Aufgaben-ID: {last, by, history}} aus dem Backend (Abo …/subscribe, Feld „maintenance“) */
 let MAINT = {};
@@ -91,7 +92,7 @@ function maintPageHTML(L, isAdmin) {
   if (!list.length) return `<div class="ptitle"><h1>Wartung</h1><span class="sp"></span>${edit}</div>
     <div class="glass empty">${icon("mdi:wrench-clock")}Noch keine Wartungsaufgaben.<br><small>Anlegen unter Einstellungen → Technik → Wartungsplaner, z. B. Lüftungsfilter, Rauchmelder oder Kaminkehrer.</small></div>`;
   const due = list.filter((i) => i.status === "due"), soon = list.filter((i) => i.status === "soon"), ok = list.filter((i) => i.status === "ok");
-  const sec = (title, ic, items, cls = "") => items.length ? `<div class="section glass wsec ${cls}"><div class="shead${cls === "due" ? " alert" : ""}">${icon(ic)}<span class="st">${title}</span><span class="gc">${items.length}</span></div>
+  const sec = (title, ic, items, cls = "") => items.length ? `<div class="section glass wsec ${cls}${langCls(items)}"><div class="shead${cls === "due" ? " alert" : ""}">${icon(ic)}<span class="st">${title}</span><span class="gc">${items.length}</span></div>
     <div class="wlist">${items.map(rowHTML).join("")}</div></div>` : "";
   return `<div class="ptitle"><h1>Wartung</h1><span class="psub">${list.length} ${list.length === 1 ? "Aufgabe" : "Aufgaben"}${due.length ? ` · ${due.length} fällig` : " · nichts fällig"}</span><span class="sp"></span>${edit}</div>
     <div class="wgrid">${sec("Fällig", "mdi:wrench-clock", due, "due")}${sec("Demnächst", "mdi:calendar-clock", soon, "soon")}${sec("Später", "mdi:calendar-check", ok)}</div>`;

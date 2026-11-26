@@ -150,6 +150,9 @@ function roomActive(h, a) {
   return a.lights.some((e) => isOn(h.states[e])) || a.contacts.some((e) => isOn(h.states[e])) || a.presence.some((e) => isOn(h.states[e]))
     || a.climates.some((e) => h.states[e] && h.states[e].attributes.hvac_action === "heating") || a.media.some((e) => h.states[e] && h.states[e].state === "playing");
 }
+/** Lange Liste: ab 1200 px über die ganze Breite, Einträge je nach Platz 2- oder 3-spaltig (CSS `.lang` in stile.js) */
+const LANG_AB = 8;
+const langCls = (items) => (items.length >= LANG_AB ? " lang" : "");
 const isBigRoom = (a) => !!(a.tempId || a.climates.length || a.covers.length || a.lights.length >= 3);
 
 function rowsSectionHTML(h, a, kind, eids, title, ic, opts = {}) {
@@ -170,4 +173,4 @@ function rowsSectionHTML(h, a, kind, eids, title, ic, opts = {}) {
   return `<div class="section glass"><div class="shead"${cnt}>${head}</div>${rows}</div>`;
 }
 
-export { CTRL_DOMAINS, isBigRoom, roomActive, roomChipHTML, roomRowHTML, roomTileHTML, rowHTML, rowsSectionHTML, tileHTML, vchipHTML };
+export { CTRL_DOMAINS, isBigRoom, langCls, roomActive, roomChipHTML, roomRowHTML, roomTileHTML, rowHTML, rowsSectionHTML, tileHTML, vchipHTML };
