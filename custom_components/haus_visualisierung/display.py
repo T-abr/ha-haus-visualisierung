@@ -28,7 +28,6 @@ from typing import Any
 
 from homeassistant.const import EVENT_SERVICE_REGISTERED, EVENT_STATE_CHANGED
 from homeassistant.core import Event, HomeAssistant, ServiceCall, State, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.storage import Store
@@ -36,6 +35,7 @@ from homeassistant.util import dt as dt_util
 
 from .alerts import UNAV, is_on, num
 from .const import DEFAULT_LAYOUT
+from .klingel import find_bell, find_bell_camera, is_ring
 from .pin import KIND_TXT as PIN_TXT
 from .pin import LOCK_S as PIN_LOCK_S
 from .pin import Throttle, mode_kind, verify
@@ -84,34 +84,31 @@ W_COND = {
 }
 
 # Müllabfuhr: wie termine.js
-WASTE_RE = re.compile(r"abfall|m(ü|ue|u)ll|waste|tonne|abfuhr|wertstoff|entsorg|recycl|garbage|trash", re.I)
+WASTE_RE = re.compile(r"abfall|m(ü|ue|u)ll|waste|tonne|abfuhr|wertstoff|entsorg|recycl|garbage|trash", re.IGNORECASE)
 BINS = [
-    (re.compile(r"gelb|wertstoff|verpackung|plastik|lvp|recycl", re.I), "#f2c230", "recycle"),
-    (re.compile(r"papier|pappe|karton|blau|paper", re.I), "#4b8df8", "newspaper-variant-outline"),
-    (re.compile(r"bio|braun|kompost|organic", re.I), "#a8703f", "leaf"),
-    (re.compile(r"grün|gruen|garten|baum|laub", re.I), "#4cbf6b", "tree-outline"),
-    (re.compile(r"glas|glass", re.I), "#3fae8f", "bottle-wine-outline"),
-    (re.compile(r"sperr", re.I), "#e8893a", "sofa-outline"),
-    (re.compile(r"schadstoff|problem|sonder", re.I), "#e5534b", "biohazard"),
-    (re.compile(r"rest|grau|schwarz|haus|general", re.I), C_DIM, "trash-can-outline"),
+    (re.compile(r"gelb|wertstoff|verpackung|plastik|lvp|recycl", re.IGNORECASE), "#f2c230", "recycle"),
+    (re.compile(r"papier|pappe|karton|blau|paper", re.IGNORECASE), "#4b8df8", "newspaper-variant-outline"),
+    (re.compile(r"bio|braun|kompost|organic", re.IGNORECASE), "#a8703f", "leaf"),
+    (re.compile(r"grün|gruen|garten|baum|laub", re.IGNORECASE), "#4cbf6b", "tree-outline"),
+    (re.compile(r"glas|glass", re.IGNORECASE), "#3fae8f", "bottle-wine-outline"),
+    (re.compile(r"sperr", re.IGNORECASE), "#e8893a", "sofa-outline"),
+    (re.compile(r"schadstoff|problem|sonder", re.IGNORECASE), "#e5534b", "biohazard"),
+    (re.compile(r"rest|grau|schwarz|haus|general", re.IGNORECASE), C_DIM, "trash-can-outline"),
 ]
 WEEKDAY = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 
 # Gute Nacht: wie gutenacht.js
 HOT_RE = re.compile(r"herd|kochfeld|backofen|\bofen\b|bügeleisen|buegeleisen|glätteisen|wasserkocher|kaffeemaschine|"
-                    r"heizlüfter|stove|oven|\biron\b|kettle", re.I)
+                    r"heizlüfter|stove|oven|\biron\b|kettle", re.IGNORECASE)
 GN_TITLE = {"garage": "Garage & Tore", "contact": "Fenster & Türen", "lock": "Schlösser", "device": "Geräte",
             "light": "Licht", "media": "Medien"}
 GN_MAX = 8
-BAT_RE = re.compile(r"(akku|batter|battery|hausspeicher|stromspeicher)", re.I)
+BAT_RE = re.compile(r"(akku|batter|battery|hausspeicher|stromspeicher)", re.IGNORECASE)
 # Reine Lade-/Entladesensoren (immer >= 0) ausschließen, sonst fehlt eine Flussrichtung
-BAT_NOT = re.compile(r"(pv|solar|grid|netz|soc|wallbox|evcc|lade|charg)", re.I)
+BAT_NOT = re.compile(r"(pv|solar|grid|netz|soc|wallbox|evcc|lade|charg)", re.IGNORECASE)
 
 WEATHER_TTL = 30 * 60
 CAL_TTL = 15 * 60
-BELL_RE = re.compile(r"doorbell|klingel", re.I)
-BELL_EVENT_RE = re.compile(r"ring|press|doorbell|klingel", re.I)
-BELL_CAM_RE = re.compile(r"entry|doorbell|klingel|haust", re.I)
 BELL_IMG = (432, 243)  # Kamerabild im Overlay (16:9); die Firmware passt es mit gleichem Seitenverhältnis ein
 BELL_AFTER_DOOR = 15   # Sekunden, die das Overlay nach „Tür öffnen“ noch offen bleibt
 SENSOR_DELAY = 10     # Sekunden: Messwert-Änderungen gebündelt schicken (Display-Last, siehe CHANGELOG 1.18.1)
@@ -307,25 +304,6 @@ def sanitize_displays(raw: Any) -> list[dict]:
     return out
 
 
-def is_ring(old: State | None, new: State | None) -> bool:
-    """Klingelt es? Wie im Panel (aktualisierer.js isRing): neues Ereignis bzw. Binärsensor wird „an“.
-
-    Nach einem Neustart steht eine Ereignis-Entität auf „unknown“, bis zum ersten Klingeln – das muss zählen.
-    Damit eine wieder erreichbare Entität nicht als Klingeln gilt, zählt ein Ereignis nur, wenn es frisch ist.
-    """
-    if old is None or new is None or new.state in UNAV:
-        return False
-    if new.domain == "event":
-        if new.state == old.state:
-            return False
-        when = dt_util.parse_datetime(new.state)
-        if when is not None and abs((dt_util.utcnow() - when).total_seconds()) > 60:
-            return False
-        et = new.attributes.get("event_type")
-        return not et or bool(BELL_EVENT_RE.search(str(et)))
-    return new.state == "on" and old.state not in ("on", "unavailable")
-
-
 def _dumps(v: Any) -> str:
     return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
 
@@ -448,30 +426,12 @@ class DisplayHub:
 
     # ---------- Klingel (Einstellungen → Klingel, wie das Overlay im Panel) ----------
     def bell_entity(self) -> str | None:
-        cfg = self.layout.get("doorbell") or {}
         if not any(d.get("bell", True) and d.get("device") for d in self.displays):
             return None
-        if cfg.get("entity"):
-            return cfg["entity"] if self.hass.states.get(cfg["entity"]) else None
-        states = self.hass.states.async_all(("event", "binary_sensor"))
-        pick = next((st for st in states if st.domain == "event" and st.attributes.get("device_class") == "doorbell"), None) \
-            or next((st for st in states if BELL_RE.search(st.entity_id)), None)
-        return pick.entity_id if pick else None
+        return find_bell(self.hass, self.layout.get("doorbell") or {})
 
     def bell_camera(self) -> str | None:
-        cfg = self.layout.get("doorbell") or {}
-        if cfg.get("camera") and self.hass.states.get(cfg["camera"]):
-            return cfg["camera"]
-        cams = self.hass.states.async_entity_ids("camera")
-        pref = lambda lst: next((e for e in lst if not re.search(r"paket|package", e, re.I)), lst[0] if lst else None)  # noqa: E731
-        bell = self.bell_entity()
-        reg = er.async_get(self.hass)
-        dev = (ent := reg.async_get(bell)) and ent.device_id if bell else None
-        if dev:
-            same = [e for e in cams if (c := reg.async_get(e)) and c.device_id == dev]
-            if same:
-                return pref(same)
-        return pref([e for e in cams if BELL_CAM_RE.search(e)]) or (cams[0] if cams else None)
+        return find_bell_camera(self.hass, self.layout.get("doorbell") or {}, self.bell_entity())
 
     @callback
     def start_ring(self, test: bool = False) -> None:
@@ -565,7 +525,7 @@ class DisplayHub:
         H, E = L.get("header") or {}, L.get("energy") or {}
         if E.get("enabled") is False:
             return None
-        S = lambda e: e if e and get(e) else ""  # noqa: E731
+        S = lambda e: e if e and get(e) else ""
         pv, grid, house, soc = S(H.get("pv")), S(H.get("grid")), S(H.get("power")), S(H.get("battery"))
         bat = S(E.get("battery_power"))
         if not bat:
@@ -585,7 +545,7 @@ class DisplayHub:
         if c is None:
             return None
         get = self.hass.states.get
-        W = lambda e: power_w(get(e)) if e else None  # noqa: E731
+        W = lambda e: power_w(get(e)) if e else None
         pv, grid, bat, house = W(c["pv"]), W(c["grid"]), W(c["bat"]), W(c["house"])
         if grid is not None and c["grid_inv"]:
             grid = -grid
@@ -1068,7 +1028,7 @@ class DisplayHub:
         for d in self.displays:
             try:
                 new[d["id"]] = self.build(d)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Display %s: Inhalte nicht berechenbar", d["id"])
         if new != self.payloads:
             self.payloads = new

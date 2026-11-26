@@ -30,6 +30,7 @@ Backend, je Datei ein Thema (der Docstring am Dateianfang erklärt es):
 - `automations.py` Seite „Automationen“ (Liste, an/aus; nur Admins); anlegen per HA-Konfigurations-API im Frontend
 - `scenes.py` Szenen je Raum (Bereinigen, Schalten) + `scene.py` Entitäten `scene.haus_<id>`
 - `weather.py` Wetterwarnungen; `maintenance.py` Wartung; `pin.py` PIN; `backup.py` Sicherungen
+- `klingel.py` Klingel/Kamera finden, Standbilder (7 Tage); `zeitleiste.py` Zeitleiste „Was war los?“ (Recorder + Protokoll)
 - `display.py` Inhalte fürs Wanddisplay, `display_setup.py` Einrichten/Flashen, `update.py` Firmware-Update je Display
 
 Frontend (`frontend/`):
@@ -42,7 +43,7 @@ Frontend (`frontend/`):
 - `haus-visualisierung.js` Einstieg des Panels (nur beim Öffnen geladen). Panel = `modules/panel.js` plus Mixins
   `panel-*.js` (Ansichten, Einstellungen, Alarmseite, Wandpanel, Klingel, Aktionen, Kompakt).
 - Fachmodule je Thema: `energie`, `klima`, `verlauf`, `rueckblick`, `strompreis`, `prognose`, `wetter`,
-  `wetterwarnung`, `termine`, `automationen`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
+  `wetterwarnung`, `zeitleiste`, `termine`, `automationen`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
   `technik`, `wanddisplay`, `warnungen`, `szenen` (Mixin: Raumkopf-Knöpfe und Editor). Gemeinsam genutzt: `basis`, `grundlagen`, `bausteine`, `modell`,
   `bindungen`, `aktualisierer`, `stile` (Änderungen daran lösen alle Bedienprüfungen aus).
 - Frontend-Version: `modules/version.js` (setzt `bump_version.py` mit). Das Release-ZIP legt `.js.gz` daneben.

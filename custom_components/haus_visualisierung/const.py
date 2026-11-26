@@ -202,6 +202,7 @@ DEFAULT_LAYOUT: dict = {
         "lock": "",                    # optional: Türöffner (Schloss, Schalter, Taste, Skript)
         "timeout": 60,                 # Sekunden bis zum automatischen Schließen
         "pulse": 2,                    # Schalter nach … s wieder aus (0 = nur ein)
+        "snapshots": True,             # Standbild bei jedem Klingeln für die Zeitleiste merken (7 Tage)
     },
     "header_style": "kompakt",     # kompakt | chips | satz | leiste
     "overview_style": "auto",      # auto | haus | cockpit | spalten | fokus (nur Kompakt)

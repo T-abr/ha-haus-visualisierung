@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -16,6 +17,8 @@ from .pin import PIN_RE, Throttle, make_hash, verify
 from .const import DOMAIN, HOUSE_MODES, VERSION
 from .maintenance import parse_date
 from .scenes import async_apply, sanitize_scenes
+from .klingel import IMG_URL
+from .zeitleiste import MAX_DAYS, async_timeline
 
 
 @callback
@@ -43,6 +46,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_backup_restore)
     websocket_api.async_register_command(hass, ws_export)
     websocket_api.async_register_command(hass, ws_scene_test)
+    websocket_api.async_register_command(hass, ws_zeitleiste)
     display_setup.async_register(hass)
     automations.async_register(hass)
 
@@ -470,3 +474,26 @@ async def ws_scene_test(hass: HomeAssistant, connection: websocket_api.ActiveCon
     sc = sanitize_scenes({"test": {"name": "Test", "ents": msg["ents"]}}).get("test")
     calls = await async_apply(hass, sc["ents"]) if sc else 0
     connection.send_result(msg["id"], {"calls": calls})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/zeitleiste",
+        vol.Optional("days", default=3): vol.All(int, vol.Range(min=1, max=MAX_DAYS)),
+    }
+)
+@websocket_api.async_response
+async def ws_zeitleiste(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Zeitleiste „Was war los?“: Türen, Klingel (Standbild als signierte Adresse), Bewegung, Modus, Alarme."""
+    from homeassistant.components.http.auth import async_sign_path
+
+    data = hass.data.get(DOMAIN, {})
+    monitor, rings = data.get("monitor"), data.get("rings")
+    since = dt_util.start_of_local_day(dt_util.now() - timedelta(days=msg["days"] - 1)).timestamp()
+    res = await async_timeline(hass, data["store"].data, rings.query(since) if rings else [],
+                               monitor.book.query(MAX_DAYS) if monitor else [], msg["days"])
+    for e in res["events"]:
+        if e.get("bild"):
+            e["bild"] = async_sign_path(hass, f"{IMG_URL}/{e['bild']}", timedelta(hours=2),
+                                        refresh_token_id=connection.refresh_token_id)
+    connection.send_result(msg["id"], res)

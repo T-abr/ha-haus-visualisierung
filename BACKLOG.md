@@ -30,7 +30,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 19 | ~~Einstellungen sichern und wiederherstellen~~ | hoch | S | umgesetzt |
 | 20 | ~~Einrichtungs-Check~~ | hoch | S–M | umgesetzt |
 | 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt |
-| 22 | Zeitleiste „Was war los?“ | mittel | M | neu |
+| 22 | ~~Zeitleiste „Was war los?“~~ | mittel | M | umgesetzt |
 | 23 | ~~Szenen je Raum (auch als Display-Kachel)~~ | mittel | M | umgesetzt |
 | 24 | ~~Display: Alarm-Vollbild mit Quittieren~~ | mittel | M | umgesetzt |
 | 25 | Display: Relais als Lichtschalter | niedrig | M | neu |
@@ -117,7 +117,7 @@ Einstellungen hinterlegen oder das Firmware-Repo öffentlich machen (dann ohne T
 ~~Offen bei 21: Tastenfeld für die PIN am Wanddisplay~~ (umgesetzt, Firmware ab 0.7.0; ältere Firmware sperrt
 geschützte Aktionen weiter mit Hinweis).
 
-### 22. Zeitleiste „Was war los?“
+### 22. ~~Zeitleiste „Was war los?“~~ (umgesetzt, Standbilder 7 Tage)
 Tür, Klingel mit Standbild, Bewegung, Moduswechsel und Alarme als Verlauf auf der Seite Sicherheit, nach Tag
 gruppiert und filterbar. Praktisch nach dem Urlaub oder wenn man unterwegs war. Quelle: Recorder bzw. Logbuch und
 das Protokoll des Alarmmanagers; Standbilder der Klingel bei jedem Klingeln merken.

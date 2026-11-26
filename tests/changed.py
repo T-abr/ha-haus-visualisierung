@@ -40,6 +40,7 @@ GRUPPEN_FUER = {
     "modules/anwesenheit.js": {"anwesenheit"},
     "modules/termine.js": {"termine", "wandpanel", "kopfzeile"},
     "modules/rueckblick.js": {"rueckblick"},
+    "modules/zeitleiste.js": {"zeitleiste"},
     "modules/geraete.js": {"geraete"},
     "modules/wartung.js": {"wartung"},
     "modules/automationen.js": {"automationen"},
