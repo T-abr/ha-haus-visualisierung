@@ -29,6 +29,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Neu `tests/backend/test_zeitleiste.py`: Ereignisse aus Verlauf, Klingeln und Protokoll (Türdauer, Bewegung zusammengefasst, nur passende Protokolleinträge), Standbild ablegen, wiederverwenden, nach 7 Tagen löschen, abschaltbar, Websocket mit echtem Recorder und signierter Bildadresse.
 - Neuer Abschnitt `zeitleiste` (Gruppe zeitleiste): Gruppierung nach Tag, Filter mit Anzahl, Standbild groß, Zeitraum, kein Neuaufbau bei Messwerten, ohne Recorder, Fehler, Komfort-Ansicht, Handy, Einstellung.
 
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 18–21 ms, Raumseite 15 ms, Licht 41 ms, Klima 27 ms, Energie 22 ms (1.21.0: 37–49 ms), Alarme 11 ms; hass-Setter Übersicht 35–49 µs, Unterseiten 0,3–28 µs; Aktualisierer auf der Übersicht 480 pro Minute. Sonst im Rahmen der Messschwankung wie 1.21.0.
+
 ## 1.21.0 – 2026-11-25
 
 ### Neu
