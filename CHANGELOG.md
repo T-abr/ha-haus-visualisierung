@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Behoben
+- **Kopfzeile „Kompakt“: Symbol in Badges ohne Zahl mittig.** Stand keine Zahl daneben (z. B. alle Fenster zu), saß das Symbol 3 px zu weit links, weil das leere Zahlenfeld trotzdem Abstand bekam. Das leere Feld wird jetzt ausgeblendet.
+
+### Tests
+- Kopfzeile: Prüfung, dass das Symbol in einem Badge ohne Zahl waagrecht und senkrecht mittig sitzt.
+
 ## 1.22.0 – 2026-11-26
 
 ### Neu

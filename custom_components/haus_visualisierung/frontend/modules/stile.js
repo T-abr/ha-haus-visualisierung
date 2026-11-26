@@ -701,7 +701,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .kchip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px 0 10px;border-radius:999px;background:var(--hv-glass);border:1px solid var(--hv-line);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;flex:none;transition:transform .15s}
 .kchip:active{transform:scale(.96)}
 .kchip ha-icon{--mdc-icon-size:18px;color:var(--hv-dim)}
-.kchip.iconly{padding:0 9px}
+.kchip.iconly{padding:0 9px}.kchip .ct:empty{display:none}
 .kchip.warm,.kchip.warm ha-icon{color:var(--hv-warm)}
 .kchip.alert{color:#ffb0a6;border-color:rgba(255,107,91,.45);background:rgba(255,107,91,.12)}.kchip.alert ha-icon{color:var(--hv-alert)}
 .kchip.ok ha-icon{color:var(--hv-ok)}.kchip.heat ha-icon{color:var(--hv-heat)}.kchip.heat{color:#ffc29a}

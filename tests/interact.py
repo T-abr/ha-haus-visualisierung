@@ -346,6 +346,13 @@ def kopfzeile():
     check("K-Kopf: Standard Kompakt, Licht-Zahl", k.locator(".ct").inner_text() == "6" and k.get_attribute("title") == "6 Lichter an")
     check("K-Kopf: offenes Fenster rot", "alert" in pg.locator(f"{P} .kchip[data-k=contacts]").get_attribute("class"))
     check("K-Kopf: Batterien gezählt (Diagnose-Entitäten)", pg.locator(f"{P} .kchip[data-k=batt] .ct").inner_text() == "2")
+    # Chip ohne Zahl (z. B. alle Fenster zu): leeres .ct darf das Symbol nicht verschieben
+    mitte = pg.evaluate(f"""(() => {{ const R = document.querySelector('{P}').shadowRoot;
+      const c = R.querySelector('.kchip').cloneNode(true); c.className = 'kchip iconly'; c.hidden = false; c.querySelector('.ct').textContent = '';
+      R.querySelector('.kchips').append(c);
+      const a = c.getBoundingClientRect(), i = c.querySelector('ha-icon').getBoundingClientRect(); c.remove();
+      return Math.round((Math.abs((a.left + a.width / 2) - (i.left + i.width / 2)) + Math.abs((a.top + a.height / 2) - (i.top + i.height / 2))) * 10) / 10; }})()""")
+    check(f"K-Kopf: Symbol ohne Zahl mittig (Abweichung {mitte} px)", mitte <= 1)
     hdr = pg.evaluate(f"(() => {{ const R = document.querySelector('{P}').shadowRoot; const d = R.querySelector('.dtop').getBoundingClientRect(); const w = R.querySelector('.hright').getBoundingClientRect(); return [Math.round(d.height), Math.round(w.top - d.top)]; }})()")
     check("K-Kopf: eine Zeile, Wetter/Personen oben", hdr[0] <= 50 and hdr[1] <= 10)
     pg.evaluate("window.__api.set('light.flur_decke', 'on')"); pg.wait_for_timeout(150)
