@@ -5,8 +5,6 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ## Unveröffentlicht
 
 ### Neu
-- **Seite „Automationen“ (nur Administratoren):** listet alle Automationen von Home Assistant mit Bereich, Beschreibung und „zuletzt ausgelöst“, mit Suche und Schalter zum Aktivieren/Deaktivieren (live, auch bei Änderungen in Home Assistant). „Neue Automation“ öffnet ein Kurzformular für einfache Fälle: Name, ein Auslöser (Uhrzeit, Sonnenauf-/-untergang mit Versatz, Gerät ändert Zustand) und eine Aktion (ein-/aus-/umschalten, Szene, Benachrichtigung); gespeichert wird über die Konfigurations-API von Home Assistant, wie im Editor. „Im HA-Editor“ und „Bearbeiten“ springen in den Automationseditor von Home Assistant. Nicht-Administratoren sehen die Seite nicht, die neuen Websocket-Befehle `automations` und `automation_set` lehnen sie ab.
-
 ### Verbessert
 - **Auf großen Monitoren nichts mehr aufklappen.** Ab 1200 px Fensterbreite (wie das Raster auf Licht und Beschattung) sind die klappbaren Bereiche immer offen und ohne Pfeil: „Weitere“ und „Batterien“ auf den Raumseiten, „Fenster & Türen“ auf der Sicherheitsseite, „In Ordnung“ auf der Batterieseite (alle im Kompakt-Modus) sowie Text und Empfehlung der Wetterwarnungen. Beim Ändern der Fenstergröße über die Schwelle baut sich die Seite passend neu auf. Handy und Tablet bleiben wie bisher; die Einstellungen bleiben auch am großen Monitor klappbar.
 - **Wanddisplay schlanker** (Display-Firmware, kommt mit der nächsten Firmware-Version): Labels holen Schrift und Grau aus gemeinsamen Stilen statt je Widget, und drei Roboto-Größen entfallen (12 → 13, 14 → 15, 17 → 16 px). Texte wirken fast unverändert, die Firmware wird kleiner und das Update übers Netz schneller (Backlog 30; der Zeichenpuffer bleibt bewusst im PSRAM).
@@ -15,6 +13,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Neuer Abschnitt `automationen` (Gruppe automationen): Liste, Schalten, Live-Zustand, Suche, Kurzformular mit Prüfungen, HA-Editor, Nicht-Admin.
 - Backend: `test_automations.py` (Liste mit Bereich und Beschreibung, Schalten, nur Automationen, nur Administratoren).
 - Neuer Abschnitt `grosse_monitore_ausgeklappt` (Gruppe basis): Batterie- und Sicherheitsseite ab 1200 px ohne Aufklappen, darunter klappbar, Wechsel beim Verkleinern/Vergrößern; Wetterwarnungen ab 1200 px offen, darunter zugeklappt.
+- `test_display_alarm_vollbild`: Bereich `alarm` nur für Alarme (nicht Warnungen), nur für eingeschaltete Displays, Quittieren und 1 h stumm am Display, falsche Schlüssel ändern nichts.
 
 ## 1.21.0 – 2026-11-25
 
