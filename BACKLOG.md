@@ -32,7 +32,7 @@ Wenn ein Punkt umgesetzt wird: hier streichen und im `CHANGELOG.md` beschreiben.
 | 21 | ~~PIN für heikle Aktionen (Wandpanel, Display)~~ | hoch | M | umgesetzt |
 | 22 | Zeitleiste „Was war los?“ | mittel | M | neu |
 | 23 | Szenen je Raum (auch als Display-Kachel) | mittel | M | neu |
-| 24 | Display: Alarm-Vollbild mit Quittieren | mittel | M | neu |
+| 24 | ~~Display: Alarm-Vollbild mit Quittieren~~ | mittel | M | umgesetzt |
 | 25 | Display: Relais als Lichtschalter | niedrig | M | neu |
 | 26 | Display: Wecken über Bewegungsmelder im Raum | mittel | S | neu |
 | 27 | Display: kurze Meldungen als Popup | mittel | S–M | neu |
@@ -127,9 +127,7 @@ Stimmungen wie Kino, Essen oder Putzen im Panel anlegen (Lichter mit Helligkeit/
 einem Tipp schalten: auf der Raumseite, im Schnellzugriff und als Kachel am Wanddisplay. Vorhandene `scene.*`
 weiter nutzbar.
 
-### 24. Display: Alarm-Vollbild mit Quittieren
-Wie das Klingel-Overlay: bei einem Alarm füllt die Meldung den Bildschirm des Wanddisplays (rot, mit Raum und
-Zeit), dazu „Quittieren“ und „1 h stumm“ direkt am Gerät. Braucht neue Firmware.
+### 24. ~~Display: Alarm-Vollbild mit Quittieren~~ (umgesetzt, Bereich `alarm`, Firmware ab 0.8.0)
 
 ### 25. Display: Relais als Lichtschalter
 Die Guition-Variante mit Relais macht das Display zum echten Wandschalter: Relais je Kanal einer Kachel zuordnen,

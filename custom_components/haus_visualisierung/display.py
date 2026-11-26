@@ -302,6 +302,7 @@ def sanitize_displays(raw: Any) -> list[dict]:
             "saver_min": _int("saver_min", 1, 120, 5),
             "saver_bright": _int("saver_bright", 0, 100, 20),
             "bell": d.get("bell", True) is not False,
+            "alarm": d.get("alarm", True) is not False,
         })
     return out
 
@@ -825,6 +826,17 @@ class DisplayHub:
         al = [a for a in self.monitor.book.alarms.values() if a.get("status") != "stumm"]
         return sorted(al, key=lambda a: (order.get(a.get("level"), 3), -float(a.get("since") or 0)))
 
+    def alarm(self) -> dict | None:
+        """Alarm-Vollbild: wichtigste Meldung der Stufe „Alarm“, die weder quittiert noch stumm ist."""
+        al = [a for a in self._alerts() if a.get("level") == "alarm" and a.get("status") == "neu"]
+        if not al:
+            return None
+        a = al[0]
+        since = dt_util.as_local(dt_util.utc_from_timestamp(float(a.get("since") or time.time()))).strftime("%H:%M")
+        icon = str(a.get("icon") or "").removeprefix("mdi:") or "alarm-light"
+        return {"k": a["key"], "t": str(a.get("title", "")), "s": " · ".join(p for p in (str(a.get("detail") or ""), f"seit {since}") if p),
+                "i": icon if icon in DISPLAY_ICONS else "alarm-light", "mehr": len(al) - 1}
+
     def _done_appliances(self) -> list[str]:
         return [r["name"] for r in self.monitor.appliances.snapshot() if r.get("state") == "fertig"]
 
@@ -1034,6 +1046,7 @@ class DisplayHub:
                                   "p": gn_rows, "mehr": max(0, n - GN_MAX)}),
             "schoner": _dumps(self.schoner() if d["saver"] else None),
             "klingel": _dumps(self.klingel() if d["bell"] else None),
+            "alarm": _dumps(self.alarm() if d["alarm"] else None),
             "eigene": _dumps([{"n": pg["name"], "i": pg["icon"], "k": [self.custom_tile(t) for t in pg["tiles"]]} for pg in d["custom"]]),
             "haus": _dumps({"modus": mode, "modi": [[k, nm, ic] for k, nm, ic, _f in MODES],
                             "meldungen": [{"l": a.get("level"), "t": a.get("title", "")} for a in self._alerts()[:4]],
@@ -1300,6 +1313,11 @@ class DisplayHub:
             self._ring_until(BELL_AFTER_DOOR)
             self.update()
             return
+        elif ziel.startswith(("alarm:ok:", "alarm:stumm:")):
+            # Alarm-Vollbild: genau die angezeigte Meldung quittieren bzw. 1 h stummschalten (wie im Panel)
+            act, key = ziel[6:].split(":", 1)
+            if self.monitor.book.alarms.get(key) is not None:
+                self.monitor.async_action(key, "ack" if act == "ok" else "mute", f"Display {d['name']}", 60 if act == "stumm" else None)
         elif ziel == "geraet_ok":
             for r in self.monitor.appliances.snapshot():
                 if r.get("state") == "fertig":

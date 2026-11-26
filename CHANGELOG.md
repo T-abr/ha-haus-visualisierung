@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Alarm-Vollbild am Wanddisplay** (Backlog 24, braucht Firmware 0.8.0): Ein neuer Alarm (Stufe „Alarm“, weder quittiert noch stumm) füllt den Bildschirm rot mit Meldung, Raum bzw. Details und Uhrzeit („seit 14:32“), bei mehreren Alarmen „+ 2 weitere Alarme“. Am Gerät „Quittieren“ und „1 h stumm“ wie im Panel; im Protokoll steht „Display Flur“ als Benutzer. Das Display wird hell, auch nachts und aus dem Bildschirmschoner. Je Display unter Displays → „Alarm-Vollbild“ abschaltbar. Neuer Bereich `alarm` und Ziele `alarm:ok:<schlüssel>`/`alarm:stumm:<schlüssel>` im Display-Protokoll (Version bleibt 1, ältere Firmware ignoriert sie).
+
+### Tests
+- `test_display_alarm_vollbild`: Bereich `alarm` nur für Alarme (nicht Warnungen), nur für eingeschaltete Displays, Quittieren und 1 h stumm am Display, falsche Schlüssel ändern nichts.
+
 ## 1.21.0 – 2026-11-25
 
 ### Neu

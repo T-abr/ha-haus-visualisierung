@@ -1,5 +1,6 @@
 """Wanddisplays: Einstellungen, Entität je Display (Protokoll v1), Inhalte und Tippen (pytest tests/backend)."""
 import json
+import time
 from datetime import timedelta
 
 from freezegun.api import FrozenDateTimeFactory
@@ -9,6 +10,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed, async_mock_service
 from test_push import _ent, _setup, _tick
+from test_push import _house as _house_alarm
 
 from custom_components.haus_visualisierung.const import DOMAIN
 from custom_components.haus_visualisierung.display import PROTOCOL, bin_of, de, device_service, kw, sanitize_displays
@@ -31,7 +33,7 @@ def test_sanitize() -> None:
     a, b, c = out[:3]
     assert a == {"id": "flur_oben", "name": "Flur Oben", "pages": ["start", "klima", "haus"], "tiles": ["pv_jetzt", "entity:light.flur"],
                  "hint": False, "bright_day": 100, "bright_night": 0, "wake": True, "device": "", "custom": [],
-                 "saver": False, "saver_min": 5, "saver_bright": 20, "bell": True}
+                 "saver": False, "saver_min": 5, "saver_bright": 20, "bell": True, "alarm": True}
     assert b["id"] == "flur_oben_2" and b["tiles"] == ["pv_jetzt", "energie_heute", "klima_mittel", "morgen"] and b["pages"] == ["start"]
     wz, leer, b3 = b["custom"]
     assert wz["name"] == "Wohnzimmer mit sehr" and wz["icon"] == "sofa" and len(wz["tiles"]) == 6
@@ -251,7 +253,7 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     assert sent["protokoll"] == str(PROTOCOL) and json.loads(sent["einstellungen"])["name"] == "Flur"
     # leeres Haus ohne Meldungen: ruhige Hinweiszeile statt leerer Fläche
     assert json.loads(sent["hinweis"]) == {"i": "shield-check", "f": "#4fd18b", "n": "Alles in Ordnung", "s": "Keine offenen Meldungen", "knopf": "", "ziel": ""}
-    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "schoner", "klingel", "pin", "eigene", "haus"}
+    assert set(sent) == {"protokoll", "einstellungen", "kopf", "kacheln", "hinweis", "energie", "klima", "gute_nacht", "schoner", "klingel", "alarm", "pin", "eigene", "haus"}
     assert json.loads(sent["schoner"]) is None
     assert json.loads(sent["eigene"]) == []
     assert json.loads(sent["klingel"]) is None
@@ -265,7 +267,7 @@ async def test_display_push_and_setup(hass: HomeAssistant, hass_ws_client, monke
     # „hallo“ nach dem Verbinden → alles neu; Tipp mit Gerätenamen wirkt auf das zugeordnete Display
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "hallo"}, blocking=True)
     await hass.async_block_till_done()
-    assert len(calls) == n + 13
+    assert len(calls) == n + 14
     await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": "modus:abwesend"}, blocking=True)
     await _tick(hass)
     assert monitor.house.mode == "abwesend"
@@ -536,3 +538,49 @@ async def test_schoner_einstellungen_und_aussentemperatur(hass: HomeAssistant) -
     sv = _attr(hass, eid, "schoner")
     assert sv["zeile"] == [{"i": "home-thermometer", "t": "20,0°"}, {"i": "calendar", "t": "Morgen 15°"}, {"i": "home-account", "t": "Zuhause"}]
     assert sv["status"] is None
+
+
+async def test_display_alarm_vollbild(hass: HomeAssistant) -> None:
+    """Alarm-Vollbild: neuer Alarm → Bereich alarm; Quittieren/1 h stumm am Display; Warnungen und abgeschaltete Displays nicht."""
+    async_mock_service(hass, "notify", "persistent_notification")
+    calls = async_mock_service(hass, "esphome", "haus_display_a1b2c3_haus_daten")
+    ids = await _house_alarm(hass)
+    monitor = await _setup(hass)
+    store = hass.data[DOMAIN]["store"]
+    await store.async_save({"displays": [{"name": "Flur", "device": "haus-display-a1b2c3"}, {"name": "Küche", "alarm": False}]})
+    await _tick(hass)
+    assert _attr(hass, "sensor.haus_display_flur", "alarm") is None
+
+    # Fenster offen ist nur eine Warnung: kein Vollbild
+    hass.states.async_set(ids["fenster"], "on", {"device_class": "window", "friendly_name": "Schlafzimmer Fenster"})
+    hass.states.async_set(ids["rauch"], "on", {"device_class": "smoke", "friendly_name": "Wohnzimmer Rauchmelder"})
+    await _tick(hass)
+    await _tick(hass)
+    key = next(k for k, a in monitor.book.alarms.items() if a.get("level") == "alarm")
+    al = _attr(hass, "sensor.haus_display_flur", "alarm")
+    a = monitor.book.alarms[key]
+    assert al["k"] == key and al["t"] == a["title"] and al["mehr"] == 0
+    assert al["s"].endswith(f"seit {dt_util.as_local(dt_util.utc_from_timestamp(a['since'])).strftime('%H:%M')}")
+    assert al["i"] and _attr(hass, "sensor.haus_display_kueche", "alarm") is None
+    assert json.loads({c.data["bereich"]: c.data["daten"] for c in calls}["alarm"])["k"] == key
+
+    # falscher Schlüssel bzw. unbekanntes Ziel ändern nichts
+    for ziel in ("alarm:ok:gibtsnicht", "alarm:weg:" + key):
+        await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": ziel}, blocking=True)
+    assert monitor.book.alarms[key]["status"] == "neu"
+
+    # 1 h stumm am Display → stumm für 60 min, Vollbild weg
+    await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": f"alarm:stumm:{key}"}, blocking=True)
+    await _tick(hass)
+    a = monitor.book.alarms[key]
+    assert a["status"] == "stumm" and a["mute_by"] == "Display Flur" and 3500 < a["mute_until"] - time.time() <= 3600
+    assert _attr(hass, "sensor.haus_display_flur", "alarm") is None
+
+    # Stummschaltung aufheben → wieder da; Quittieren am Display
+    monitor.async_action(key, "unmute")
+    await _tick(hass)
+    assert _attr(hass, "sensor.haus_display_flur", "alarm")["k"] == key
+    await hass.services.async_call(DOMAIN, "display_tap", {"display": "haus-display-a1b2c3", "ziel": f"alarm:ok:{key}"}, blocking=True)
+    await _tick(hass)
+    assert monitor.book.alarms[key]["status"] == "quittiert" and monitor.book.alarms[key]["ack_by"] == "Display Flur"
+    assert _attr(hass, "sensor.haus_display_flur", "alarm") is None
