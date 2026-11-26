@@ -4,6 +4,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Verbessert
+- **Wanddisplay schlanker** (Display-Firmware, kommt mit der nächsten Firmware-Version): Labels holen Schrift und Grau aus gemeinsamen Stilen statt je Widget, und drei Roboto-Größen entfallen (12 → 13, 14 → 15, 17 → 16 px). Texte wirken fast unverändert, die Firmware wird kleiner und das Update übers Netz schneller (Backlog 30; der Zeichenpuffer bleibt bewusst im PSRAM).
+
 ## 1.21.0 – 2026-11-25
 
 ### Neu
