@@ -9,6 +9,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ### Verbessert
 - **Auf großen Monitoren nichts mehr aufklappen.** Ab 1200 px Fensterbreite (wie das Raster auf Licht und Beschattung) sind die klappbaren Bereiche immer offen und ohne Pfeil: „Weitere“ und „Batterien“ auf den Raumseiten, „Fenster & Türen“ auf der Sicherheitsseite, „In Ordnung“ auf der Batterieseite (alle im Kompakt-Modus) sowie Text und Empfehlung der Wetterwarnungen. Beim Ändern der Fenstergröße über die Schwelle baut sich die Seite passend neu auf. Handy und Tablet bleiben wie bisher; die Einstellungen bleiben auch am großen Monitor klappbar.
+- **Wanddisplay schlanker** (Display-Firmware, kommt mit der nächsten Firmware-Version): Labels holen Schrift und Grau aus gemeinsamen Stilen statt je Widget, und drei Roboto-Größen entfallen (12 → 13, 14 → 15, 17 → 16 px). Texte wirken fast unverändert, die Firmware wird kleiner und das Update übers Netz schneller (Backlog 30; der Zeichenpuffer bleibt bewusst im PSRAM).
 
 ### Tests
 - Neuer Abschnitt `automationen` (Gruppe automationen): Liste, Schalten, Live-Zustand, Suche, Kurzformular mit Prüfungen, HA-Editor, Nicht-Admin.
