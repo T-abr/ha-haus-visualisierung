@@ -511,8 +511,9 @@ def sanitize(raw: Any) -> dict:
     if isinstance(raw.get("doorbell"), dict):
         db = raw["doorbell"]
         out = copy.deepcopy(DEFAULT_LAYOUT["doorbell"])
-        if isinstance(db.get("enabled"), bool):
-            out["enabled"] = db["enabled"]
+        for key in ("enabled", "snapshots"):
+            if isinstance(db.get(key), bool):
+                out[key] = db[key]
         for key in ("entity", "camera", "lock"):
             if isinstance(db.get(key), str):
                 out[key] = db[key].strip()[:120]

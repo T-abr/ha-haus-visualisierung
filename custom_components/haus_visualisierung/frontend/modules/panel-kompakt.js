@@ -7,6 +7,7 @@ import { alertsCardHTML } from "./warnungen.js";
 import { trendCardHTML } from "./verlauf.js";
 import { sparkHTML } from "./klima.js";
 import { pageEmpty } from "./hausschnitt.js";
+import { zlCard } from "./zeitleiste.js";
 
 const KompaktMixin = (Base) => class extends Base {
   /* ---------- Kompakt-Seiten ---------- */
@@ -133,7 +134,8 @@ const KompaktMixin = (Base) => class extends Base {
       ${alertsCardHTML("wide")}
       <div class="sgrid">${sec("Melder & Alarm", "mdi:smoke-detector-variant", safety)}${sec("Schlösser", "mdi:lock", locks)}${sec("Bewegung & Präsenz", "mdi:motion-sensor", pres)}
         ${sec("Fenster & Türen", "mdi:window-closed-variant", contacts, true)}</div>
-      ${cams.length ? `<div class="secttitle">${icon("mdi:cctv")}Kameras</div><div class="glass"><div class="tiles">${cams.map(([a, e]) => tileHTML(h, e, a)).join("")}</div></div>` : ""}`;
+      ${cams.length ? `<div class="secttitle">${icon("mdi:cctv")}Kameras</div><div class="glass"><div class="tiles">${cams.map(([a, e]) => tileHTML(h, e, a)).join("")}</div></div>` : ""}
+      ${zlCard()}`;
   }
 
   _vBatteriesDense() {

@@ -4,6 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Zeitleiste „Was war los?“ auf der Seite Sicherheit** (Backlog 22): Türen (geöffnet, mit Dauer) und Schlösser, Klingeln mit Standbild, Bewegung, Hausmodus-Wechsel und Alarme (neu, quittiert, eskaliert) als Verlauf, nach Tag gruppiert. Zeitraum Heute, 3, 7 oder 14 Tage, Filter je Art mit Anzahl; Standbilder per Tipp groß. Bewegung desselben Melders wird zu Abschnitten zusammengefasst („3× bis 15:10“), ausgeblendete Bereiche und Entitäten fehlen. Praktisch nach dem Urlaub. Türen und Bewegung kommen aus dem Recorder, Modus und Alarme aus dem Protokoll des Alarmmanagers; abgefragt wird nur beim Öffnen der Seite (neuer Befehl `haus_visualisierung/zeitleiste`).
+- **Klingel-Standbilder:** Bei jedem Klingeln legt die Integration ein Bild der Klingelkamera unter `/config/haus_visualisierung/klingel` ab (mehrfaches Drücken innerhalb von 15 s = ein Bild). Bilder bleiben 7 Tage, höchstens 300; abrufbar nur angemeldet bzw. über eine signierte Adresse. Abschaltbar unter Einstellungen → Klingel → „Standbild bei jedem Klingeln merken“.
+
+### Geändert
+- Erkennung von Klingel und Klingelkamera liegt jetzt in `klingel.py` und wird von Wanddisplay und Zeitleiste gemeinsam genutzt (Verhalten unverändert).
+
+### Tests
+- Neu `tests/backend/test_zeitleiste.py`: Ereignisse aus Verlauf, Klingeln und Protokoll (Türdauer, Bewegung zusammengefasst, nur passende Protokolleinträge), Standbild ablegen, wiederverwenden, nach 7 Tagen löschen, abschaltbar, Websocket mit echtem Recorder und signierter Bildadresse.
+- Neuer Abschnitt `zeitleiste` (Gruppe zeitleiste): Gruppierung nach Tag, Filter mit Anzahl, Standbild groß, Zeitraum, kein Neuaufbau bei Messwerten, ohne Recorder, Fehler, Komfort-Ansicht, Handy, Einstellung.
+
 ## 1.21.0 – 2026-11-25
 
 ### Neu

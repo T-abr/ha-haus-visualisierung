@@ -28,6 +28,7 @@ Backend, je Datei ein Thema (der Docstring am Dateianfang erklärt es):
 - `alerts.py` alle Warnregeln (nur hier, das Frontend zeigt nur an), `alarms.py` Zustand/Protokoll, `actions.py` Eskalation
 - `mode.py` + `select.py` Hausmodus; `presence.py` Anwesenheits-Simulation; `appliances.py` + `sensor.py` Haushaltsgeräte
 - `weather.py` Wetterwarnungen; `maintenance.py` Wartung; `pin.py` PIN; `backup.py` Sicherungen
+- `klingel.py` Klingel/Kamera finden, Standbilder (7 Tage); `zeitleiste.py` Zeitleiste „Was war los?“ (Recorder + Protokoll)
 - `display.py` Inhalte fürs Wanddisplay, `display_setup.py` Einrichten/Flashen, `update.py` Firmware-Update je Display
 
 Frontend (`frontend/`):
@@ -40,7 +41,7 @@ Frontend (`frontend/`):
 - `haus-visualisierung.js` Einstieg des Panels (nur beim Öffnen geladen). Panel = `modules/panel.js` plus Mixins
   `panel-*.js` (Ansichten, Einstellungen, Alarmseite, Wandpanel, Klingel, Aktionen, Kompakt).
 - Fachmodule je Thema: `energie`, `klima`, `verlauf`, `rueckblick`, `strompreis`, `prognose`, `wetter`,
-  `wetterwarnung`, `termine`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
+  `wetterwarnung`, `zeitleiste`, `termine`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
   `technik`, `wanddisplay`, `warnungen`. Gemeinsam genutzt: `basis`, `grundlagen`, `bausteine`, `modell`,
   `bindungen`, `aktualisierer`, `stile` (Änderungen daran lösen alle Bedienprüfungen aus).
 - Frontend-Version: `modules/version.js` (setzt `bump_version.py` mit). Das Release-ZIP legt `.js.gz` daneben.

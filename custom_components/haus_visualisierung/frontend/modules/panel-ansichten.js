@@ -15,6 +15,7 @@ import { terminBtnHTML } from "./termine.js";
 import { applCardHTML } from "./geraete.js";
 import { enDayHTML, energyFlowHTML, enPriceCard, enTrendHTML } from "./energie.js";
 import { rbCard } from "./rueckblick.js";
+import { zlCard } from "./zeitleiste.js";
 import { headerOf, svJumpsHTML } from "./solar.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
 
@@ -252,6 +253,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     return `<div class="ptitle"><h1>Sicherheit</h1><span class="psub" data-u="chip" data-k="contacts"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span><span class="sp"></span>
         ${camLink ? `<button class="pbtn" data-act="link" data-path="${esc(camLink.path)}">${icon(camLink.icon || "mdi:cctv")}${esc(camLink.title)}</button>` : ""}</div>
       <div class="sgrid">${flat("Melder & Alarm", "mdi:smoke-detector-variant", safety)}${flat("Schlösser", "mdi:lock", locks)}${flat("Bewegung & Präsenz", "mdi:motion-sensor", pres)}${flat("Kameras", "mdi:cctv", cams)}</div>
+      ${zlCard()}
       ${this._byFloor("contact", contacts)}`;
   }
 

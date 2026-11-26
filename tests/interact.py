@@ -2550,6 +2550,82 @@ def karten_bei_bedarf():
     check("K: Panel lädt den Lader mit", pg.evaluate("!!customElements.get('haus-raum-card') && !!customElements.get('haus-visualisierung-panel')"))
 
 
+
+@gruppe("zeitleiste")
+def zeitleiste():
+    # ---------- Zeitleiste „Was war los?“ (Seite Sicherheit): Daten vom Backend, hier nur Anzeige und Filter ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=sicherheit"); pg.wait_for_timeout(500)
+    zl = pg.locator(f"{P} .zl")
+    check("ZL: Karte „Was war los?“ auf der Seite Sicherheit", zl.count() == 1 and "Was war los?" in zl.locator(".trt").text_content())
+    # Antwort des Backends nachbilden (Befehl haus_visualisierung/zeitleiste); Anfragen merken
+    pg.evaluate("""(() => {
+      const now = Date.now() / 1000, d0 = new Date(); d0.setHours(0, 0, 0, 0); const t0 = d0.getTime() / 1000;
+      const img = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="40"><rect width="64" height="40" fill="#567"/></svg>');
+      const today = Math.max(t0 + 60, now - 1800);
+      window.__zl = { calls: [], fail: false, recorder: true };
+      const fn = async (msg) => {
+        if (msg.type !== 'haus_visualisierung/zeitleiste') return orig(msg);
+        window.__zl.calls.push(msg);
+        if (window.__zl.fail) throw new Error('unknown_command');
+        return { days: msg.days, recorder: window.__zl.recorder, events: [
+          { ts: today + 50, typ: 'klingel', text: 'Es hat geklingelt', bild: img, cam: 'camera.g6_entry' },
+          { ts: today + 40, typ: 'tuer', eid: 'binary_sensor.haustuer', name: 'Haustür', area: 'Eingang', text: 'geöffnet', dur: 130 },
+          { ts: today + 30, typ: 'bewegung', eid: 'binary_sensor.flur_bewegung', name: 'Flur Bewegung', area: 'Flur', n: 3, bis: today + 35 },
+          { ts: today + 20, typ: 'modus', text: 'Hausmodus: Weg', mode: 'weg', user: 'Tobias' },
+          { ts: today + 10, typ: 'alarm', art: 'neu', text: 'Fenster Bad offen', level: 'alarm' },
+          { ts: t0 - 3600, typ: 'tuer', eid: 'lock.haustuer', name: 'Schloss', area: 'Eingang', text: 'abgeschlossen', lock: true },
+        ] };
+      };
+      const orig = window.__api.hass.callWS;
+      window.__api.hass.callWS = fn; document.querySelector('haus-visualisierung-panel')._hass.callWS = fn;
+    })()""")
+    zl.locator('[data-act="zl-reload"]').click(); pg.wait_for_timeout(300)
+    calls = lambda: pg.evaluate("window.__zl.calls")  # noqa: E731
+    check("ZL: Abfrage mit dem gewählten Zeitraum (Standard 3 Tage)", calls()[-1] == {"type": "haus_visualisierung/zeitleiste", "days": 3}
+          and zl.locator('[data-act="zl-days"][data-d="3"]').get_attribute("aria-pressed") == "true")
+    heads = zl.locator(".zldh b").all_inner_texts()
+    check("ZL: nach Tag gruppiert – Heute, Gestern", heads == ["Heute", "Gestern"] and "5 Ereignisse" in zl.locator(".zldh").first.inner_text())
+    rows = zl.locator(".zlr").all_inner_texts()
+    check("ZL: Zeilen mit Uhrzeit, neueste zuerst", len(rows) == 6 and rows[0].startswith(pg.evaluate("new Date((Math.max(new Date().setHours(0,0,0,0) / 1000 + 60, Date.now() / 1000 - 1800) + 50) * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })")))
+    txt = zl.inner_text()
+    check("ZL: Tür mit Dauer, Bewegung zusammengefasst, Modus mit Person, Alarm, Schloss", all(w in txt for w in (
+        "Haustür geöffnet", "Eingang · 2 min offen", "Bewegung: Flur Bewegung", "3× bis", "Hausmodus: Weg", "von Tobias", "Fenster Bad offen", "Schloss abgeschlossen")))
+    check("ZL: Alarm rot markiert", zl.locator('.zlr.l-alarm').count() == 1)
+    cnt = dict(zip(zl.locator('[data-act="zl-kind"]').evaluate_all("b => b.map(x => x.dataset.k)"), zl.locator('[data-act="zl-kind"] b').all_inner_texts()))
+    check("ZL: Filter mit Anzahl", cnt == {"alle": "6", "tuer": "2", "klingel": "1", "bewegung": "1", "modus": "1", "alarm": "1"})
+    zl.locator('[data-act="zl-kind"][data-k="tuer"]').click(); pg.wait_for_timeout(150)
+    check("ZL: Filter Türen – nur Türen und Schlösser, ohne neue Abfrage", zl.locator(".zlr").count() == 2 and set(zl.locator(".zlr").evaluate_all("r => r.map(x => x.dataset.k)")) == {"tuer"} and len(calls()) == 1)
+    zl.locator('[data-act="zl-kind"][data-k="klingel"]').click(); pg.wait_for_timeout(150)
+    check("ZL: Klingel mit Standbild und Kameraname", zl.locator(".zlr").count() == 1 and zl.locator(".zlimg").count() == 1 and "G6 Entry" in zl.locator(".zlr").inner_text())
+    zl.locator(".zlimg").click(); pg.wait_for_timeout(150)
+    check("ZL: Standbild groß öffnen", zl.locator(".zlbig img").count() == 1 and zl.locator(".zlbig").is_visible())
+    zl.locator(".zlbig").click(); pg.wait_for_timeout(100)
+    check("ZL: großes Bild per Tipp schließen", zl.locator(".zlbig").count() == 0)
+    zl.locator('[data-act="zl-kind"][data-k="modus"]').click(); zl.locator('[data-act="zl-kind"][data-k="alle"]').click()
+    zl.locator('[data-act="zl-days"][data-d="7"]').click(); pg.wait_for_timeout(300)
+    check("ZL: Zeitraum 7 Tage – neue Abfrage", calls()[-1]["days"] == 7 and zl.locator('[data-act="zl-days"][data-d="7"]').get_attribute("aria-pressed") == "true")
+    r0 = pg.evaluate(f"{PP}._stats.renders"); n0 = len(calls())
+    pg.evaluate("window.__api.set('binary_sensor.wohnzimmer_rauchmelder', 'on')"); pg.wait_for_timeout(250)
+    check("ZL: neuer Zustand – keine Abfrage, kein Neuaufbau", pg.evaluate(f"{PP}._stats.renders") == r0 and len(calls()) == n0)
+    pg.evaluate("window.__zl.recorder = false"); zl.locator('[data-act="zl-reload"]').click(); pg.wait_for_timeout(300)
+    check("ZL: ohne Recorder – Hinweis", "Ohne Recorder" in zl.locator(".zlmsg").inner_text() and zl.locator(".zlmsg").is_visible())
+    pg.evaluate("window.__zl.fail = true"); zl.locator('[data-act="zl-days"][data-d="14"]').click(); pg.wait_for_timeout(300)
+    check("ZL: Fehler des Backends – Hinweis statt Liste", "nicht verfügbar" in zl.locator(".zlmsg").inner_text() and zl.locator(".zlr").count() == 0)
+    pg.evaluate("window.__zl.fail = false"); zl.locator('[data-act="zl-days"][data-d="3"]').click(); pg.wait_for_timeout(300)
+    # Komfort-Ansicht und Handy
+    pg.goto(base + "&view=sicherheit"); pg.wait_for_timeout(500)
+    check("ZL: Karte auch in der Komfort-Ansicht", pg.locator(f"{P} .zl").count() == 1)
+    mp = b.new_page(viewport={"width": 390, "height": 900}); mp.goto(dense + "?view=sicherheit"); mp.wait_for_timeout(600)
+    check("ZL: Handy 390 px – kein seitliches Scrollen", mp.evaluate(WIDE) == [] and mp.locator(f"{P} .zl").count() == 1)
+    mp.close()
+    # Einstellungen → Klingel: Standbilder abschaltbar
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
+    stab(pg, "meldungen")
+    tg = pg.locator(f'{P} [data-set="doorbell.snapshots"]')
+    check("ZL: Einstellung „Standbild bei jedem Klingeln merken“, Standard an", tg.count() == 1 and tg.is_checked() and "7 Tage" in pg.locator(f"{P} .set:has([data-set='doorbell.snapshots'])").inner_text())
+
+
 def auswahl(args):
     """Abschnitte zu den Namen (Gruppe oder Abschnitt) auf der Kommandozeile; ohne Namen alle."""
     if not args:
