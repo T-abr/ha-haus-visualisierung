@@ -19,6 +19,7 @@ import { wxSettingsHTML } from "./wetterwarnung.js";
 import { problems, systemFile, systemSettingsHTML } from "./system.js";
 import { advanced, allLabel, markDirty, openSec, searchHTML, sectionize } from "./einstellungen.js";
 import { headerOf } from "./solar.js";
+import { autoInput } from "./automationen.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["energie", "Energie", "mdi:solar-power-variant"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Wandpanel & Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"], ["system", "Prüfen & Sichern", "mdi:clipboard-check-outline"]];
@@ -120,7 +121,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const autoH = headerOf(this._hass, { header: {} });
     const ent = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span>
       <input class="inp w" list="dl-sensor" data-set="header.${key}" value="${esc(D.header[key] || "")}" placeholder="${autoH[key] ? `leer = automatisch: ${esc(autoH[key])}` : "sensor.…"}"></div>`;
-    const views = [["overview", "Übersicht"], ...NAV.slice(1).map(([k, t]) => [k, t])];
+    const views = [["overview", "Übersicht"], ...NAV.slice(1).filter(([k]) => k !== "automationen").map(([k, t]) => [k, t])]; // Automationen: nur Admins, keine Startseite für alle
 
     let body = "";
     if (tab === "raeume") body = `${dlAll}
@@ -422,6 +423,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="srow"><span class="lbl">Bei Klingeln Kamera einblenden</span><label class="tgl"><input type="checkbox" data-set="doorbell.enabled" data-bool="1" ${B.enabled ? "checked" : ""}><span></span></label></div>
       <div class="srow"><span class="lbl">Klingel<small>Ereignis- oder Binär-Entität; leer = automatisch${autoBell ? `: ${esc(autoBell)}` : " (nichts gefunden)"}</small></span><input class="inp w" list="dl-bell" data-set="doorbell.entity" value="${esc(B.entity)}" placeholder="${esc(autoBell || "event.…_doorbell")}"></div>
       <div class="srow"><span class="lbl">Kamera<small>leer = Kamera am selben Gerät${autoCam ? `: ${esc(autoCam)}` : ""}</small></span><input class="inp w" list="dl-cam" data-set="doorbell.camera" value="${esc(B.camera)}" placeholder="${esc(autoCam || "camera.…")}"></div>
+      <div class="srow"><span class="lbl">Standbild bei jedem Klingeln merken<small>für die Zeitleiste „Was war los?“ auf der Seite Sicherheit; Bilder bleiben 7 Tage</small></span><label class="tgl"><input type="checkbox" data-set="doorbell.snapshots" data-bool="1" ${B.snapshots !== false ? "checked" : ""}><span></span></label></div>
       <div class="srow"><span class="lbl">Türöffner für „Tür öffnen“<small>optional; Schloss, Schalter (z. B. KNX-Türöffner), Taste oder Skript; muss zweimal getippt werden</small></span><input class="inp w" list="dl-lock" data-set="doorbell.lock" value="${esc(B.lock)}" placeholder="kein Türöffner"></div>
       ${advanced(`
       ${B.lock && /^(switch|input_boolean)\./.test(B.lock) ? `<div class="srow"><span class="lbl">Impuls<small>Sekunden, nach denen der Schalter wieder ausgeschaltet wird; 0 = nur einschalten (z. B. bei Treppenhausfunktion)</small></span><input class="inp s" type="number" min="0" max="30" data-set="doorbell.pulse" data-num="1" value="${B.pulse ?? 2}"></div>` : ""}
@@ -739,6 +741,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     super._onChange(e);
     const t = e.target;
     if (t.dataset && t.dataset.bkFile && e.type === "change") { systemFile(this, t); return; }
+    if (t.dataset && t.dataset.auto) { autoInput(this, t, e); return; }
     if (t.dataset && t.dataset.setSearch) {
       // Suche: Ergebnisliste neu füllen, ohne die Seite neu aufzubauen (Fokus bleibt im Feld)
       if (e.type !== "input") return;

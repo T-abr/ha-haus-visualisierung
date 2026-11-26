@@ -5,6 +5,7 @@ import { DOMAIN } from "./version.js";
 import { BUILTIN_MODES, HOUSE_MODES, MODE_NAME, UPD, withDefaults } from "./grundlagen.js";
 import { rangeSet } from "./verlauf.js";
 import { rbShift } from "./rueckblick.js";
+import { zlAction } from "./zeitleiste.js";
 import { buildModel } from "./modell.js";
 import { ALARMS, curMode } from "./warnungen.js";
 import { simAction } from "./anwesenheit.js";
@@ -14,6 +15,7 @@ import { systemAction } from "./system.js";
 import { openSec, settingsNavAction } from "./einstellungen.js";
 import { applList } from "./geraete.js";
 import { maintCall, newTask } from "./wartung.js";
+import { autoCreate, autoForm, autoSet } from "./automationen.js";
 import { adoptDevice, customAction, displaysForSave, newDisplay, togglePage, testBell, updateDevice } from "./wanddisplay.js";
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -44,6 +46,7 @@ const AktionenMixin = (Base) => class extends Base {
         card._force = true; UPD[card.dataset.u].run(card, this); card._force = false;
         return;
       }
+      case "zl-days": case "zl-kind": case "zl-reload": case "zl-img": case "zl-close": zlAction(act, t, this); return;
       case "rb-month": { const card = t.closest('[data-u="rback"]'); if (card) rbShift(card, this, Number(t.dataset.d) || 0); return; }
       case "clim-kind": this._ck = t.dataset.k === "h" ? "h" : "t"; try { localStorage.setItem("hv-clim-kind", this._ck); } catch (err) { /* egal */ } this._render(); return;
       case "nav": this._go(t.dataset.to); return;
@@ -71,6 +74,9 @@ const AktionenMixin = (Base) => class extends Base {
         try { await this._hass.callWS({ type: `${DOMAIN}/appliance_ack`, appliance: t.dataset.id }); this._toast("Quittiert"); } catch (err) { this._toast(`Quittieren fehlgeschlagen: ${err && err.message ? err.message : err}`); }
         return;
       }
+      case "auto-set": autoSet(this, t); return;
+      case "auto-form": autoForm(this, t.dataset.open === "1"); return;
+      case "auto-create": autoCreate(this); return;
       case "wt-done": case "wt-undo": maintCall(this, t.dataset.task, act === "wt-undo"); return;
       case "al-lock": this._call("lock", "lock", { entity_id: t.dataset.eid }); this._toast("Wird verriegelt"); return;
       case "hm-set": {

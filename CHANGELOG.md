@@ -4,6 +4,35 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Seite „Automationen“ (nur Administratoren):** listet alle Automationen von Home Assistant mit Bereich, Beschreibung und „zuletzt ausgelöst“, mit Suche und Schalter zum Aktivieren/Deaktivieren (live, auch bei Änderungen in Home Assistant). „Neue Automation“ öffnet ein Kurzformular für einfache Fälle: Name, ein Auslöser (Uhrzeit, Sonnenauf-/-untergang mit Versatz, Gerät ändert Zustand) und eine Aktion (ein-/aus-/umschalten, Szene, Benachrichtigung); gespeichert wird über die Konfigurations-API von Home Assistant, wie im Editor. „Im HA-Editor“ und „Bearbeiten“ springen in den Automationseditor von Home Assistant. Nicht-Administratoren sehen die Seite nicht, die neuen Websocket-Befehle `automations` und `automation_set` lehnen sie ab.
+- **Alarm-Vollbild am Wanddisplay** (Backlog 24, braucht Firmware 0.8.0): Ein neuer Alarm (Stufe „Alarm“, weder quittiert noch stumm) füllt den Bildschirm rot mit Meldung, Raum bzw. Details und Uhrzeit („seit 14:32“), bei mehreren Alarmen „+ 2 weitere Alarme“. Am Gerät „Quittieren“ und „1 h stumm“ wie im Panel; im Protokoll steht „Display Flur“ als Benutzer. Das Display wird hell, auch nachts und aus dem Bildschirmschoner. Je Display unter Displays → „Alarm-Vollbild“ abschaltbar. Neuer Bereich `alarm` und Ziele `alarm:ok:<schlüssel>`/`alarm:stumm:<schlüssel>` im Display-Protokoll (Version bleibt 1, ältere Firmware ignoriert sie).
+- **Szenen je Raum:** Auf der Raumseite stehen die Szenen des Raums als Knöpfe im Kopf, ein Tipp schaltet (ohne Rückfrage). Admins legen dort über „Szene anlegen“ bzw. „Szenen“ eigene Stimmungen wie Kino, Essen oder Putzen an: Lichter an/aus mit Helligkeit und Farbe oder Weißton, Rollos mit Position, Schalter an/aus. Der Editor übernimmt den aktuellen Zustand des Raums als Vorlage („Aktuellen Zustand übernehmen“), einzelne Geräte lassen sich abwählen, „Ausprobieren“ schaltet ohne zu speichern, ein Schalter legt die Szene in den Schnellzugriff (Favorit). Die Integration stellt jede Szene als `scene.haus_<raum>_<name>` bereit, im Bereich des Raums, mit gewähltem Symbol – damit auch als Kachel am Wanddisplay (ohne neue Firmware) und in Automationen. Vorhandene `scene.*` erscheinen wie bisher, jetzt ebenfalls als Knöpfe im Raumkopf und im Schnellzugriff mit ihrem eigenen Symbol.
+- **Zeitleiste „Was war los?“ auf der Seite Sicherheit** (Backlog 22): Türen (geöffnet, mit Dauer) und Schlösser, Klingeln mit Standbild, Bewegung, Hausmodus-Wechsel und Alarme (neu, quittiert, eskaliert) als Verlauf, nach Tag gruppiert. Zeitraum Heute, 3, 7 oder 14 Tage, Filter je Art mit Anzahl; Standbilder per Tipp groß. Bewegung desselben Melders wird zu Abschnitten zusammengefasst („3× bis 15:10“), ausgeblendete Bereiche und Entitäten fehlen. Praktisch nach dem Urlaub. Türen und Bewegung kommen aus dem Recorder, Modus und Alarme aus dem Protokoll des Alarmmanagers; abgefragt wird nur beim Öffnen der Seite (neuer Befehl `haus_visualisierung/zeitleiste`).
+- **Klingel-Standbilder:** Bei jedem Klingeln legt die Integration ein Bild der Klingelkamera unter `/config/haus_visualisierung/klingel` ab (mehrfaches Drücken innerhalb von 15 s = ein Bild). Bilder bleiben 7 Tage, höchstens 300; abrufbar nur angemeldet bzw. über eine signierte Adresse. Abschaltbar unter Einstellungen → Klingel → „Standbild bei jedem Klingeln merken“.
+
+### Geändert
+- **Firmware 0.8.0 liegt bei** (Alarm-Vollbild, gemeinsame Schriftstile): Flashen aus dem Browser und Update über das Netz bieten sie an.
+- Erkennung von Klingel und Klingelkamera liegt jetzt in `klingel.py` und wird von Wanddisplay und Zeitleiste gemeinsam genutzt (Verhalten unverändert).
+
+### Verbessert
+- **Auf großen Monitoren nichts mehr aufklappen.** Ab 1200 px Fensterbreite (wie das Raster auf Licht und Beschattung) sind die klappbaren Bereiche immer offen und ohne Pfeil: „Weitere“ und „Batterien“ auf den Raumseiten, „Fenster & Türen“ auf der Sicherheitsseite, „In Ordnung“ auf der Batterieseite (alle im Kompakt-Modus) sowie Text und Empfehlung der Wetterwarnungen. Beim Ändern der Fenstergröße über die Schwelle baut sich die Seite passend neu auf. Handy und Tablet bleiben wie bisher; die Einstellungen bleiben auch am großen Monitor klappbar.
+- **Wanddisplay schlanker** (Display-Firmware, kommt mit der nächsten Firmware-Version): Labels holen Schrift und Grau aus gemeinsamen Stilen statt je Widget, und drei Roboto-Größen entfallen (12 → 13, 14 → 15, 17 → 16 px). Texte wirken fast unverändert, die Firmware wird kleiner und das Update übers Netz schneller (Backlog 30; der Zeichenpuffer bleibt bewusst im PSRAM).
+
+### Tests
+- Neuer Abschnitt `automationen` (Gruppe automationen): Liste, Schalten, Live-Zustand, Suche, Kurzformular mit Prüfungen, HA-Editor, Nicht-Admin.
+- Backend: `test_automations.py` (Liste mit Bereich und Beschreibung, Schalten, nur Automationen, nur Administratoren).
+- Neuer Abschnitt `grosse_monitore_ausgeklappt` (Gruppe basis): Batterie- und Sicherheitsseite ab 1200 px ohne Aufklappen, darunter klappbar, Wechsel beim Verkleinern/Vergrößern; Wetterwarnungen ab 1200 px offen, darunter zugeklappt.
+- `test_display_alarm_vollbild`: Bereich `alarm` nur für Alarme (nicht Warnungen), nur für eingeschaltete Displays, Quittieren und 1 h stumm am Display, falsche Schlüssel ändern nichts.
+- Neuer Abschnitt `szenen_je_raum` (Gruppe szenen): Knöpfe im Raumkopf (Kompakt und Komfort), Editor mit Ist-Zustand, Ausprobieren, Speichern mit Favorit, Bearbeiten, Löschen, ohne Admin nur schalten.
+- Backend `test_scenes.py`: Bereinigen der Szenen, Entität mit Bereich und Symbol, Dienstaufrufe je Gerät (Farbe, Weißton, Rollo mit und ohne Positionsfunktion), Umbenennen, Ausprobieren, Löschen.
+- `test_display.py` lädt die Kern-Integration „homeassistant“ vor dem Ersetzen von `homeassistant.turn_off` (die neue Szenen-Plattform lädt sie sonst nach und überschreibt den Ersatz).
+- Neu `tests/backend/test_zeitleiste.py`: Ereignisse aus Verlauf, Klingeln und Protokoll (Türdauer, Bewegung zusammengefasst, nur passende Protokolleinträge), Standbild ablegen, wiederverwenden, nach 7 Tagen löschen, abschaltbar, Websocket mit echtem Recorder und signierter Bildadresse.
+- Neuer Abschnitt `zeitleiste` (Gruppe zeitleiste): Gruppierung nach Tag, Filter mit Anzahl, Standbild groß, Zeitraum, kein Neuaufbau bei Messwerten, ohne Recorder, Fehler, Komfort-Ansicht, Handy, Einstellung.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 18–21 ms, Raumseite 15 ms, Licht 41 ms, Klima 27 ms, Energie 22 ms (1.21.0: 37–49 ms), Alarme 11 ms; hass-Setter Übersicht 35–49 µs, Unterseiten 0,3–28 µs; Aktualisierer auf der Übersicht 480 pro Minute. Sonst im Rahmen der Messschwankung wie 1.21.0.
+
 ## 1.21.0 – 2026-11-25
 
 ### Neu

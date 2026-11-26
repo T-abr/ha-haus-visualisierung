@@ -34,6 +34,7 @@ from .const import (
 from .display import SERVICE_TAP, DisplayHub
 from .display_setup import FIRMWARE_DIR, FIRMWARE_URL, firmware_md5, firmware_version
 from .backup import BackupBook
+from .klingel import KlingelBildView, RingBook
 from .maintenance import MaintenanceBook
 from .store import LayoutStore
 from .websocket import async_register_websocket
@@ -42,7 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 TAP_SCHEMA = vol.Schema({vol.Required("display"): vol.All(str, vol.Length(max=40)), vol.Required("ziel"): vol.All(str, vol.Length(max=200))})
-PLATFORMS = ["select", "sensor", "update"]
+PLATFORMS = ["scene", "select", "sensor", "update"]
 
 
 def _drop_stale_gz(frontend_dir: Path) -> None:
@@ -95,6 +96,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if data["firmware"]:
         await hass.http.async_register_static_paths([StaticPathConfig(FIRMWARE_URL, str(FIRMWARE_DIR), True)])
 
+    # Klingel-Standbilder für die Zeitleiste (nur angemeldet bzw. per signierter Adresse)
+    hass.http.register_view(KlingelBildView())
+
     async_register_websocket(hass)
     _LOGGER.info("Haus Visualisierung v%s geladen", VERSION)
     return True
@@ -140,6 +144,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(hub.async_stop)
     hass.services.async_register(DOMAIN, SERVICE_TAP, hub.async_tap, schema=TAP_SCHEMA)
     entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, SERVICE_TAP))
+    # Zeitleiste: jedes Klingeln mit Standbild merken
+    rings = RingBook(hass, lambda: hass.data[DOMAIN]["store"].data)
+    await rings.async_load()
+    rings.async_start()
+    hass.data[DOMAIN]["rings"] = rings
+    entry.async_on_unload(rings.async_stop)
     # Hausmodus (select.hausmodus) und Anzahl aktiver Meldungen (sensor.haus_alarme_aktiv)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -155,4 +165,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     frontend.async_remove_panel(hass, PANEL_URL_PATH)
     hass.data[DOMAIN].pop("monitor", None)
     hass.data[DOMAIN].pop("displays", None)
+    hass.data[DOMAIN].pop("rings", None)
     return ok

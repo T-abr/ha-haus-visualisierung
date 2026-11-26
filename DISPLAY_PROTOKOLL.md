@@ -105,6 +105,22 @@ Overlay offen ist, alle paar Sekunden neu. `tuer`: Türöffner eingerichtet, Kno
 getippt werden, dann Ziel `klingel:tuer`); `offen`: Türöffner wurde ausgelöst. `bis`: Unix-Zeit, zu der das Overlay
 schließt (für die Anzeige „schließt in … s“ und als Sicherung ohne Verbindung).
 
+### `alarm`
+
+Alarm-Vollbild (Firmware ab 0.8.0; je Display unter Displays → „Alarm-Vollbild“ abschaltbar). `null`, solange kein
+Alarm offen ist. Gezeigt wird die jüngste Meldung der Stufe „Alarm“, die weder quittiert noch stumm ist:
+
+```json
+{"k": "smoke:binary_sensor.wohnzimmer_rauch", "t": "Rauch im Wohnzimmer", "s": "Wohnzimmer Rauchmelder · seit 14:32",
+ "i": "fire", "mehr": 1}
+```
+
+`k` ist der Schlüssel der Meldung: Ein neues `k` zeigt das Vollbild und weckt das Display (hell, auch nachts, auch aus
+dem Bildschirmschoner). `t` Titel, `s` Details und Uhrzeit, `i` Symbol (nur Namen aus der Icon-Liste der Firmware,
+sonst `alarm-light`), `mehr` = weitere offene Alarme. Knöpfe „Quittieren“ (Ziel `alarm:ok:<k>`) und „1 h stumm“
+(`alarm:stumm:<k>`); danach schickt die Integration den nächsten Alarm oder `null`. Am Display lässt sich das
+Vollbild nicht anders schließen. Es liegt über Seiten und Schoner, aber unter Klingel und PIN-Tastenfeld.
+
 ### `pin`
 
 PIN-Tastenfeld (Firmware ab 0.7.0), `null`, solange nichts abgefragt wird. Tippt man am Display eine Aktion, die laut
@@ -227,6 +243,7 @@ data: {display: haus-display-a1b2c3, ziel: "gn:light.kueche"}
 | `eigen:<seite>:<kachel>` | Kachel einer eigenen Seite angetippt (Seite 0–2, Kachel 0–5): schaltet wie eine `entity:`-Kachel |
 | `wert:<kachel:N\|eigen:p:k>:<0–100>` | Regler nach langem Druck auf eine stellbare Kachel: Licht auf diese Helligkeit (0 = aus), Rollo auf diese Position |
 | `klingel:tuer` | „Tür öffnen“ im Klingel-Overlay (nur während es klingelt): Türöffner aus Einstellungen → Klingel auslösen wie im Panel (Schloss öffnen, Schalter mit Impuls, Taste, Skript) |
+| `alarm:ok:<k>`, `alarm:stumm:<k>` | Alarm-Vollbild: Meldung `k` quittieren bzw. 1 h stummschalten wie im Panel (Benutzer im Protokoll: „Display <Name>“); ist `k` nicht mehr aktiv, passiert nichts |
 | `pin:<ziffern>` | Eingabe im PIN-Tastenfeld, verschleiert mit `k` aus dem Bereich `pin`; `pin:` = abgebrochen |
 | `geraet_ok` | fertige Haushaltsgeräte quittieren |
 | `hallo` | Gerät ist (neu) verbunden: alle Bereiche neu schicken; nicht zugeordnetes Gerät bekommt `protokoll` = `""` |
@@ -240,6 +257,7 @@ Unbekannte Ziele und Displays werden ignoriert (Warnung im Log).
 
 | Protokoll | Haus Visualisierung | ha-haus-display |
 |---|---|---|
+| 1 (Alarm-Vollbild) | ab 1.22.0 | ab 0.8.0 |
 | 1 (PIN-Tastenfeld) | ab 1.20.0 | ab 0.7.0 |
 | 1 (Stellen per langem Tippen, Rückmeldung beim Tippen, Wischen, Verbindungsanzeige) | ab 1.18.0 | ab 0.6.0 |
 | 1 (Klingel-Overlay) | ab 1.16.0 | ab 0.5.0 |

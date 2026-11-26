@@ -280,6 +280,20 @@ def seitenfuellend():
     check("F: kurze Seite füllt die Höhe", pg.evaluate(geo)["appH"] == 900)
     pg.set_viewport_size({"width": 1440, "height": 1000})
 
+@gruppe("basis")
+def grosse_monitore_ausgeklappt():
+    """Ab 1200 px sind klappbare Bereiche (Kompakt-Seiten) immer offen und ohne Aufklapp-Knopf; darunter klappbar."""
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=batterien"); pg.wait_for_timeout(400)
+    check("GM: Batterien ab 1200 px ohne <details>, ohne Pfeil", pg.locator(f"{P} .sgrid details").count() == 0
+          and pg.locator(f"{P} .sgrid .section .chev").count() == 0 and pg.locator(f"{P} .sgrid .section .rows").count() >= 1)
+    pg.goto(dense + "?view=sicherheit"); pg.wait_for_timeout(400)
+    check("GM: Sicherheit ab 1200 px ohne <details>", pg.locator(f"{P} details.section").count() == 0)
+    pg.set_viewport_size({"width": 1100, "height": 900}); pg.wait_for_timeout(500)
+    check("GM: unter 1200 px wieder klappbar (Neuaufbau beim Verkleinern)", pg.locator(f"{P} details.section:not([open])").count() >= 1)
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(500)
+    check("GM: beim Vergrößern wieder offen", pg.locator(f"{P} details.section").count() == 0)
+
 @gruppe("panels")
 def eingebettete_panels():
     # ---------- Eingebettete Panels ----------
@@ -2032,6 +2046,77 @@ def strompreis():
     mp.close()
 
 
+@gruppe("szenen")
+def szenen_je_raum():
+    # ---------- Szenen je Raum: Knöpfe im Raumkopf, Editor, Speichern als scene.haus_<id> ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=raum/wohnzimmer"); pg.wait_for_timeout(600)
+    bar = f"{P} .hero"
+    chips = pg.evaluate(f"[...{R}.querySelectorAll('.hero .schip[data-act=run]')].map(b => b.dataset.eid)")
+    check("SZ: vorhandene Szenen als Knöpfe im Raumkopf", sorted(chips) == ["scene.wohnzimmer_gemutlich", "scene.wohnzimmer_kino"]
+          and "Kino" in pg.locator(bar).inner_text())
+    pg.locator(f'{bar} .schip[data-eid="scene.wohnzimmer_kino"]').click(); pg.wait_for_timeout(300)
+    check("SZ: ein Tipp schaltet ohne Rückfrage", log()[-1] == "scene.turn_on" and pg.locator(f"{P} .mbg").count() == 0)
+    # Neue Szene: ohne eigene Szenen öffnet sich gleich der Editor mit dem Ist-Zustand
+    pg.locator(f"{bar} [data-act=sz-list]").click(); pg.wait_for_timeout(300)
+    M = f"{P} .szmodal"
+    rows = pg.evaluate(f"[...{R}.querySelectorAll('.szmodal [data-sz=inc]')].map(i => i.dataset.eid)")
+    check("SZ: Editor mit Lichtern und Rollos des Raums", pg.locator(M).count() == 1 and "Neue Szene" in pg.locator(f"{M} .mt").inner_text()
+          and {"light.wohnzimmer_decke", "light.wohnzimmer_led_streifen", "cover.wohnzimmer_fenster"} <= set(rows))
+    check("SZ: Ist-Zustand übernommen (Decke an 70 %, Rollo 60 %)", pg.locator(f'{M} [data-sz=bri][data-eid="light.wohnzimmer_decke"]').input_value() == "70"
+          and pg.locator(f'{M} [data-sz=pos][data-eid="cover.wohnzimmer_fenster"]').input_value() == "60")
+    check("SZ: Speichern erst mit Namen", pg.locator(f"{M} [data-act=sz-save]").is_disabled())
+    pg.locator(f"{M} [data-sz=name]").fill("Kino")
+    pg.locator(f'{M} [data-sz=on][data-eid="light.wohnzimmer_decke"] + span').click(); pg.wait_for_timeout(150)
+    check("SZ: Licht aus → keine Helligkeit mehr", pg.locator(f'{M} [data-sz=bri][data-eid="light.wohnzimmer_decke"]').count() == 0)
+    pg.locator(f'{M} [data-sz=pos][data-eid="cover.wohnzimmer_fenster"]').fill("0"); pg.wait_for_timeout(100)
+    check("SZ: Rollo-Position mit Anzeige", pg.locator(f'{M} [data-sz=pos][data-eid="cover.wohnzimmer_fenster"] + .szv').inner_text() == "Zu")
+    pg.locator(f'{M} [data-sz=inc][data-eid="light.wohnzimmer_led_streifen"]').uncheck(); pg.wait_for_timeout(150)
+    pg.locator(f'{M} [data-act=sz-icon][data-icon="mdi:movie-open"]').click(); pg.wait_for_timeout(100)
+    pg.locator(f"{M} [data-act=sz-test]").click(); pg.wait_for_timeout(300)
+    t = [x for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "scene_test"]
+    check("SZ: Ausprobieren schickt die Szene, ohne zu speichern", t and t[-1][2]["ents"]["light.wohnzimmer_decke"] == {"on": False}
+          and t[-1][2]["ents"]["cover.wohnzimmer_fenster"] == {"pos": 0} and "light.wohnzimmer_led_streifen" not in t[-1][2]["ents"]
+          and not pg.evaluate(f"Object.keys({PP}._layout.scenes || {{}}).length"))
+    pg.locator(f"{M} [data-sz=fav] + span").click()
+    pg.locator(f"{M} [data-act=sz-save]").click(); pg.wait_for_timeout(500)
+    L = pg.evaluate(f"{PP}._layout")
+    sc = L["scenes"].get("wohnzimmer_kino", {})
+    check("SZ: gespeichert mit Raum, Symbol und Zuständen", sc.get("area") == "wohnzimmer" and sc.get("icon") == "mdi:movie-open"
+          and sc.get("ents", {}).get("cover.wohnzimmer_fenster") == {"pos": 0} and pg.locator(M).count() == 0)
+    check("SZ: im Schnellzugriff (Favorit)", "scene.haus_wohnzimmer_kino" in L["favorites"])
+    chips = pg.evaluate(f"[...{R}.querySelectorAll('.hero .schip[data-act=run]')].map(b => b.dataset.eid)")
+    check("SZ: neue Szene erscheint als Knopf", "scene.haus_wohnzimmer_kino" in chips)
+    pg.locator(f'{bar} .schip[data-eid="scene.haus_wohnzimmer_kino"]').click(); pg.wait_for_timeout(200)
+    check("SZ: eigene Szene schalten", log()[-1] == "scene.turn_on")
+    q = pg.evaluate(f"{PP}._sceneChips({PP}._layout.favorites)")
+    check("SZ: Schnellzugriff zeigt die Szene mit ihrem Symbol", 'data-eid="scene.haus_wohnzimmer_kino"' in q and "mdi:movie-open" in q)
+    # Bearbeiten und Löschen
+    pg.locator(f"{bar} [data-act=sz-list]").click(); pg.wait_for_timeout(300)
+    check("SZ: Liste der eigenen Szenen", pg.locator(f"{M} [data-act=sz-edit]").count() == 1)
+    pg.locator(f"{M} [data-act=sz-edit]").click(); pg.wait_for_timeout(300)
+    check("SZ: Bearbeiten lädt Name und Zustand", pg.locator(f"{M} [data-sz=name]").input_value() == "Kino"
+          and not pg.locator(f'{M} [data-sz=on][data-eid="light.wohnzimmer_decke"]').is_checked()
+          and not pg.locator(f'{M} [data-sz=inc][data-eid="light.wohnzimmer_led_streifen"]').is_checked()
+          and pg.locator(f"{M} [data-sz=fav]").is_checked())
+    pg.locator(f"{M} [data-act=sz-del]").click(); pg.wait_for_timeout(150)
+    check("SZ: Löschen fragt nach", pg.locator(M).count() == 1 and "Wirklich" in pg.locator(f"{M} [data-act=sz-del]").inner_text())
+    pg.locator(f"{M} [data-act=sz-del]").click(); pg.wait_for_timeout(500)
+    L = pg.evaluate(f"{PP}._layout")
+    check("SZ: gelöscht, auch aus den Favoriten", not L["scenes"] and "scene.haus_wohnzimmer_kino" not in L["favorites"] and pg.locator(M).count() == 0)
+    check("SZ: Knopf verschwindet", pg.locator(f'{bar} .schip[data-eid="scene.haus_wohnzimmer_kino"]').count() == 0)
+    # Ohne Admin-Rechte nur schalten
+    pg.evaluate(f"(() => {{ const p = {PP}; p._hass.user.is_admin = false; p._dirty = true; p._flush(); }})()"); pg.wait_for_timeout(300)
+    check("SZ: ohne Admin kein Bearbeiten", pg.locator(f"{bar} [data-act=sz-list]").count() == 0 and pg.locator(f"{bar} .schip").count() == 2)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._hass.user.is_admin = true; }})()")
+    # Komfort-Ansicht: Leiste unter dem Raumkopf, Szenen nicht doppelt in den Abschnitten
+    pg.goto(base + "&view=raum/wohnzimmer"); pg.wait_for_timeout(600)
+    chips = pg.evaluate(f"[...{R}.querySelectorAll('.hero .szbar .schip[data-act=run]')].map(b => b.dataset.eid)")
+    check("SZ-Komfort: Szenen als Leiste im Raumkopf", sorted(chips) == ["scene.wohnzimmer_gemutlich", "scene.wohnzimmer_kino"]
+          and pg.locator(f"{P} .hero .szbar [data-act=sz-list]").count() == 1)
+    check("SZ-Komfort: nicht doppelt in den Abschnitten", pg.locator(f'{P} .sections [data-eid="scene.wohnzimmer_kino"]').count() == 0)
+
+
 @gruppe("gutenacht")
 def gute_nacht_check():
     # ---------- Gute-Nacht- und Verlassen-Check ----------
@@ -2252,6 +2337,80 @@ def wartung():
         pg.locator(f"{P} [data-act=s-wt-del]").first.click(); pg.wait_for_timeout(120)
     pg.locator(f"{P} [data-act=s-save]").click(); pg.wait_for_timeout(300)
     check("WT: alle Aufgaben gelöscht – keine Seite Wartung mehr", pg.locator(f"{P} .wtask").count() == 0 and pg.locator(f'{P} .nav[data-to="wartung"]').count() == 0)
+
+
+@gruppe("automationen")
+def automationen():
+    # ---------- Automationen: nur Administratoren, an/aus, Suche, einfache Automation anlegen, HA-Editor ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense); pg.wait_for_timeout(500)
+    pg.evaluate("""(() => { const a = window.__api; a.autoMeta = { 'automation.flurlicht_abends': { area: 'Flur', description: 'Licht bei Sonnenuntergang' } };
+      a.set('automation.flurlicht_abends', 'on', { friendly_name: 'Flurlicht abends', id: '1001', last_triggered: new Date(Date.now() - 7200000).toISOString(), mode: 'single' });
+      a.set('automation.rollos_morgens', 'off', { friendly_name: 'Rollos morgens', id: '1002', last_triggered: null, mode: 'single' });
+      a.set('automation.alt_yaml', 'on', { friendly_name: 'Alte YAML-Regel', last_triggered: null }); })()""")
+    nav = pg.locator(f'{P} .nav[data-to="automationen"]')
+    check("AU: Seite Automationen in der Navigation (Admin)", nav.count() == 1)
+    nav.click(); pg.wait_for_timeout(400)
+    rows = pg.locator(f"{P} .aurow")
+    check("AU: Liste vom Backend, nach Name sortiert", rows.count() == 3 and [x.split("\n")[0] for x in rows.locator(".wtx b").all_inner_texts()] == ["Alte YAML-Regel", "Flurlicht abends", "Rollos morgens"])
+    check("AU: Zusammenfassung", "3 Automationen · 2 aktiv" in pg.locator(f"{P} .ptitle .psub").inner_text())
+    fl = pg.locator(f'{P} .aurow[data-eid="automation.flurlicht_abends"]')
+    check("AU: Bereich, Beschreibung und zuletzt ausgelöst", "Flur · Licht bei Sonnenuntergang" in fl.inner_text() and "vor 2 Std." in fl.inner_text())
+    check("AU: Bearbeiten springt in den HA-Editor; YAML ohne id nicht", fl.locator('[data-act=nav-raw]').get_attribute("data-path") == "/config/automation/edit/1001"
+          and pg.locator(f'{P} .aurow[data-eid="automation.alt_yaml"] [data-act=nav-raw]').count() == 0)
+    # Deaktivieren über das Backend; Zustand kommt live zurück
+    fl.locator(".tgl").click(); pg.wait_for_timeout(300)
+    calls = [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "automation_set"]
+    check("AU: Schalter schickt automation_set ans Backend", len(calls) == 1 and calls[0]["entity_id"] == "automation.flurlicht_abends" and calls[0]["enabled"] is False)
+    check("AU: Zeile und Zusammenfassung zeigen aus", not fl.locator("input").is_checked() and "on" not in fl.get_attribute("class").split() and "1 aktiv" in pg.locator(f"{P} .ptitle .psub").inner_text())
+    pg.locator(f'{P} .aurow[data-eid="automation.rollos_morgens"] .tgl').click(); pg.wait_for_timeout(300)
+    check("AU: Aktivieren", pg.evaluate("window.__api.hass.states['automation.rollos_morgens'].state") == "on")
+    # Änderung von außen (z. B. in Home Assistant) erscheint ohne Neuaufbau
+    pg.evaluate("window.__api.set('automation.flurlicht_abends', 'on', { last_triggered: new Date().toISOString() })"); pg.wait_for_timeout(200)
+    check("AU: Live-Zustand und „gerade eben“", fl.locator("input").is_checked() and "gerade eben" in fl.inner_text())
+    # Suche blendet nur Zeilen aus
+    pg.locator(f"{P} .ausearch").fill("flur"); pg.wait_for_timeout(150)
+    check("AU: Suche nach Name/Bereich", pg.locator(f"{P} .aurow:visible").count() == 1 and pg.locator(f"{P} .auempty:visible").count() == 0)
+    pg.locator(f"{P} .ausearch").fill("gibtsnicht"); pg.wait_for_timeout(150)
+    check("AU: Suche ohne Treffer – Hinweis", pg.locator(f"{P} .aurow:visible").count() == 0 and pg.locator(f"{P} .auempty:visible").count() == 1)
+    pg.locator(f"{P} .ausearch").fill(""); pg.wait_for_timeout(150)
+    # Einfache Automation: Pflichtfelder, Sonnenuntergang mit Versatz, Licht einschalten
+    pg.locator(f'{P} [data-act=auto-form][data-open="1"]').click(); pg.wait_for_timeout(200)
+    check("AU: Kurzformular öffnet", pg.locator(f"{P} .auform").count() == 1)
+    pg.locator(f"{P} [data-act=auto-create]").click(); pg.wait_for_timeout(200)
+    check("AU: ohne Namen nicht angelegt", "Namen" in pg.locator(f"{P} .toast").inner_text() and not pg.evaluate("window.__api.autoCreated"))
+    pg.locator(f'{P} .auform [data-auto="name"]').fill("Flur an bei Dämmerung")
+    pg.locator(f'{P} .auform [data-auto="trig"]').select_option("sun"); pg.wait_for_timeout(200)
+    check("AU: Auslöser Sonne zeigt Auswahl und Versatz, Name bleibt", pg.locator(f'{P} .auform [data-auto="offset"]').count() == 1 and pg.locator(f'{P} .auform [data-auto="name"]').input_value() == "Flur an bei Dämmerung")
+    pg.locator(f'{P} .auform [data-auto="offset"]').fill("-30")
+    pg.locator(f'{P} .auform [data-auto="aEnt"]').fill("light.flur_decke")
+    pg.locator(f"{P} [data-act=auto-create]").click(); pg.wait_for_timeout(400)
+    cr = pg.evaluate("window.__api.autoCreated") or []
+    check("AU: Konfiguration wie in Home Assistant", len(cr) == 1 and cr[0]["alias"] == "Flur an bei Dämmerung" and cr[0]["trigger"] == [{"platform": "sun", "event": "sunset", "offset": "-00:30:00"}]
+          and cr[0]["action"] == [{"service": "homeassistant.turn_on", "target": {"entity_id": "light.flur_decke"}}] and cr[0]["id"])
+    check("AU: neue Automation in der Liste, Formular zu", pg.locator(f"{P} .aurow").count() == 4 and pg.locator(f"{P} .auform").count() == 0 and "Flur an bei Dämmerung" in pg.locator(f"{P} .wlist").inner_text())
+    # Benachrichtigung ohne Text wird abgelehnt; Zustands-Auslöser
+    cfg = pg.evaluate("""(() => { const p = document.querySelector('haus-visualisierung-panel'), f = window.__HAUS_VIS__.formConfig;
+      const base = { name: 'Test', desc: '', trig: 'state', tEnt: 'light.flur_decke', tTo: 'on', at: '', sun: 'sunset', offset: 0, act: 'notify', aEnt: '', notify: 'mobile_app_pixel', msg: '' };
+      return [f(base, p._hass).error || '', f({ ...base, msg: 'Licht an' }, p._hass).config, f({ ...base, trig: 'time', at: '7:05', act: 'scene', aEnt: 'light.flur_decke' }, p._hass).error || '']; })()""")
+    check("AU: Benachrichtigung braucht Text", "Text" in cfg[0])
+    check("AU: Zustands-Auslöser und notify", cfg[1]["trigger"] == [{"platform": "state", "entity_id": "light.flur_decke", "to": "on"}] and cfg[1]["action"] == [{"service": "notify.mobile_app_pixel", "data": {"message": "Licht an"}}])
+    check("AU: Szene verlangt scene.*", "Szene" in cfg[2])
+    # Handy: nichts ragt heraus (mit offenem Formular)
+    pg.locator(f'{P} [data-act=auto-form][data-open="1"]').click(); pg.wait_for_timeout(200)
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    check("AU: Handy – nichts ragt aus der Seite", not pg.evaluate(WIDE))
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    # HA-Editor für alles andere
+    pg.locator(f'{P} .ptitle [data-act=nav-raw]').click(); pg.wait_for_timeout(200)
+    check("AU: „Im HA-Editor“ öffnet neue Automation", pg.evaluate("location.pathname") == "/config/automation/edit/new")
+    # Kein Administrator: keine Navigation, Adresse führt zur Übersicht, Backend lehnt ab
+    pg.goto(dense + "?view=automationen"); pg.wait_for_timeout(500)
+    pg.evaluate(f"(() => {{ window.__api.hass.user.is_admin = false; const p = {PP}; p._dirty = true; p._schedule(); }})()"); pg.wait_for_timeout(300)
+    check("AU: Nicht-Admin – keine Seite in der Navigation, Übersicht statt Liste", pg.locator(f'{P} .nav[data-to="automationen"]').count() == 0 and pg.locator(f"{P} .aurow").count() == 0)
+    err = pg.evaluate("window.__api.hass.callWS({ type: 'x/automation_set', entity_id: 'automation.rollos_morgens', enabled: false }).then(() => '', (e) => e.code)")
+    check("AU: Nicht-Admin – Schalten abgelehnt", err == "unauthorized")
+    pg.evaluate("window.__api.hass.user.is_admin = true")
 
 
 @gruppe("displays")
@@ -2502,8 +2661,14 @@ def wetterwarnungen():
     pg.wait_for_timeout(400)
     w = pg.locator(f"{P} .swarn")
     check("WW: Warnung auf der Wetterkarte (Unwetter rot)", w.count() == 1 and "severe" in w.get_attribute("class") and "schwerem Gewitter" in w.inner_text())
+    check("WW: ab 1200 px Text und Empfehlung sofort sichtbar, nichts zum Aufklappen",
+          w.locator("summary").count() == 0 and "Fenster und Türen schließen" in w.inner_text())
+    pg.set_viewport_size({"width": 1100, "height": 900}); pg.wait_for_timeout(500)
+    w = pg.locator(f"{P} .swarn")
+    check("WW: unter 1200 px zugeklappt", w.locator("summary").count() == 1 and "Fenster und Türen schließen" not in w.inner_text())
     w.locator("summary").click(); pg.wait_for_timeout(150)
     check("WW: aufklappen zeigt Text und Empfehlung", "Fenster und Türen schließen" in w.inner_text())
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(300)
     al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).map(a => [a.key, a.level, a.to]); }})()")
     check("WW: Meldungen im Alarmmanager", al == [["wx:dwd:gewitter", "warn", "beschattung"], ["wx:rain", "warn", "sicherheit"]])
     # feste Regel aus → keine Meldungen
@@ -2548,6 +2713,82 @@ def karten_bei_bedarf():
     # Panel und Lader gemeinsam: keine doppelte Anmeldung, Panel-Einstieg lädt den Lader mit
     pg.goto(dense); pg.wait_for_timeout(500)
     check("K: Panel lädt den Lader mit", pg.evaluate("!!customElements.get('haus-raum-card') && !!customElements.get('haus-visualisierung-panel')"))
+
+
+
+@gruppe("zeitleiste")
+def zeitleiste():
+    # ---------- Zeitleiste „Was war los?“ (Seite Sicherheit): Daten vom Backend, hier nur Anzeige und Filter ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=sicherheit"); pg.wait_for_timeout(500)
+    zl = pg.locator(f"{P} .zl")
+    check("ZL: Karte „Was war los?“ auf der Seite Sicherheit", zl.count() == 1 and "Was war los?" in zl.locator(".trt").text_content())
+    # Antwort des Backends nachbilden (Befehl haus_visualisierung/zeitleiste); Anfragen merken
+    pg.evaluate("""(() => {
+      const now = Date.now() / 1000, d0 = new Date(); d0.setHours(0, 0, 0, 0); const t0 = d0.getTime() / 1000;
+      const img = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="40"><rect width="64" height="40" fill="#567"/></svg>');
+      const today = Math.max(t0 + 60, now - 1800);
+      window.__zl = { calls: [], fail: false, recorder: true };
+      const fn = async (msg) => {
+        if (msg.type !== 'haus_visualisierung/zeitleiste') return orig(msg);
+        window.__zl.calls.push(msg);
+        if (window.__zl.fail) throw new Error('unknown_command');
+        return { days: msg.days, recorder: window.__zl.recorder, events: [
+          { ts: today + 50, typ: 'klingel', text: 'Es hat geklingelt', bild: img, cam: 'camera.g6_entry' },
+          { ts: today + 40, typ: 'tuer', eid: 'binary_sensor.haustuer', name: 'Haustür', area: 'Eingang', text: 'geöffnet', dur: 130 },
+          { ts: today + 30, typ: 'bewegung', eid: 'binary_sensor.flur_bewegung', name: 'Flur Bewegung', area: 'Flur', n: 3, bis: today + 35 },
+          { ts: today + 20, typ: 'modus', text: 'Hausmodus: Weg', mode: 'weg', user: 'Tobias' },
+          { ts: today + 10, typ: 'alarm', art: 'neu', text: 'Fenster Bad offen', level: 'alarm' },
+          { ts: t0 - 3600, typ: 'tuer', eid: 'lock.haustuer', name: 'Schloss', area: 'Eingang', text: 'abgeschlossen', lock: true },
+        ] };
+      };
+      const orig = window.__api.hass.callWS;
+      window.__api.hass.callWS = fn; document.querySelector('haus-visualisierung-panel')._hass.callWS = fn;
+    })()""")
+    zl.locator('[data-act="zl-reload"]').click(); pg.wait_for_timeout(300)
+    calls = lambda: pg.evaluate("window.__zl.calls")  # noqa: E731
+    check("ZL: Abfrage mit dem gewählten Zeitraum (Standard 3 Tage)", calls()[-1] == {"type": "haus_visualisierung/zeitleiste", "days": 3}
+          and zl.locator('[data-act="zl-days"][data-d="3"]').get_attribute("aria-pressed") == "true")
+    heads = zl.locator(".zldh b").all_inner_texts()
+    check("ZL: nach Tag gruppiert – Heute, Gestern", heads == ["Heute", "Gestern"] and "5 Ereignisse" in zl.locator(".zldh").first.inner_text())
+    rows = zl.locator(".zlr").all_inner_texts()
+    check("ZL: Zeilen mit Uhrzeit, neueste zuerst", len(rows) == 6 and rows[0].startswith(pg.evaluate("new Date((Math.max(new Date().setHours(0,0,0,0) / 1000 + 60, Date.now() / 1000 - 1800) + 50) * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })")))
+    txt = zl.inner_text()
+    check("ZL: Tür mit Dauer, Bewegung zusammengefasst, Modus mit Person, Alarm, Schloss", all(w in txt for w in (
+        "Haustür geöffnet", "Eingang · 2 min offen", "Bewegung: Flur Bewegung", "3× bis", "Hausmodus: Weg", "von Tobias", "Fenster Bad offen", "Schloss abgeschlossen")))
+    check("ZL: Alarm rot markiert", zl.locator('.zlr.l-alarm').count() == 1)
+    cnt = dict(zip(zl.locator('[data-act="zl-kind"]').evaluate_all("b => b.map(x => x.dataset.k)"), zl.locator('[data-act="zl-kind"] b').all_inner_texts()))
+    check("ZL: Filter mit Anzahl", cnt == {"alle": "6", "tuer": "2", "klingel": "1", "bewegung": "1", "modus": "1", "alarm": "1"})
+    zl.locator('[data-act="zl-kind"][data-k="tuer"]').click(); pg.wait_for_timeout(150)
+    check("ZL: Filter Türen – nur Türen und Schlösser, ohne neue Abfrage", zl.locator(".zlr").count() == 2 and set(zl.locator(".zlr").evaluate_all("r => r.map(x => x.dataset.k)")) == {"tuer"} and len(calls()) == 1)
+    zl.locator('[data-act="zl-kind"][data-k="klingel"]').click(); pg.wait_for_timeout(150)
+    check("ZL: Klingel mit Standbild und Kameraname", zl.locator(".zlr").count() == 1 and zl.locator(".zlimg").count() == 1 and "G6 Entry" in zl.locator(".zlr").inner_text())
+    zl.locator(".zlimg").click(); pg.wait_for_timeout(150)
+    check("ZL: Standbild groß öffnen", zl.locator(".zlbig img").count() == 1 and zl.locator(".zlbig").is_visible())
+    zl.locator(".zlbig").click(); pg.wait_for_timeout(100)
+    check("ZL: großes Bild per Tipp schließen", zl.locator(".zlbig").count() == 0)
+    zl.locator('[data-act="zl-kind"][data-k="modus"]').click(); zl.locator('[data-act="zl-kind"][data-k="alle"]').click()
+    zl.locator('[data-act="zl-days"][data-d="7"]').click(); pg.wait_for_timeout(300)
+    check("ZL: Zeitraum 7 Tage – neue Abfrage", calls()[-1]["days"] == 7 and zl.locator('[data-act="zl-days"][data-d="7"]').get_attribute("aria-pressed") == "true")
+    r0 = pg.evaluate(f"{PP}._stats.renders"); n0 = len(calls())
+    pg.evaluate("window.__api.set('binary_sensor.wohnzimmer_rauchmelder', 'on')"); pg.wait_for_timeout(250)
+    check("ZL: neuer Zustand – keine Abfrage, kein Neuaufbau", pg.evaluate(f"{PP}._stats.renders") == r0 and len(calls()) == n0)
+    pg.evaluate("window.__zl.recorder = false"); zl.locator('[data-act="zl-reload"]').click(); pg.wait_for_timeout(300)
+    check("ZL: ohne Recorder – Hinweis", "Ohne Recorder" in zl.locator(".zlmsg").inner_text() and zl.locator(".zlmsg").is_visible())
+    pg.evaluate("window.__zl.fail = true"); zl.locator('[data-act="zl-days"][data-d="14"]').click(); pg.wait_for_timeout(300)
+    check("ZL: Fehler des Backends – Hinweis statt Liste", "nicht verfügbar" in zl.locator(".zlmsg").inner_text() and zl.locator(".zlr").count() == 0)
+    pg.evaluate("window.__zl.fail = false"); zl.locator('[data-act="zl-days"][data-d="3"]').click(); pg.wait_for_timeout(300)
+    # Komfort-Ansicht und Handy
+    pg.goto(base + "&view=sicherheit"); pg.wait_for_timeout(500)
+    check("ZL: Karte auch in der Komfort-Ansicht", pg.locator(f"{P} .zl").count() == 1)
+    mp = b.new_page(viewport={"width": 390, "height": 900}); mp.goto(dense + "?view=sicherheit"); mp.wait_for_timeout(600)
+    check("ZL: Handy 390 px – kein seitliches Scrollen", mp.evaluate(WIDE) == [] and mp.locator(f"{P} .zl").count() == 1)
+    mp.close()
+    # Einstellungen → Klingel: Standbilder abschaltbar
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(500)
+    stab(pg, "meldungen")
+    tg = pg.locator(f'{P} [data-set="doorbell.snapshots"]')
+    check("ZL: Einstellung „Standbild bei jedem Klingeln merken“, Standard an", tg.count() == 1 and tg.is_checked() and "7 Tage" in pg.locator(f"{P} .set:has([data-set='doorbell.snapshots'])").inner_text())
 
 
 def auswahl(args):

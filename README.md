@@ -18,6 +18,9 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
 - **Heizung** im Heizungsraum: Speicher mit Schichtung und Ladung, Kamin mit Pumpe, Heizkurve mit Betriebspunkt
   und Mischer (passt zur Integration „Heizkurve Fußbodenheizung“).
 - **Wallbox** in der Einfahrt: Ladeleistung, Ladestand, Reichweite, Lademodus und Ziel (EVCC und andere).
+- **Szenen je Raum**: Stimmungen wie Kino oder Essen im Panel anlegen (Lichter mit Helligkeit und Farbe, Rollos mit
+  Position, Schalter; Vorlage aus dem aktuellen Zustand) und auf der Raumseite oder im Schnellzugriff mit einem Tipp
+  schalten. Jede Szene ist eine Entität `scene.haus_…` im Raum – auch als Kachel am Wanddisplay und in Automationen.
 - **Wetter und Beschattung**: Vorhersage für fünf Tage auf der Seite Beschattung, „morgen“ im Kopf und im
   Bildschirmschoner; Hinweise wie „Morgen 30 °C: Südrollos bis 10:30 schließen“ aus Vorhersage, Sonnenstand am
   Standort und Ausrichtung der Fenster. Geschaltet wird nur auf Tippen, mit Rückfrage.
@@ -28,12 +31,15 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   hervorgehoben, dazu Termine von heute und morgen; aus Kalendern in Home Assistant (z. B. Waste Collection Schedule).
 - **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
   Fälligkeit auf der Seite „Wartung“, „Erledigt“ für alle Benutzer, fällige Aufgaben als Hinweis in den Meldungen.
+- **Automationen** (nur für Administratoren): alle Automationen von Home Assistant mit Bereich, Beschreibung und
+  „zuletzt ausgelöst“, Suche, Schalter zum Aktivieren/Deaktivieren; neue einfache Automationen (ein Auslöser: Uhrzeit,
+  Sonne oder Zustand; eine Aktion: schalten, Szene, Benachrichtigung) direkt anlegen, alles andere im Editor von Home Assistant.
 - **Wanddisplays** (z. B. 4-Zoll-ESP32-S3 mit ESPHome): das Display ist ein Client der Visualisierung, Seiten und
   Kacheln stehen in Einstellungen → Wandpanel & Displays. **Einrichten ohne Handarbeit** im selben Reiter: Firmware aus dem
   Browser flashen (Chrome/Edge über HTTPS, Firmware liegt der Integration bei), WLAN per Improv, Gerät übernehmen
   und zuordnen, **Firmware-Updates über das Netz** (Update-Entität je Display). Die Inhalte kommen fertig gerechnet per Push ans Gerät (und als `sensor.haus_display_<kennung>`),
   Tipps über den Dienst `haus_visualisierung.display_tap`. Firmware: [ha-haus-display](https://github.com/T-abr/ha-haus-display),
-  Schnittstelle: [DISPLAY_PROTOKOLL.md](DISPLAY_PROTOKOLL.md) (Protokoll 1; Push und Einrichten ab 1.13.0 mit Firmware 0.2.0).
+  Schnittstelle: [DISPLAY_PROTOKOLL.md](DISPLAY_PROTOKOLL.md) (Protokoll 1; Push und Einrichten ab 1.13.0 mit Firmware 0.2.0). Neue Alarme füllen den Bildschirm rot, mit „Quittieren“ und „1 h stumm“ am Gerät (Firmware ab 0.8.0).
 - **Wandpanel-Modus** je Gerät (auch per `?wandpanel=1`): Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr,
   Wetter, Hausmodus und Meldungen (Elemente, Innentemperatur, Uhrgröße und Nachtzeit einstellbar, gilt auch für die
   Wanddisplays), automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
@@ -47,6 +53,9 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   überall; die PIN bleibt in Home Assistant. Wanddisplays (Firmware ab 0.7.0) fragen sie mit einem Tastenfeld ab.
 - **Eingebettete Panels** (Solar, Protect, Dashboards) mit fester Navigation und Haus-Farben.
 - **Klingel-Overlay** mit Kamera, Live-Bild und Türöffner (Schalter, Taste, Schloss).
+- **Zeitleiste „Was war los?“** auf der Seite Sicherheit: Türen und Schlösser, Klingeln mit Standbild, Bewegung,
+  Hausmodus und Alarme der letzten 1–14 Tage, nach Tag gruppiert und filterbar. Klingel-Standbilder bleiben 7 Tage
+  (`/config/haus_visualisierung/klingel`, abschaltbar unter Einstellungen → Klingel).
 - **Alarmmanager**: Warnregeln (fest und eigene), Leitstelle, Quittieren, Stummschalten, Protokoll,
   Fehlalarm-Auswertung, Push-Meldungen mit Aktionsknöpfen.
 - **Hausmodus** Zuhause, Nacht, Abwesend, Urlaub – Automatik nach Personen und Uhrzeit, Kopplung mit Alarmo,
