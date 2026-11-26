@@ -11,6 +11,7 @@ import { enHover } from "./energie.js";
 import { fcListen, fcUnlisten } from "./wetter.js";
 import { termListen, termUnlisten } from "./termine.js";
 import { autoPageHTML } from "./automationen.js";
+import { kalOn, kalPageHTML } from "./kalender.js";
 import { MAINT, maintDueCount, maintOn, maintPageHTML, setMaint } from "./wartung.js";
 import { LOGO, STYLES } from "./stile.js";
 import { HvBase } from "./basis.js";
@@ -282,7 +283,7 @@ class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(E
     const active = view === "raum" ? "overview" : view;
 
     // Energie nur, wenn es Energiedaten gibt; Wartung nur mit Aufgaben (Zahl = fällige)
-    const navList = NAV.filter(([k]) => (k !== "energie" || (this._model && this._model.energy)) && (k !== "wartung" || maintOn(L)) && (k !== "automationen" || isAdmin));
+    const navList = NAV.filter(([k]) => (k !== "energie" || (this._model && this._model.energy)) && (k !== "wartung" || maintOn(L)) && (k !== "kalender" || kalOn(h, L)) && (k !== "automationen" || isAdmin));
     const nDue = maintOn(L) ? maintDueCount(L) : 0;
     const badge = (k) => (k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : k === "wartung" && nDue ? `<i class="nbadge on wbadge">${nDue}</i>` : "");
     const nav = navList.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${badge(k)}<span>${t}</span></button>`).join("");
@@ -432,6 +433,7 @@ class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(E
       case "sicherheit": return d ? this._vSecurityDense() : this._vSecurity();
       case "alarme": return this._vAlarme();
       case "batterien": return d ? this._vBatteriesDense() : this._vBatteries();
+      case "kalender": return kalPageHTML(this);
       case "wartung": return maintPageHTML(this._layout, !!(this._hass.user && this._hass.user.is_admin));
       case "automationen": return this._hass.user && this._hass.user.is_admin ? autoPageHTML(this) : this._vOverview();
       case "einstellungen": return this._vSettings();

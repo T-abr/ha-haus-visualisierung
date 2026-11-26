@@ -300,9 +300,9 @@ def _forecast(raw: dict) -> dict:
 
 
 def _termine(raw: dict) -> dict:
-    """Müllabfuhr und Termine: Schalter, Vorlauf, Vorabend-Stunde und Art je Kalender."""
+    """Müllabfuhr und Termine: Schalter, Vorlauf, Vorabend-Stunde, Art, Farbe und Name je Kalender."""
     out = copy.deepcopy(DEFAULT_LAYOUT["termine"])
-    for key in ("enabled", "header", "saver"):
+    for key in ("enabled", "header", "saver", "page"):
         if isinstance(raw.get(key), bool):
             out[key] = raw[key]
     out["days"] = _int(raw.get("days"), 1, 14, out["days"])
@@ -312,6 +312,16 @@ def _termine(raw: dict) -> dict:
         e = _entity(eid)
         if e.startswith("calendar.") and kind in ("waste", "event", "-"):
             out["cals"][e] = kind
+    colors = raw.get("colors") if isinstance(raw.get("colors"), dict) else {}
+    for eid, color in list(colors.items())[:100]:
+        e = _entity(eid)
+        if e.startswith("calendar.") and isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            out["colors"][e] = color.lower()
+    names = raw.get("names") if isinstance(raw.get("names"), dict) else {}
+    for eid, name in list(names.items())[:100]:
+        e = _entity(eid)
+        if e.startswith("calendar.") and isinstance(name, str) and name.strip():
+            out["names"][e] = name.strip()[:40]
     return out
 
 
