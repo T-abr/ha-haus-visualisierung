@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.22.0 – 2026-11-26
+
 ### Neu
 - **Seite „Automationen“ (nur Administratoren):** listet alle Automationen von Home Assistant mit Bereich, Beschreibung und „zuletzt ausgelöst“, mit Suche und Schalter zum Aktivieren/Deaktivieren (live, auch bei Änderungen in Home Assistant). „Neue Automation“ öffnet ein Kurzformular für einfache Fälle: Name, ein Auslöser (Uhrzeit, Sonnenauf-/-untergang mit Versatz, Gerät ändert Zustand) und eine Aktion (ein-/aus-/umschalten, Szene, Benachrichtigung); gespeichert wird über die Konfigurations-API von Home Assistant, wie im Editor. „Im HA-Editor“ und „Bearbeiten“ springen in den Automationseditor von Home Assistant. Nicht-Administratoren sehen die Seite nicht, die neuen Websocket-Befehle `automations` und `automation_set` lehnen sie ab.
 - **Alarm-Vollbild am Wanddisplay** (Backlog 24, braucht Firmware 0.8.0): Ein neuer Alarm (Stufe „Alarm“, weder quittiert noch stumm) füllt den Bildschirm rot mit Meldung, Raum bzw. Details und Uhrzeit („seit 14:32“), bei mehreren Alarmen „+ 2 weitere Alarme“. Am Gerät „Quittieren“ und „1 h stumm“ wie im Panel; im Protokoll steht „Display Flur“ als Benutzer. Das Display wird hell, auch nachts und aus dem Bildschirmschoner. Je Display unter Displays → „Alarm-Vollbild“ abschaltbar. Neuer Bereich `alarm` und Ziele `alarm:ok:<schlüssel>`/`alarm:stumm:<schlüssel>` im Display-Protokoll (Version bleibt 1, ältere Firmware ignoriert sie).
