@@ -12,6 +12,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - **Klingel-Standbilder:** Bei jedem Klingeln legt die Integration ein Bild der Klingelkamera unter `/config/haus_visualisierung/klingel` ab (mehrfaches Drücken innerhalb von 15 s = ein Bild). Bilder bleiben 7 Tage, höchstens 300; abrufbar nur angemeldet bzw. über eine signierte Adresse. Abschaltbar unter Einstellungen → Klingel → „Standbild bei jedem Klingeln merken“.
 
 ### Geändert
+- **Firmware 0.8.0 liegt bei** (Alarm-Vollbild, gemeinsame Schriftstile): Flashen aus dem Browser und Update über das Netz bieten sie an.
 - Erkennung von Klingel und Klingelkamera liegt jetzt in `klingel.py` und wird von Wanddisplay und Zeitleiste gemeinsam genutzt (Verhalten unverändert).
 
 ### Verbessert
