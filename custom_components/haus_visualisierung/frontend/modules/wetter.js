@@ -1,7 +1,7 @@
 /* Haus Visualisierung – Wettervorhersage und Beschattungshinweise nach Sonnenstand und Ausrichtung der Fenster.
  * Nur Hinweise: geschaltet wird erst, wenn jemand auf „Schließen“ tippt (mit Rückfrage). */
 
-import { esc, icon, isOn, NF0, setHtml } from "./grundlagen.js";
+import { esc, icon, isOn, NF0, setHtml, weit } from "./grundlagen.js";
 
 /* ---------- Wetterlagen ---------- */
 const W_COND = {
@@ -234,8 +234,10 @@ function updateShade(el, ctx) {
   setHtml(el.querySelector(".shsun"), az === null ? "" : elv > 0 ? `${icon("mdi:white-balance-sunny")}Sonne im ${esc(dir)}en, ${NF0.format(elv)}° hoch` : `${icon("mdi:weather-night")}Sonne untergegangen`);
   // Wetterwarnungen (DWD) aus dem Backend (sensor.haus_wetter): Überschrift, Zeitraum, Text und Empfehlung
   const ws = (h.states["sensor.haus_wetter"] && h.states["sensor.haus_wetter"].attributes.warnungen) || [];
-  setHtml(el.querySelector(".swarns"), ws.map((w) => `<details class="swarn ${w.l === "warn" ? "warn" : "info"}${w.stufe >= 3 ? " severe" : ""}"><summary>${icon(w.i || "mdi:alert")}<div><b>${esc(w.t)}</b><small>${esc(w.d || "")}</small></div></summary>
-      ${w.text ? `<p>${esc(w.text)}</p>` : ""}${w.tipp ? `<p class="tip">${esc(w.tipp)}</p>` : ""}</details>`).join(""));
+  // große Monitore: Text und Empfehlung immer sichtbar, nichts zum Aufklappen
+  const [tag, kopf] = weit() ? ["div", "div"] : ["details", "summary"];
+  setHtml(el.querySelector(".swarns"), ws.map((w) => `<${tag} class="swarn ${w.l === "warn" ? "warn" : "info"}${w.stufe >= 3 ? " severe" : ""}"><${kopf} class="swh">${icon(w.i || "mdi:alert")}<div><b>${esc(w.t)}</b><small>${esc(w.d || "")}</small></div></${kopf}>
+      ${w.text ? `<p>${esc(w.text)}</p>` : ""}${w.tipp ? `<p class="tip">${esc(w.tipp)}</p>` : ""}</${tag}>`).join(""));
   const days = res.days.slice(0, 5);
   setHtml(el.querySelector(".fcs"), days.length
     ? days.map((d, i) => `<div class="fc${hotDay(d, res.lim) ? " hot" : ""}" title="${esc(condName(d.cond))}"><small>${WD(d.date, i)}</small>${icon(condIcon(d.cond))}<b>${fin(d.hi) ? `${NF0.format(d.hi)}°` : "–"}</b><small>${fin(d.lo) ? `${NF0.format(d.lo)}°` : ""}${d.rain >= 0.5 ? ` · ${NF0.format(d.rain)} mm` : ""}</small></div>`).join("")

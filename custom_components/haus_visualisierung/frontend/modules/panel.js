@@ -1,7 +1,7 @@
 /* Haus Visualisierung – Panel: Navigation, Lebenszyklus, Gerüst und Seitenwahl. Die übrigen Methoden kommen aus den panel-*.js-Teilen. */
 
 import { DOMAIN, VERSION } from "./version.js";
-import { esc, hideHaChrome, icon, installNavGuard, isDense, NAV, panelPathOf, setText, themeFrame, UPD, withDefaults } from "./grundlagen.js";
+import { esc, hideHaChrome, icon, installNavGuard, isDense, NAV, panelPathOf, setText, themeFrame, UPD, weit, withDefaults } from "./grundlagen.js";
 import { linkMode } from "./modell.js";
 import { isRing } from "./aktualisierer.js";
 import { trendHover } from "./verlauf.js";
@@ -198,6 +198,10 @@ class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(Einstellungen
       if (this._extEl) this._extEl.narrow = n;
       if (app && isDense(this._layout) && this._view !== "extern") { this._dirty = true; this._schedule(); }
     }
+    // Schwelle „großer Monitor“ überschritten: klappbare Bereiche neu aufbauen (dort immer offen)
+    const w = weit();
+    if (this._isWide !== undefined && w !== this._isWide && this._view !== "extern") { this._dirty = true; this._schedule(); }
+    this._isWide = w;
   }
 
   _subscribe() {
@@ -268,6 +272,7 @@ class HausVisualisierungPanel extends GuteNachtMixin(AktionenMixin(Einstellungen
   _render() {
     const h = this._hass;
     if (this._isNarrow === undefined) this._isNarrow = !!this._narrowProp || (this.clientWidth || window.innerWidth) < 760;
+    this._isWide = weit();
     const L = this._layout;
     let view = this._view || L.start_view || "overview";
     const isAdmin = !!(h.user && h.user.is_admin);

@@ -1,6 +1,6 @@
 /* Haus Visualisierung – HTML-Bausteine: Kacheln, Zeilen, Raumkarten. */
 
-import { dc, dom, entName, esc, icon, isOn } from "./grundlagen.js";
+import { dc, dom, entName, esc, icon, isOn, weit } from "./grundlagen.js";
 import { CONTACT_DC, GROUP_META, PRESENCE_DC, SAFETY_DC } from "./modell.js";
 import { sparkHTML } from "./klima.js";
 
@@ -162,9 +162,11 @@ function rowsSectionHTML(h, a, kind, eids, title, ic, opts = {}) {
   if (kind === "light") actions = `<button class="gbtn" data-act="list-lights" data-eids="${list}">${icon("mdi:lightbulb-group")}<span></span></button>`;
   if (kind === "cover") actions = `<button class="gbtn" data-act="list-covers" data-svc="open_cover" data-eids="${list}">${icon("mdi:arrow-up")}</button><button class="gbtn" data-act="list-covers" data-svc="close_cover" data-eids="${list}">${icon("mdi:arrow-down")}</button>`;
   const cnt = counted ? ` data-u="gcount" data-kind="${kind}" data-eids="${list}"` : "";
-  const head = `${icon(i)}<span class="st">${esc(t)}</span><span class="gc">${opts.collapsed ? eids.length : ""}</span><span class="sp"></span>${actions}${opts.collapsed ? icon("mdi:chevron-down", "chev") : ""}`;
+  // auf großen Monitoren immer offen, ohne Aufklapp-Knopf
+  const zu = opts.collapsed && !weit();
+  const head = `${icon(i)}<span class="st">${esc(t)}</span><span class="gc">${opts.collapsed ? eids.length : ""}</span><span class="sp"></span>${actions}${zu ? icon("mdi:chevron-down", "chev") : ""}`;
   const rows = `<div class="rows">${eids.map((e) => rowHTML(h, e, a)).join("")}</div>`;
-  if (opts.collapsed) return `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>`;
+  if (zu) return `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>`;
   return `<div class="section glass"><div class="shead"${cnt}>${head}</div>${rows}</div>`;
 }
 

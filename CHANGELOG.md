@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Verbessert
+- **Auf großen Monitoren nichts mehr aufklappen.** Ab 1200 px Fensterbreite (wie das Raster auf Licht und Beschattung) sind die klappbaren Bereiche immer offen und ohne Pfeil: „Weitere“ und „Batterien“ auf den Raumseiten, „Fenster & Türen“ auf der Sicherheitsseite, „In Ordnung“ auf der Batterieseite (alle im Kompakt-Modus) sowie Text und Empfehlung der Wetterwarnungen. Beim Ändern der Fenstergröße über die Schwelle baut sich die Seite passend neu auf. Handy und Tablet bleiben wie bisher; die Einstellungen bleiben auch am großen Monitor klappbar.
+
+### Tests
+- Neuer Abschnitt `grosse_monitore_ausgeklappt` (Gruppe basis): Batterie- und Sicherheitsseite ab 1200 px ohne Aufklappen, darunter klappbar, Wechsel beim Verkleinern/Vergrößern; Wetterwarnungen ab 1200 px offen, darunter zugeklappt.
+
 ## 1.21.0 – 2026-11-25
 
 ### Neu

@@ -280,6 +280,20 @@ def seitenfuellend():
     check("F: kurze Seite füllt die Höhe", pg.evaluate(geo)["appH"] == 900)
     pg.set_viewport_size({"width": 1440, "height": 1000})
 
+@gruppe("basis")
+def grosse_monitore_ausgeklappt():
+    """Ab 1200 px sind klappbare Bereiche (Kompakt-Seiten) immer offen und ohne Aufklapp-Knopf; darunter klappbar."""
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=batterien"); pg.wait_for_timeout(400)
+    check("GM: Batterien ab 1200 px ohne <details>, ohne Pfeil", pg.locator(f"{P} .sgrid details").count() == 0
+          and pg.locator(f"{P} .sgrid .section .chev").count() == 0 and pg.locator(f"{P} .sgrid .section .rows").count() >= 1)
+    pg.goto(dense + "?view=sicherheit"); pg.wait_for_timeout(400)
+    check("GM: Sicherheit ab 1200 px ohne <details>", pg.locator(f"{P} details.section").count() == 0)
+    pg.set_viewport_size({"width": 1100, "height": 900}); pg.wait_for_timeout(500)
+    check("GM: unter 1200 px wieder klappbar (Neuaufbau beim Verkleinern)", pg.locator(f"{P} details.section:not([open])").count() >= 1)
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(500)
+    check("GM: beim Vergrößern wieder offen", pg.locator(f"{P} details.section").count() == 0)
+
 @gruppe("panels")
 def eingebettete_panels():
     # ---------- Eingebettete Panels ----------
@@ -2502,8 +2516,14 @@ def wetterwarnungen():
     pg.wait_for_timeout(400)
     w = pg.locator(f"{P} .swarn")
     check("WW: Warnung auf der Wetterkarte (Unwetter rot)", w.count() == 1 and "severe" in w.get_attribute("class") and "schwerem Gewitter" in w.inner_text())
+    check("WW: ab 1200 px Text und Empfehlung sofort sichtbar, nichts zum Aufklappen",
+          w.locator("summary").count() == 0 and "Fenster und Türen schließen" in w.inner_text())
+    pg.set_viewport_size({"width": 1100, "height": 900}); pg.wait_for_timeout(500)
+    w = pg.locator(f"{P} .swarn")
+    check("WW: unter 1200 px zugeklappt", w.locator("summary").count() == 1 and "Fenster und Türen schließen" not in w.inner_text())
     w.locator("summary").click(); pg.wait_for_timeout(150)
     check("WW: aufklappen zeigt Text und Empfehlung", "Fenster und Türen schließen" in w.inner_text())
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(300)
     al = pg.evaluate(f"(() => {{ const p = {PP}; return window.__HAUS_VIS__.evalAlertsAll(p._hass, p._model, p._layout).filter(a => a.key.startsWith('wx:')).map(a => [a.key, a.level, a.to]); }})()")
     check("WW: Meldungen im Alarmmanager", al == [["wx:dwd:gewitter", "warn", "beschattung"], ["wx:rain", "warn", "sicherheit"]])
     # feste Regel aus → keine Meldungen
