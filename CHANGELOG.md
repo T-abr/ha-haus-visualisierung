@@ -4,6 +4,14 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Szenen je Raum:** Auf der Raumseite stehen die Szenen des Raums als Knöpfe im Kopf, ein Tipp schaltet (ohne Rückfrage). Admins legen dort über „Szene anlegen“ bzw. „Szenen“ eigene Stimmungen wie Kino, Essen oder Putzen an: Lichter an/aus mit Helligkeit und Farbe oder Weißton, Rollos mit Position, Schalter an/aus. Der Editor übernimmt den aktuellen Zustand des Raums als Vorlage („Aktuellen Zustand übernehmen“), einzelne Geräte lassen sich abwählen, „Ausprobieren“ schaltet ohne zu speichern, ein Schalter legt die Szene in den Schnellzugriff (Favorit). Die Integration stellt jede Szene als `scene.haus_<raum>_<name>` bereit, im Bereich des Raums, mit gewähltem Symbol – damit auch als Kachel am Wanddisplay (ohne neue Firmware) und in Automationen. Vorhandene `scene.*` erscheinen wie bisher, jetzt ebenfalls als Knöpfe im Raumkopf und im Schnellzugriff mit ihrem eigenen Symbol.
+
+### Tests
+- Neuer Abschnitt `szenen_je_raum` (Gruppe szenen): Knöpfe im Raumkopf (Kompakt und Komfort), Editor mit Ist-Zustand, Ausprobieren, Speichern mit Favorit, Bearbeiten, Löschen, ohne Admin nur schalten.
+- Backend `test_scenes.py`: Bereinigen der Szenen, Entität mit Bereich und Symbol, Dienstaufrufe je Gerät (Farbe, Weißton, Rollo mit und ohne Positionsfunktion), Umbenennen, Ausprobieren, Löschen.
+- `test_display.py` lädt die Kern-Integration „homeassistant“ vor dem Ersetzen von `homeassistant.turn_off` (die neue Szenen-Plattform lädt sie sonst nach und überschreibt den Ersatz).
+
 ## 1.21.0 – 2026-11-25
 
 ### Neu

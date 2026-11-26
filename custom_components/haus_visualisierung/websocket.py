@@ -15,6 +15,7 @@ from .backup import export_doc, parse_doc
 from .pin import PIN_RE, Throttle, make_hash, verify
 from .const import DOMAIN, HOUSE_MODES, VERSION
 from .maintenance import parse_date
+from .scenes import async_apply, sanitize_scenes
 
 
 @callback
@@ -41,6 +42,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_backup_delete)
     websocket_api.async_register_command(hass, ws_backup_restore)
     websocket_api.async_register_command(hass, ws_export)
+    websocket_api.async_register_command(hass, ws_scene_test)
     display_setup.async_register(hass)
 
 
@@ -457,3 +459,13 @@ def ws_pin_check(hass: HomeAssistant, connection: websocket_api.ActiveConnection
         return
     _THROTTLE.fail(src)
     connection.send_result(msg["id"], {"ok": False, "wait": _THROTTLE.locked_for(src)})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/scene_test", vol.Required("ents"): dict})
+@websocket_api.async_response
+async def ws_scene_test(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Szene aus dem Editor ausprobieren, ohne sie zu speichern."""
+    sc = sanitize_scenes({"test": {"name": "Test", "ents": msg["ents"]}}).get("test")
+    calls = await async_apply(hass, sc["ents"]) if sc else 0
+    connection.send_result(msg["id"], {"calls": calls})

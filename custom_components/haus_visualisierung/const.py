@@ -138,6 +138,7 @@ DEFAULT_LAYOUT: dict = {
     },
     "alarm_actions": [],           # Aktionen (KNX, Schalter, Sirene, Durchsage, Skript) – siehe actions.py
     "confirm_quick": True,         # Schnellzugriff vor dem Ausführen bestätigen
+    "scenes": {},                  # Szenen je Raum: {id: {name, icon, area, ents: {entity_id: {...}}}} – siehe scenes.py
     "heating": {                   # Technik: Karte „Heizung“ (leere Felder = automatisch erkannt)
         "enabled": True, "area": "", "tank": [], "tank_min": 30, "tank_max": 65,
         "stove": "", "stove_pump": "", "stove_hot": 50, "curve": "", "mixer": "", "flow": "", "outdoor": "",

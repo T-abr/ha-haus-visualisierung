@@ -368,6 +368,8 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex;align-items:center;justify-cont
 .hero.slim .pbtn{padding:6px 10px;font-size:12.5px;border-radius:10px}
 .schip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px 5px 8px;border-radius:999px;background:rgba(199,155,255,.13);color:#dcc8ff;font-size:12px;border:1px solid rgba(199,155,255,.24)}
 .schip ha-icon{--mdc-icon-size:15px}.schip.flash{animation:flash .7s}
+.hero .schip{cursor:pointer}.schip.szadd{background:var(--hv-surface);color:var(--hv-dim);border-color:var(--hv-line)}
+.szbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px}
 .vstrip{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
 .vchip{display:inline-flex;align-items:center;gap:6px;padding:3px 11px 3px 3px;border-radius:999px;background:var(--hv-glass);border:1px solid var(--hv-line);font-size:12.5px;color:var(--hv-dim)}
 .vchip .tic{width:24px;height:24px;border-radius:50%}.vchip .tic ha-icon{--mdc-icon-size:15px}

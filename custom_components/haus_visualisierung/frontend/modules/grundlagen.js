@@ -15,7 +15,7 @@ const DEFAULT_LAYOUT = {
   ],
   show_energy_sensors: false, show_other: true, camera_interval: 10, glass: true,
   start_view: "overview", battery_critical: 15, battery_low: 35, density: "kompakt", header_style: "kompakt", overview_style: "auto",
-  confirm_quick: true, show_trends: true,
+  confirm_quick: true, show_trends: true, scenes: {},
   heating: { enabled: true, area: "", tank: [], tank_min: 30, tank_max: 65, stove: "", stove_pump: "", stove_hot: 50, curve: "", mixer: "", flow: "", outdoor: "",
     manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 } },
   wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "",

@@ -258,6 +258,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         if (api.layoutCb) setTimeout(() => api.layoutCb({ layout }), 0);
         return { layout, items: api.bkList() };
       }
+      if (msg.type.endsWith("/scene_test")) { api.log.push(["ws", "scene_test", msg]); return { calls: Object.keys(msg.ents || {}).length }; }
       if (msg.type.endsWith("/save")) {
         if (msg.changes) {
           // wie store.async_patch: Pfade über Objekt-Schlüssel, Listen als Ganzes
@@ -268,6 +269,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
             if (c.delete) delete o[c.path[c.path.length - 1]]; else o[c.path[c.path.length - 1]] = structuredClone(c.value);
           }
         } else layout = msg.layout;
+        api.syncScenes(layout);
         return { layout };
       }
       if (msg.type.endsWith("/display_devices")) {
@@ -384,6 +386,18 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       const d0 = new Date(); d0.setHours(12, 0, 0, 0);
       api.forecast = rows.map(([hi, lo, cond, rain], i) => ({ datetime: new Date(d0.getTime() + i * 86400000).toISOString(), temperature: hi, templow: lo, condition: cond, precipitation: rain || 0 }));
       api.fcCbs.forEach((cb) => cb({ type: "daily", forecast: api.forecast }));
+    },
+    // wie scene.py: je Szene aus dem Layout eine Entität scene.haus_<id> im Raum der Szene
+    syncScenes(L) {
+      const sc = (L && L.scenes) || {}, st = { ...hass.states }, en = { ...hass.entities };
+      for (const e of Object.keys(st)) if (st[e].attributes.haus_szene && !sc[st[e].attributes.haus_szene]) { delete st[e]; delete en[e]; }
+      for (const [id, s] of Object.entries(sc)) {
+        const e = `scene.haus_${id}`;
+        st[e] = { entity_id: e, state: (hass.states[e] || {}).state || "unknown", attributes: { friendly_name: s.name, icon: s.icon, haus_szene: id, entity_id: Object.keys(s.ents) }, last_changed: new Date().toISOString() };
+        en[e] = { entity_id: e, area_id: s.area || null, device_id: null, labels: [], hidden: false, entity_category: null, platform: "haus_visualisierung" };
+      }
+      hass.states = st; hass.entities = en;
+      api.hass = hass; setTimeout(() => listeners.forEach((l) => l({ ...hass })), 0);
     },
     set(eid, state, attrs) {
       const old = hass.states[eid];

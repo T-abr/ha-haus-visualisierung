@@ -27,6 +27,7 @@ Backend, je Datei ein Thema (der Docstring am Dateianfang erklärt es):
   (`save` nimmt `changes` = Liste geänderter Pfade, gespeichert per `store.async_patch`)
 - `alerts.py` alle Warnregeln (nur hier, das Frontend zeigt nur an), `alarms.py` Zustand/Protokoll, `actions.py` Eskalation
 - `mode.py` + `select.py` Hausmodus; `presence.py` Anwesenheits-Simulation; `appliances.py` + `sensor.py` Haushaltsgeräte
+- `scenes.py` Szenen je Raum (Bereinigen, Schalten) + `scene.py` Entitäten `scene.haus_<id>`
 - `weather.py` Wetterwarnungen; `maintenance.py` Wartung; `pin.py` PIN; `backup.py` Sicherungen
 - `display.py` Inhalte fürs Wanddisplay, `display_setup.py` Einrichten/Flashen, `update.py` Firmware-Update je Display
 
@@ -41,7 +42,7 @@ Frontend (`frontend/`):
   `panel-*.js` (Ansichten, Einstellungen, Alarmseite, Wandpanel, Klingel, Aktionen, Kompakt).
 - Fachmodule je Thema: `energie`, `klima`, `verlauf`, `rueckblick`, `strompreis`, `prognose`, `wetter`,
   `wetterwarnung`, `termine`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
-  `technik`, `wanddisplay`, `warnungen`. Gemeinsam genutzt: `basis`, `grundlagen`, `bausteine`, `modell`,
+  `technik`, `wanddisplay`, `warnungen`, `szenen` (Mixin: Raumkopf-Knöpfe und Editor). Gemeinsam genutzt: `basis`, `grundlagen`, `bausteine`, `modell`,
   `bindungen`, `aktualisierer`, `stile` (Änderungen daran lösen alle Bedienprüfungen aus).
 - Frontend-Version: `modules/version.js` (setzt `bump_version.py` mit). Das Release-ZIP legt `.js.gz` daneben.
 

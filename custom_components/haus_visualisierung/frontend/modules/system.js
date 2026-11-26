@@ -45,6 +45,7 @@ function layoutRefs(L) {
   (L.alarm_actions || []).forEach((a, i) => add(a.entity, `Aktion ${a.name || i + 1}`, "alarme"));
   Object.entries(L.pins || {}).forEach(([, l]) => (l || []).forEach((e) => add(e, "Raum-Pin", "raeume")));
   (L.favorites || []).forEach((e) => add(e, "Favorit", "raeume"));
+  Object.values(L.scenes || {}).forEach((sc) => Object.keys(sc.ents || {}).forEach((e) => add(e, `Szene ${sc.name}`, "raeume")));
   (L.displays || []).forEach((d) => {
     (d.tiles || []).forEach((t) => { if (typeof t === "string" && t.startsWith("entity:")) add(t.slice(7), `Display ${d.name} · Kachel`, "displays"); });
     (d.custom || []).forEach((pg) => (pg.tiles || []).forEach((t) => add(t && t.entity, `Display ${d.name} · ${pg.name}`, "displays")));
