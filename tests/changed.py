@@ -41,6 +41,7 @@ GRUPPEN_FUER = {
     "modules/rueckblick.js": {"rueckblick"},
     "modules/geraete.js": {"geraete"},
     "modules/wartung.js": {"wartung"},
+    "modules/automationen.js": {"automationen"},
     "modules/wanddisplay.js": {"displays"},
     "modules/standard.js": {"standard"},
     "modules/system.js": {"system"},

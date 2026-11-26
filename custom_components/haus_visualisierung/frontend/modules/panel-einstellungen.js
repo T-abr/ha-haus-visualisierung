@@ -19,6 +19,7 @@ import { wxSettingsHTML } from "./wetterwarnung.js";
 import { problems, systemFile, systemSettingsHTML } from "./system.js";
 import { advanced, allLabel, markDirty, openSec, searchHTML, sectionize } from "./einstellungen.js";
 import { headerOf } from "./solar.js";
+import { autoInput } from "./automationen.js";
 
 /* ---------- Einstellungen: Reiter und Sortieren ---------- */
 const SET_TABS = [["raeume", "Räume", "mdi:floor-plan"], ["alarme", "Alarme", "mdi:shield-home-outline"], ["meldungen", "Meldungen", "mdi:cellphone-message"], ["energie", "Energie", "mdi:solar-power-variant"], ["technik", "Technik", "mdi:heat-pump-outline"], ["displays", "Wandpanel & Displays", "mdi:tablet-dashboard"], ["darstellung", "Darstellung", "mdi:tune-variant"], ["system", "Prüfen & Sichern", "mdi:clipboard-check-outline"]];
@@ -120,7 +121,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const autoH = headerOf(this._hass, { header: {} });
     const ent = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span>
       <input class="inp w" list="dl-sensor" data-set="header.${key}" value="${esc(D.header[key] || "")}" placeholder="${autoH[key] ? `leer = automatisch: ${esc(autoH[key])}` : "sensor.…"}"></div>`;
-    const views = [["overview", "Übersicht"], ...NAV.slice(1).map(([k, t]) => [k, t])];
+    const views = [["overview", "Übersicht"], ...NAV.slice(1).filter(([k]) => k !== "automationen").map(([k, t]) => [k, t])]; // Automationen: nur Admins, keine Startseite für alle
 
     let body = "";
     if (tab === "raeume") body = `${dlAll}
@@ -739,6 +740,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     super._onChange(e);
     const t = e.target;
     if (t.dataset && t.dataset.bkFile && e.type === "change") { systemFile(this, t); return; }
+    if (t.dataset && t.dataset.auto) { autoInput(this, t, e); return; }
     if (t.dataset && t.dataset.setSearch) {
       // Suche: Ergebnisliste neu füllen, ohne die Seite neu aufzubauen (Fokus bleibt im Feld)
       if (e.type !== "input") return;

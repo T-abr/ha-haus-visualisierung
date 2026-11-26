@@ -375,6 +375,7 @@ const NAV = [
   ["alarme", "Alarme", "mdi:bell-ring-outline"],
   ["batterien", "Batterien", "mdi:battery-heart-variant"],
   ["wartung", "Wartung", "mdi:wrench-clock"],
+  ["automationen", "Automationen", "mdi:robot"], // nur Administratoren
 ];
 
 /** Aktualisierer je data-u: { watch, run }. Gefüllt in bindungen.js, damit Klima- und Energie-Seite

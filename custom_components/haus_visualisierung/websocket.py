@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from homeassistant.util import dt as dt_util
 
-from . import display_setup
+from . import automations, display_setup
 from .backup import export_doc, parse_doc
 from .pin import PIN_RE, Throttle, make_hash, verify
 from .const import DOMAIN, HOUSE_MODES, VERSION
@@ -42,6 +42,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_backup_restore)
     websocket_api.async_register_command(hass, ws_export)
     display_setup.async_register(hass)
+    automations.async_register(hass)
 
 
 def _payload(hass: HomeAssistant) -> dict[str, Any]:

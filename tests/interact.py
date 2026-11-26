@@ -2254,6 +2254,80 @@ def wartung():
     check("WT: alle Aufgaben gelöscht – keine Seite Wartung mehr", pg.locator(f"{P} .wtask").count() == 0 and pg.locator(f'{P} .nav[data-to="wartung"]').count() == 0)
 
 
+@gruppe("automationen")
+def automationen():
+    # ---------- Automationen: nur Administratoren, an/aus, Suche, einfache Automation anlegen, HA-Editor ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense); pg.wait_for_timeout(500)
+    pg.evaluate("""(() => { const a = window.__api; a.autoMeta = { 'automation.flurlicht_abends': { area: 'Flur', description: 'Licht bei Sonnenuntergang' } };
+      a.set('automation.flurlicht_abends', 'on', { friendly_name: 'Flurlicht abends', id: '1001', last_triggered: new Date(Date.now() - 7200000).toISOString(), mode: 'single' });
+      a.set('automation.rollos_morgens', 'off', { friendly_name: 'Rollos morgens', id: '1002', last_triggered: null, mode: 'single' });
+      a.set('automation.alt_yaml', 'on', { friendly_name: 'Alte YAML-Regel', last_triggered: null }); })()""")
+    nav = pg.locator(f'{P} .nav[data-to="automationen"]')
+    check("AU: Seite Automationen in der Navigation (Admin)", nav.count() == 1)
+    nav.click(); pg.wait_for_timeout(400)
+    rows = pg.locator(f"{P} .aurow")
+    check("AU: Liste vom Backend, nach Name sortiert", rows.count() == 3 and [x.split("\n")[0] for x in rows.locator(".wtx b").all_inner_texts()] == ["Alte YAML-Regel", "Flurlicht abends", "Rollos morgens"])
+    check("AU: Zusammenfassung", "3 Automationen · 2 aktiv" in pg.locator(f"{P} .ptitle .psub").inner_text())
+    fl = pg.locator(f'{P} .aurow[data-eid="automation.flurlicht_abends"]')
+    check("AU: Bereich, Beschreibung und zuletzt ausgelöst", "Flur · Licht bei Sonnenuntergang" in fl.inner_text() and "vor 2 Std." in fl.inner_text())
+    check("AU: Bearbeiten springt in den HA-Editor; YAML ohne id nicht", fl.locator('[data-act=nav-raw]').get_attribute("data-path") == "/config/automation/edit/1001"
+          and pg.locator(f'{P} .aurow[data-eid="automation.alt_yaml"] [data-act=nav-raw]').count() == 0)
+    # Deaktivieren über das Backend; Zustand kommt live zurück
+    fl.locator(".tgl").click(); pg.wait_for_timeout(300)
+    calls = [x[2] for x in pg.evaluate("window.__api.log") if x[0] == "ws" and x[1] == "automation_set"]
+    check("AU: Schalter schickt automation_set ans Backend", len(calls) == 1 and calls[0]["entity_id"] == "automation.flurlicht_abends" and calls[0]["enabled"] is False)
+    check("AU: Zeile und Zusammenfassung zeigen aus", not fl.locator("input").is_checked() and "on" not in fl.get_attribute("class").split() and "1 aktiv" in pg.locator(f"{P} .ptitle .psub").inner_text())
+    pg.locator(f'{P} .aurow[data-eid="automation.rollos_morgens"] .tgl').click(); pg.wait_for_timeout(300)
+    check("AU: Aktivieren", pg.evaluate("window.__api.hass.states['automation.rollos_morgens'].state") == "on")
+    # Änderung von außen (z. B. in Home Assistant) erscheint ohne Neuaufbau
+    pg.evaluate("window.__api.set('automation.flurlicht_abends', 'on', { last_triggered: new Date().toISOString() })"); pg.wait_for_timeout(200)
+    check("AU: Live-Zustand und „gerade eben“", fl.locator("input").is_checked() and "gerade eben" in fl.inner_text())
+    # Suche blendet nur Zeilen aus
+    pg.locator(f"{P} .ausearch").fill("flur"); pg.wait_for_timeout(150)
+    check("AU: Suche nach Name/Bereich", pg.locator(f"{P} .aurow:visible").count() == 1 and pg.locator(f"{P} .auempty:visible").count() == 0)
+    pg.locator(f"{P} .ausearch").fill("gibtsnicht"); pg.wait_for_timeout(150)
+    check("AU: Suche ohne Treffer – Hinweis", pg.locator(f"{P} .aurow:visible").count() == 0 and pg.locator(f"{P} .auempty:visible").count() == 1)
+    pg.locator(f"{P} .ausearch").fill(""); pg.wait_for_timeout(150)
+    # Einfache Automation: Pflichtfelder, Sonnenuntergang mit Versatz, Licht einschalten
+    pg.locator(f'{P} [data-act=auto-form][data-open="1"]').click(); pg.wait_for_timeout(200)
+    check("AU: Kurzformular öffnet", pg.locator(f"{P} .auform").count() == 1)
+    pg.locator(f"{P} [data-act=auto-create]").click(); pg.wait_for_timeout(200)
+    check("AU: ohne Namen nicht angelegt", "Namen" in pg.locator(f"{P} .toast").inner_text() and not pg.evaluate("window.__api.autoCreated"))
+    pg.locator(f'{P} .auform [data-auto="name"]').fill("Flur an bei Dämmerung")
+    pg.locator(f'{P} .auform [data-auto="trig"]').select_option("sun"); pg.wait_for_timeout(200)
+    check("AU: Auslöser Sonne zeigt Auswahl und Versatz, Name bleibt", pg.locator(f'{P} .auform [data-auto="offset"]').count() == 1 and pg.locator(f'{P} .auform [data-auto="name"]').input_value() == "Flur an bei Dämmerung")
+    pg.locator(f'{P} .auform [data-auto="offset"]').fill("-30")
+    pg.locator(f'{P} .auform [data-auto="aEnt"]').fill("light.flur_decke")
+    pg.locator(f"{P} [data-act=auto-create]").click(); pg.wait_for_timeout(400)
+    cr = pg.evaluate("window.__api.autoCreated") or []
+    check("AU: Konfiguration wie in Home Assistant", len(cr) == 1 and cr[0]["alias"] == "Flur an bei Dämmerung" and cr[0]["trigger"] == [{"platform": "sun", "event": "sunset", "offset": "-00:30:00"}]
+          and cr[0]["action"] == [{"service": "homeassistant.turn_on", "target": {"entity_id": "light.flur_decke"}}] and cr[0]["id"])
+    check("AU: neue Automation in der Liste, Formular zu", pg.locator(f"{P} .aurow").count() == 4 and pg.locator(f"{P} .auform").count() == 0 and "Flur an bei Dämmerung" in pg.locator(f"{P} .wlist").inner_text())
+    # Benachrichtigung ohne Text wird abgelehnt; Zustands-Auslöser
+    cfg = pg.evaluate("""(() => { const p = document.querySelector('haus-visualisierung-panel'), f = window.__HAUS_VIS__.formConfig;
+      const base = { name: 'Test', desc: '', trig: 'state', tEnt: 'light.flur_decke', tTo: 'on', at: '', sun: 'sunset', offset: 0, act: 'notify', aEnt: '', notify: 'mobile_app_pixel', msg: '' };
+      return [f(base, p._hass).error || '', f({ ...base, msg: 'Licht an' }, p._hass).config, f({ ...base, trig: 'time', at: '7:05', act: 'scene', aEnt: 'light.flur_decke' }, p._hass).error || '']; })()""")
+    check("AU: Benachrichtigung braucht Text", "Text" in cfg[0])
+    check("AU: Zustands-Auslöser und notify", cfg[1]["trigger"] == [{"platform": "state", "entity_id": "light.flur_decke", "to": "on"}] and cfg[1]["action"] == [{"service": "notify.mobile_app_pixel", "data": {"message": "Licht an"}}])
+    check("AU: Szene verlangt scene.*", "Szene" in cfg[2])
+    # Handy: nichts ragt heraus (mit offenem Formular)
+    pg.locator(f'{P} [data-act=auto-form][data-open="1"]').click(); pg.wait_for_timeout(200)
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    check("AU: Handy – nichts ragt aus der Seite", not pg.evaluate(WIDE))
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    # HA-Editor für alles andere
+    pg.locator(f'{P} .ptitle [data-act=nav-raw]').click(); pg.wait_for_timeout(200)
+    check("AU: „Im HA-Editor“ öffnet neue Automation", pg.evaluate("location.pathname") == "/config/automation/edit/new")
+    # Kein Administrator: keine Navigation, Adresse führt zur Übersicht, Backend lehnt ab
+    pg.goto(dense + "?view=automationen"); pg.wait_for_timeout(500)
+    pg.evaluate(f"(() => {{ window.__api.hass.user.is_admin = false; const p = {PP}; p._dirty = true; p._schedule(); }})()"); pg.wait_for_timeout(300)
+    check("AU: Nicht-Admin – keine Seite in der Navigation, Übersicht statt Liste", pg.locator(f'{P} .nav[data-to="automationen"]').count() == 0 and pg.locator(f"{P} .aurow").count() == 0)
+    err = pg.evaluate("window.__api.hass.callWS({ type: 'x/automation_set', entity_id: 'automation.rollos_morgens', enabled: false }).then(() => '', (e) => e.code)")
+    check("AU: Nicht-Admin – Schalten abgelehnt", err == "unauthorized")
+    pg.evaluate("window.__api.hass.user.is_admin = true")
+
+
 @gruppe("displays")
 def displays():
     # ---------- Wanddisplays: Reiter „Displays“, Seiten, Kacheln, Entität, Speichern ----------

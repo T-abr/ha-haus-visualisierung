@@ -28,6 +28,9 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   hervorgehoben, dazu Termine von heute und morgen; aus Kalendern in Home Assistant (z. B. Waste Collection Schedule).
 - **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
   Fälligkeit auf der Seite „Wartung“, „Erledigt“ für alle Benutzer, fällige Aufgaben als Hinweis in den Meldungen.
+- **Automationen** (nur für Administratoren): alle Automationen von Home Assistant mit Bereich, Beschreibung und
+  „zuletzt ausgelöst“, Suche, Schalter zum Aktivieren/Deaktivieren; neue einfache Automationen (ein Auslöser: Uhrzeit,
+  Sonne oder Zustand; eine Aktion: schalten, Szene, Benachrichtigung) direkt anlegen, alles andere im Editor von Home Assistant.
 - **Wanddisplays** (z. B. 4-Zoll-ESP32-S3 mit ESPHome): das Display ist ein Client der Visualisierung, Seiten und
   Kacheln stehen in Einstellungen → Wandpanel & Displays. **Einrichten ohne Handarbeit** im selben Reiter: Firmware aus dem
   Browser flashen (Chrome/Edge über HTTPS, Firmware liegt der Integration bei), WLAN per Improv, Gerät übernehmen

@@ -180,12 +180,21 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     formatEntityState: fmt,
     callService: async (d, svc, data) => { api.log.push([d, svc, data]); api.applyService(d, svc, data); },
     // Kalender-API: GET calendars/<entity>?start=…&end=… → Termine aus api.calEvents (Tests setzen sie)
-    callApi: async (method, path) => {
+    callApi: async (method, path, data) => {
       api.log.push(["api", method, path]);
       const m = String(path).match(/^calendars\/([^?]+)\?/);
       if (method === "GET" && m) {
         if (api.calFail) throw new Error("Kalender nicht erreichbar");
         return api.calEvents[decodeURIComponent(m[1])] || [];
+      }
+      // Automation anlegen (Konfigurations-API von Home Assistant): Zustand erscheint wie nach dem Neuladen
+      const ac = String(path).match(/^config\/automation\/config\/(.+)$/);
+      if (method === "POST" && ac) {
+        if (!hass.user.is_admin) throw new Error("Unauthorized");
+        api.autoCreated = [...(api.autoCreated || []), data];
+        const slug = String(data.alias).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "neu";
+        api.set(`automation.${slug}`, "on", { friendly_name: data.alias, id: ac[1], last_triggered: null, mode: data.mode });
+        return { result: "ok" };
       }
       throw new Error(`unbekannt: ${method} ${path}`);
     },
@@ -284,6 +293,20 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
         Object.assign(d, { flow_id: null, entry_id: d.entry_id || `e-${d.name}`, allowed: true, ready: true, version: "0.2.0", host: "192.168.1.50" });
         return { ok: true, entry_id: d.entry_id, name: d.name };
       }
+      // Automationen (wie automations.py): Liste aus den Zuständen, Schalten nur als Administrator
+      if (msg.type.endsWith("/automations") || msg.type.endsWith("/automation_set")) {
+        api.log.push(["ws", msg.type.split("/")[1], msg]);
+        if (!hass.user.is_admin) { const e = new Error("Unauthorized"); e.code = "unauthorized"; throw e; }
+        if (msg.type.endsWith("/automation_set")) {
+          if (!hass.states[msg.entity_id]) { const e = new Error("Automation nicht gefunden"); e.code = "not_found"; throw e; }
+          api.set(msg.entity_id, msg.enabled ? "on" : "off");
+          return { entity_id: msg.entity_id, state: hass.states[msg.entity_id].state };
+        }
+        return { automations: Object.values(hass.states).filter((st) => st.entity_id.startsWith("automation."))
+          .map((st) => ({ entity_id: st.entity_id, name: st.attributes.friendly_name || st.entity_id, state: st.state, id: st.attributes.id ?? null,
+            last_triggered: st.attributes.last_triggered || null, mode: st.attributes.mode || "single", area: (api.autoMeta[st.entity_id] || {}).area || "", description: (api.autoMeta[st.entity_id] || {}).description || "" }))
+          .sort((a, b) => a.name.localeCompare(b.name, "de")) };
+      }
       if (msg.type.endsWith("/maintenance_done")) {
         // Wartungsplaner: wie websocket.py – heute erledigt bzw. letztes Erledigt zurücknehmen, Stand an das Abo
         api.log.push(["ws", "maintenance_done", msg]);
@@ -380,6 +403,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     // Vorhersage (täglich): heute, morgen … – mild; Tests setzen mit fcSet([[hoch, tief, Lage], …]) andere Werte
     forecast: [], fcCbs: [],
     calEvents: {}, calFail: false,
+    autoMeta: {}, // Automationen: Bereich und Beschreibung je Entität (Tests setzen sie)
     fcSet(rows) {
       const d0 = new Date(); d0.setHours(12, 0, 0, 0);
       api.forecast = rows.map(([hi, lo, cond, rain], i) => ({ datetime: new Date(d0.getTime() + i * 86400000).toISOString(), temperature: hi, templow: lo, condition: cond, precipitation: rain || 0 }));

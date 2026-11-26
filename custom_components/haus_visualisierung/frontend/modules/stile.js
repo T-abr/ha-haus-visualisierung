@@ -1151,6 +1151,9 @@ details[open]>summary.shead{padding-bottom:2px}
 .wbtns{flex:0 0 auto;display:flex;gap:6px;align-items:center}
 .wrow.due .wdone{background:var(--hv-accent);border-color:transparent;color:#fff}
 .narrow .wrow{flex-wrap:wrap}.narrow .wbtns{width:100%;justify-content:flex-end}
+.aurow[hidden],.auempty[hidden]{display:none}.aurow:not(.on) .wtx b{color:var(--hv-dim)}.aurow.on .wic{color:var(--hv-accent)}
+.ausearch{width:100%;box-sizing:border-box}.auempty{padding:0 16px 12px}
+.aubody{padding:4px 16px 14px}.auform .srow{flex-wrap:wrap;gap:8px}.auform .shead .sbtn{margin-left:auto}.auform .srow .lbl{flex:0 0 110px;min-width:0}
 .wtask .wsi{color:var(--hv-dim);display:inline-flex}
 `;
 

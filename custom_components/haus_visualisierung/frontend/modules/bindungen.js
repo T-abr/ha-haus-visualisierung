@@ -14,6 +14,7 @@ import { priceWatch, updateWbPrice } from "./strompreis.js";
 import { termWatch, updateTermin } from "./termine.js";
 import { updateRback } from "./rueckblick.js";
 import { headerOf } from "./solar.js";
+import { autoWatch, updateAuto, updateAutoSum } from "./automationen.js";
 
 Object.assign(UPD, {
   alerts: { watch: (el, c) => alertWatch(c._model, c._layout), run: updateAlerts },
@@ -51,5 +52,7 @@ Object.assign(UPD, {
     ? [...humRooms(c._model).flatMap((a) => [a.humId, a.tempId]), ...(c._model._outClim || [])]
     : [...climRooms(c._model).map((a) => a.tempId), outdoorTempId(c._hass, c._model, c._layout), ...c._model.agg.climates]).filter(Boolean), run: updateClimTrend },
   spark: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return !a ? [] : el.dataset.kind === "h" ? [a.humId].filter(Boolean) : [a.tempId, ...a.climates].filter(Boolean); }, run: updateSpark },
+  auto: { watch: (el) => [el.dataset.eid], run: updateAuto },
+  autosum: { watch: autoWatch, run: updateAutoSum },
   trend: { watch: (el, c) => { const a = c._model.areas.get(el.dataset.area); return a ? [a.tempId, a.humId].filter(Boolean) : []; }, run: updateTrend },
 });
