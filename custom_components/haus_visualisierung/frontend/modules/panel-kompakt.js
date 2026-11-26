@@ -1,7 +1,7 @@
 /* Haus Visualisierung – Kompakt-Seiten (Dichte „kompakt“): Zeilen statt Kacheln.
  * Wird in panel.js mit den anderen Teilen zur Klasse des Panels zusammengesetzt. */
 
-import { dom, entName, esc, icon, isOn, num } from "./grundlagen.js";
+import { dom, entName, esc, icon, isOn, num, weit } from "./grundlagen.js";
 import { CTRL_DOMAINS, rowHTML, rowsSectionHTML, tileHTML, vchipHTML } from "./bausteine.js";
 import { alertsCardHTML } from "./warnungen.js";
 import { trendCardHTML } from "./verlauf.js";
@@ -124,6 +124,7 @@ const KompaktMixin = (Base) => class extends Base {
     const camLink = (this._layout.links || []).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
     const sec = (title, ic, list, collapsed) => {
       if (!list.length) return "";
+      collapsed = collapsed && !weit(); // große Monitore: immer offen
       const rows = `<div class="rows">${list.map(([a, e]) => rowHTML(h, e, a, { sub: a.name })).join("")}</div>`;
       const head = `${icon(ic)}<span class="st">${title}</span><span class="gc">${list.length}</span><span class="sp"></span>${collapsed ? icon("mdi:chevron-down", "chev") : ""}`;
       return collapsed ? `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>` : `<div class="section glass"><div class="shead">${head}</div>${rows}</div>`;
@@ -147,6 +148,7 @@ const KompaktMixin = (Base) => class extends Base {
     const ok = list.filter((b) => b.v === null || b.v >= L.battery_low);
     const sec = (title, ic, items, collapsed) => {
       if (!items.length) return "";
+      collapsed = collapsed && !weit(); // große Monitore: immer offen
       const rows = `<div class="rows">${items.map((b) => rowHTML(h, b.eid, m.areas.get(b.areaId), { sub: (m.areas.get(b.areaId) || {}).name || "Ohne Bereich" })).join("")}</div>`;
       const head = `${icon(ic)}<span class="st">${title}</span><span class="gc">${items.length}</span><span class="sp"></span>${collapsed ? icon("mdi:chevron-down", "chev") : ""}`;
       return collapsed ? `<details class="section glass"><summary class="shead">${head}</summary>${rows}</details>` : `<div class="section glass"><div class="shead">${head}</div>${rows}</div>`;

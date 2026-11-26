@@ -382,4 +382,9 @@ const NAV = [
  *  ohne Ringabhängigkeit nachladen können. */
 const UPD = {};
 
-export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, instant, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, outdoorSensor, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, withDefaults };
+
+/** Großer Monitor (wie die Raster ab 1200 px in stile.js): klappbare Bereiche sind dort immer offen, ohne Aufklapp-Knopf. */
+const WEIT_MQ = "(min-width:1200px)";
+const weit = () => typeof matchMedia === "function" && matchMedia(WEIT_MQ).matches;
+
+export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, instant, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, outdoorSensor, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, weit, WEIT_MQ, withDefaults };
