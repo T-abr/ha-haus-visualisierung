@@ -20,6 +20,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Kopfzeile: Prüfung, dass das Symbol in einem Badge ohne Zahl waagrecht und senkrecht mittig sitzt.
 - Neuer Abschnitt `lange_listen_mehrspaltig` (Gruppe basis): 2 Spalten bei 1280 px, 3 bei 1440 px, einspaltig unter 1200 px, Handy ohne Überstand, Batterie-Liste über die ganze Breite.
 
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 15–20 ms, Raumseite 13 ms, Licht 30 ms, Klima 35 ms, Energie 23 ms, Alarme 6 ms; hass-Setter Übersicht 27–38 µs, Unterseiten 0,4–20 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Im Rahmen der Messschwankung wie 1.22.0.
+
 ## 1.22.0 – 2026-11-26
 
 ### Neu
