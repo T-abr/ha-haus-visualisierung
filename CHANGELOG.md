@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Behoben
+- **Fotos erschienen nicht im Bildschirmschoner.** Die Integration speicherte größere Bilder abgeschnitten: Beim Download las sie nur den ersten Block der Antwort statt der ganzen Datei. Jetzt wird jedes Bild vollständig gelesen; schon gespeicherte Fotos werden beim nächsten Abruf einmal neu geladen. Außerdem fragt ein Wandpanel, das die Fotoliste vor dem ersten Abruf leer bekommen hat, alle 2 Minuten neu statt erst nach einer Stunde.
+
+### Tests
+- Backend `test_fotos.py`: großes Bild wird vollständig gespeichert, Fotos älterer Versionen werden einmal neu geladen.
+
 ## 2.0.2 – 2026-11-27
 
 ### Behoben

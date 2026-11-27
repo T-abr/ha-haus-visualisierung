@@ -170,11 +170,17 @@ async def test_sync_ck(hass: HomeAssistant, aioclient_mock) -> None:
     aioclient_mock.post(f"{CK_BASE}/public/records/resolve", json=CK_RESOLVE)
     aioclient_mock.post(f"{CK_PART}/shared/records/query", json=CK_RECORDS)
     aioclient_mock.get("https://cvws.icloud-content.com/B/med1/foto.jpg", content=b"eins")
-    aioclient_mock.get("https://cvws.icloud-content.com/B/edit2/foto.jpg", content=b"zwei")
+    aioclient_mock.get("https://cvws.icloud-content.com/B/edit2/foto.jpg", content=b"z" * 300_000)
     await hass.data[DOMAIN]["store"].async_patch([{"path": ["wallpanel", "photos"], "value": CK_LINK}])
     await album.async_refresh()
     assert album.error == "" and len(album.photos) == 2
     assert (album.dir / album.photos[0]["file"]).read_bytes() == b"eins"
+    assert len((album.dir / album.photos[1]["file"]).read_bytes()) == 300_000   # ganz, nicht nur der erste Block
+    # von einer älteren Version gespeichert (ohne „full“, evtl. abgeschnitten): wird einmal neu geladen
+    album.photos[1].pop("full")
+    n = aioclient_mock.call_count
+    await album.async_refresh()
+    assert aioclient_mock.call_count == n + 3 and album.photos[1]["full"]   # resolve, query, ein Bild
     query = [c for c in aioclient_mock.mock_calls if "records/query" in str(c[1])][0]
     assert "publicAccessAuthToken=TOKEN123" in str(query[1]) and '"SharedCollection-TEST"' in query[2]
 
