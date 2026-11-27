@@ -4,6 +4,21 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Einrichtungsassistent im Panel.** Startet beim ersten Öffnen (nur Administratoren) und geht Räume, Energie, Wetter, Sicherheit, Heizung & Wallbox, Kalender und Push durch. Jeder Schritt zeigt, was erkannt wurde und woher (Label, Energie-Dashboard, Integration, Name); zur Auswahl stehen nur passende Entitäten nach Art bzw. Einheit (z. B. Leistung in W/kW, Preis je kWh, Temperatur). Gespeichert wird beim Schrittwechsel, nur die Änderungen. Erneut starten zum Ergänzen: Einstellungen → „Assistent“. Bestehende Installationen sehen ihn nicht ungefragt.
+- **Erkennung ohne Namen.** Energiesensoren aus dem Energie-Dashboard von Home Assistant (Leistungssensor am Gerät des Zählers bzw. `stat_rate`), Wallboxen über ihre Integration (EVCC, go-e, Easee, Wallbox, KEBA, openWB, OCPP, Zaptec …) samt aller Entitäten des Geräts, Müllkalender über die Integration (z. B. Waste Collection Schedule), Klingeln über die Geräteklasse jeder Integration. Netz-Leistung wird jetzt ebenfalls automatisch gefunden; nach Namen nur noch als letzte Stufe.
+- **Labels von Home Assistant als Zuordnung:** „Haus PV“, „Haus Netz“, „Haus Verbrauch“, „Haus Akku“, „Haus Akku Leistung“, „Haus Strompreis“, „Haus Wallbox“, „Haus Heizung“, „Haus Speicher“, „Haus Kamin“, „Haus Kamin Pumpe“, „Haus Vorlauf“, „Haus Außen“, „Haus Regensensor“, „Haus Markise“, „Haus Klingel“, „Haus Müll“ – an Entität, Gerät oder (Räume) Bereich; Liste im README und im Assistenten.
+- **Heizungskarte aus Bausteinen:** Speicher, Kamin und Heizkurve einzeln abschaltbar, neuer Baustein „Werte“ für beliebige Entitäten (Wärmepumpe, Gastherme, Rücklauf …; leer = Label „Haus Heizung“).
+- **Lademodi der Wallbox frei benennen** (Einstellungen → Energie → Wallbox, auch im Assistenten); „-“ blendet einen Modus aus. Ohne Eintrag wie bisher die EVCC-Namen.
+- **HACS:** zusätzliches Release-ZIP `haus_visualisierung.zip` für HACS (`zip_release`, mit vorgepackten `.js.gz`), README als Infoseite mit Bildern, Installation über HACS.
+
+### Geändert
+- Standard-Verknüpfungen „Solar“ und „Kameras“ (und jede andere auf ein Panel) erscheinen nur, wenn das Panel installiert ist.
+
+### Tests
+- Neue Gruppe `assistent`: erster Start, Erkanntes aus dem Energie-Dashboard, Auswahl nach Art, Speichern je Schritt, Fertig, erneut starten; Label „Haus Heizung“ → Baustein „Werte“, Kamin abschaltbar, Lademodi benennen/ausblenden, Standard-Link ohne Panel ausgeblendet.
+- Backend `test_einrichtung.py`: Status des Assistenten (neu/bestehend), Bausteine und Lademodi geprüft, Rollen-Labels an Entität und Gerät.
+
 ## 1.23.1 – 2026-11-27
 
 ### Geändert

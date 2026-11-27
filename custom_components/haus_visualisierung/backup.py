@@ -182,6 +182,8 @@ class BackupBook:
     async def async_restore(self, layout: dict, maintenance: dict | None, reason: str = "wiederherstellen") -> dict:
         """Stand übernehmen: vorher den aktuellen sichern, dann Layout speichern und Wartungsstand setzen."""
         self.create(reason)
+        if isinstance(layout, dict) and "setup" not in layout:
+            layout = {**layout, "setup": {"done": True}}  # Sicherung von vor dem Einrichtungsassistenten
         saved = await self.layout_store.async_save(layout)
         if maintenance is not None and self.maintenance is not None:
             self.maintenance.replace(clean_maintenance(maintenance))

@@ -81,6 +81,7 @@ function buildModel(h, L) {
       id: a.area_id, name: a.name, icon: null, picture: a.picture || null,
       floorId: a.floor_id || null, tempId: a.temperature_entity_id || null, humId: a.humidity_entity_id || null,
       hidden: hiddenAreas.has(a.area_id), groups: {}, pins: [], batteries: [], watch: [],
+      outdoor: (a.labels || []).includes("haus_aussen"),
     });
     areas.get(a.area_id).icon = areaIcon({ name: a.name, icon: a.icon });
   }
@@ -170,8 +171,8 @@ function buildModel(h, L) {
   if (loose.length) {
     if (!floors.length) floors.push({ id: "_all", name: "Räume", level: 0, outdoor: false, areas: loose, virtual: true });
     else {
-      const outdoorLoose = loose.filter((a) => OUTDOOR_RE.test(a.name));
-      const indoorLoose = loose.filter((a) => !OUTDOOR_RE.test(a.name));
+      const outdoorLoose = loose.filter((a) => a.outdoor || OUTDOOR_RE.test(a.name));
+      const indoorLoose = loose.filter((a) => !a.outdoor && !OUTDOOR_RE.test(a.name));
       if (indoorLoose.length) floors.push({ id: "_loose", name: "Weitere Bereiche", level: 0, outdoor: false, areas: indoorLoose, virtual: true });
       if (outdoorLoose.length) floors.push({ id: "_out", name: "Außen", level: 0, outdoor: true, areas: outdoorLoose, virtual: true });
     }
@@ -190,7 +191,7 @@ function buildModel(h, L) {
   const agg = {
     lights: all("light"), covers: all("cover").filter((e) => !["garage", "gate", "door"].includes(dc(h.states[e]))),
     contacts: all("contact"), safety: all("safety"), climates: all("climate"),
-    temps: visibleAreas.filter((a) => !OUTDOOR_RE.test(a.name) && !outdoor.some((f) => f.areas.includes(a))).map((a) => a.tempId).filter(Boolean),
+    temps: visibleAreas.filter((a) => !a.outdoor && !OUTDOOR_RE.test(a.name) && !outdoor.some((f) => f.areas.includes(a))).map((a) => a.tempId).filter(Boolean),
     batteries: batteries.filter((b) => !b.areaId || !hiddenAreas.has(b.areaId)).map((b) => b.eid),
   };
   agg.unavailable = [...new Set(visibleAreas.flatMap((a) => Object.values(a.groups).flat()))];

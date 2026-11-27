@@ -1,8 +1,9 @@
 /* Haus Visualisierung – Technik: Heizung (Speicher, Kamin, Heizkurve) und Wallbox (EVCC). */
 
-import { dc, dom, entName, esc, icon, isOn, NF0, NF1, num, outdoorSensor, powerW, setText } from "./grundlagen.js";
+import { dc, dom, entName, esc, fmtState, icon, isOn, NF0, NF1, num, outdoorSensor, powerW, setText } from "./grundlagen.js";
 import { finite } from "./verlauf.js";
 import { wbPriceHTML } from "./strompreis.js";
+import { isWallboxPlatform, labelled, labelledAreas, sameDevice } from "./erkennung.js";
 
 /* ------------------------------------------------------------------------ */
 /*  Technik: Heizung (Speicher, Kamin, Heizkurve) und Wallbox (EVCC)          */
@@ -15,7 +16,9 @@ const TANK_RE = /(speicher|puffer|boiler|tank)/i;
 const STOVE_RE = /(kamin|ofen|stove|holz)/i;
 const WB_RE = /(evcc|wallbox|wall_box|go_?e|easee|wattpilot|openwb|keba|ladestation|ladepunkt|loadpoint|charger)/i;
 const TANK_POS = (s) => (/(oben|top|ober)/i.test(s) ? 0 : /(mitte|middle|mid)/i.test(s) ? 1 : /(unten|bottom|unter)/i.test(s) ? 2 : 1.5);
+/* Bekannte Lademodi (EVCC); andere Wallboxen: Namen je Option in Einstellungen → Wallbox („-“ blendet aus) */
 const WB_MODES = { off: "Aus", now: "Sofort", minpv: "Min + PV", pv: "PV" };
+const wbModeName = (W, o) => { const n = ((W && W.mode_names) || {})[o]; return n || WB_MODES[String(o).toLowerCase()] || String(o); };
 
 function entArea(h, e) {
   const r = (h.entities || {})[e];
@@ -34,30 +37,41 @@ function techCfg(h, L, areas) {
   const isTemp = (e) => tempSet.has(e);
   const pick = (v) => (v && S(v) ? v : "");
   const byAreaName = (re) => [...areas.values()].find((a) => re.test(a.name));
+  const byAreaLabel = (id) => labelledAreas(h, id).map((x) => areas.get(x)).find(Boolean);
+  const lab = (id, ok = () => true) => labelled(h, id).filter(ok);
   const used = new Set();
   // ---- Heizung ----
   const H = L.heating || {};
   let heat = null;
   if (H.enabled !== false) {
-    const curve = pick(H.curve) || ids.find((e) => e.startsWith("sensor.") && S(e).attributes.slope !== undefined && (S(e).attributes.curve !== undefined || S(e).attributes.heating_limit !== undefined)) || "";
+    const curveOn = (H.parts || {}).curve !== false;
+    const curve = !curveOn ? "" : pick(H.curve) || ids.find((e) => e.startsWith("sensor.") && S(e).attributes.slope !== undefined && (S(e).attributes.curve !== undefined || S(e).attributes.heating_limit !== undefined)) || "";
     const mixer = pick(H.mixer) || ids.find((e) => e.startsWith("sensor.") && S(e).attributes.feedforward !== undefined && S(e).attributes.status !== undefined) || "";
-    const tank = (H.tank || []).filter((e) => S(e)).length ? H.tank.filter((e) => S(e))
+    const tankSort = (a, b) => TANK_POS(label(a)) - TANK_POS(label(b)) || label(a).localeCompare(label(b), "de");
+    const tankLab = lab("haus_speicher", isTemp).sort(tankSort);
+    const parts = { tank: true, stove: true, curve: true, ...(H.parts || {}) };
+    const tank = !parts.tank ? [] : (H.tank || []).filter((e) => S(e)).length ? H.tank.filter((e) => S(e)) : tankLab.length ? tankLab
       : temps.filter((e) => TANK_RE.test(label(e)) && !/soll|target/i.test(label(e))).sort((a, b) => TANK_POS(label(a)) - TANK_POS(label(b)) || label(a).localeCompare(label(b), "de"));
-    const stove = pick(H.stove) || temps.find((e) => STOVE_RE.test(label(e))) || "";
-    const pump = pick(H.stove_pump) || ids.find((e) => /^(sensor|switch|fan|binary_sensor|number)\./.test(e) && STOVE_RE.test(label(e)) && /pump/i.test(label(e))) || "";
-    const flow = pick(H.flow) || temps.find((e) => /vorlauf|flow/i.test(label(e)) && !/soll|target|prim/i.test(label(e))) || "";
+    const stove = !parts.stove ? "" : pick(H.stove) || lab("haus_kamin", isTemp)[0] || temps.find((e) => STOVE_RE.test(label(e))) || "";
+    const pump = !stove ? "" : pick(H.stove_pump) || lab("haus_kamin_pumpe")[0] || ids.find((e) => /^(sensor|switch|fan|binary_sensor|number)\./.test(e) && STOVE_RE.test(label(e)) && /pump/i.test(label(e))) || "";
+    const flow = pick(H.flow) || lab("haus_vorlauf", isTemp)[0] || temps.find((e) => /vorlauf|flow/i.test(label(e)) && !/soll|target|prim/i.test(label(e))) || "";
+    // Baustein „Weitere Werte“: beliebige Entitäten (Wärmepumpe, Rücklauf, Leistung …), sonst Label „Haus Heizung“
+    const extra = (H.extra || []).filter((e) => S(e)).length ? H.extra.filter((e) => S(e)) : lab("haus_heizung").filter((e) => ![...tank, stove, pump, flow].includes(e)).slice(0, 12);
     const outdoor = pick(H.outdoor) || outdoorSensor(h, "temperature");
-    if (tank.length || stove || curve || H.manual_curve) {
-      const area = (H.area && areas.get(H.area)) || byAreaName(HEAT_AREA_RE) || areas.get(entArea(h, tank[0] || curve || flow));
-      heat = { area: area ? area.id : null, tank, stove, pump, curve, mixer, flow, outdoor };
-      [...tank, stove, pump, curve, mixer, flow].filter(Boolean).forEach((e) => used.add(e));
+    const manual = !!H.manual_curve && curveOn;
+    if (tank.length || stove || curve || manual || extra.length) {
+      const area = (H.area && areas.get(H.area)) || byAreaLabel("haus_heizung") || byAreaName(HEAT_AREA_RE) || areas.get(entArea(h, tank[0] || curve || flow || extra[0]));
+      heat = { area: area ? area.id : null, tank, stove, pump, curve, mixer, flow, outdoor, extra, manual };
+      [...tank, stove, pump, curve, mixer, flow, ...extra].filter(Boolean).forEach((e) => used.add(e));
     }
   }
   // ---- Wallbox ----
   const W = L.wallbox || {};
   let wb = null;
   if (W.enabled !== false) {
-    const cand = ids.filter((e) => WB_RE.test(label(e)));
+    // Kandidaten: Label „Haus Wallbox“ (Entität oder Gerät), Integration der Wallbox, Name – jeweils mit dem ganzen Gerät
+    const seed = [...lab("haus_wallbox"), ...ids.filter((e) => isWallboxPlatform(h, e))];
+    const cand = [...new Set([...seed, ...seed.flatMap((e) => sameDevice(h, e)), ...ids.filter((e) => WB_RE.test(label(e)))])];
     const find = (doms, re, not) => cand.find((e) => doms.includes(dom(e)) && re.test(label(e)) && !(not && not.test(label(e)))) || "";
     const power = pick(W.power) || cand.find((e) => e.startsWith("sensor.") && dc(S(e)) === "power" && /(charg|lade|power|leistung)/i.test(label(e)) && !/(pv|grid|netz|home|haus)/i.test(e)) || "";
     const mode = pick(W.mode) || cand.find((e) => /^(select|input_select)\./.test(e) && (S(e).attributes.options || []).some((o) => ["pv", "now", "minpv"].includes(String(o).toLowerCase()))) || find(["select", "input_select"], /(mode|modus)/i);
@@ -68,7 +82,7 @@ function techCfg(h, L, areas) {
     const charging = pick(W.charging) || find(["binary_sensor"], /(charging|l(ä|ae)dt)/i);
     const range = pick(W.range) || find(["sensor"], /(range|reichweite)/i);
     if (power || mode) {
-      const area = (W.area && areas.get(W.area)) || areas.get(entArea(h, power || mode)) || byAreaName(WB_AREA_RE);
+      const area = (W.area && areas.get(W.area)) || byAreaLabel("haus_wallbox") || areas.get(entArea(h, power || mode)) || byAreaName(WB_AREA_RE);
       wb = { area: area ? area.id : null, power, mode, soc, limit, energy, connected, charging, range };
       [power, mode, soc, limit, energy, connected, charging, range].filter(Boolean).forEach((e) => used.add(e));
     }
@@ -167,7 +181,7 @@ function updateHeat(el, ctx) {
     if (burning) status.push(`Kamin ${deg(t, 0)}`);
   }
   // Heizkurve
-  if (cfg.curve || H.manual_curve) {
+  if (cfg.curve || cfg.manual) {
     const st = cfg.curve && h.states[cfg.curve];
     const p = curveParams(h, cfg, L);
     const pts = curvePoints(st, p);
@@ -207,8 +221,16 @@ function updateHeat(el, ctx) {
       <div class="hpf">Steilheit ${NF1.format(p.slope)} · Niveau ${p.level > 0 ? "+" : ""}${NF1.format(p.level)} K · Raum ${deg(p.room, 0)} · Grenze ${deg(p.limit, 0)}${mx ? ` · <button class="lnk" data-act="more" data-eid="${esc(cfg.mixer)}">Mischer ${num(mx) === null ? "–" : `${NF0.format(num(mx))} %`}${mx.attributes.status ? ` · ${esc(mx.attributes.status)}` : ""}</button>` : ""}</div></div>`);
     if (soll !== null) status.push(`Vorlauf ${deg(soll, 0)}`);
   }
+  const nMain = parts.length;
+  // Weitere Werte (Baustein für Wärmepumpe, Gastherme …): Name und Zustand je Entität
+  if (cfg.extra && cfg.extra.length) {
+    parts.push(`<div class="hpanel hextra"><div class="hpt">${icon("mdi:gauge")}Werte</div><div class="hxl">${cfg.extra.map((e) => {
+      const st = h.states[e];
+      return `<button class="hx" data-act="more" data-eid="${esc(e)}"><small>${esc(entName(h, e))}</small><b>${st ? esc(fmtState(h, st)) : "–"}</b></button>`;
+    }).join("")}</div></div>`);
+  }
   el.querySelector(".heatgrid").innerHTML = parts.join("");
-  el.querySelector(".heatgrid").dataset.n = String(parts.length);
+  el.querySelector(".heatgrid").dataset.n = String(nMain || 1);
   setText(el, ".techs", status.join(" · "));
 }
 
@@ -245,7 +267,8 @@ function updateWallbox(el, ctx) {
   const enU = en ? en.attributes.unit_of_measurement || "kWh" : "";
   const txt = charging ? `Lädt mit ${NF1.format(kw ?? 0)} kW` : connected ? "Angesteckt – lädt nicht" : connected === false ? "Kein Fahrzeug" : "Bereit";
   const ms = S(cfg.mode);
-  const opts = ms ? (ms.attributes.options || []) : [];
+  const W = (ctx._layout && ctx._layout.wallbox) || {};
+  const opts = ms ? (ms.attributes.options || []).filter((o) => wbModeName(W, o) !== "-") : [];
   const limSt = S(cfg.limit), limStep = limSt && limSt.attributes.step ? Number(limSt.attributes.step) : 5;
   el.classList.toggle("charging", charging);
   el.querySelector(".wbbody").innerHTML = `
@@ -256,9 +279,9 @@ function updateWallbox(el, ctx) {
         <i class="socbar"><em style="width:${Math.max(0, Math.min(100, soc ?? 0))}%"></em>${lim !== null ? `<u style="left:${Math.max(0, Math.min(100, lim))}%"></u>` : ""}</i></button>` : ""}
       ${en ? `<button class="wbses" data-act="more" data-eid="${esc(cfg.energy)}"><small>Geladen</small><b>${enV === null ? "–" : `${NF1.format(enV)} ${esc(enU)}`}</b></button>` : ""}
     </div>
-    ${opts.length ? `<div class="wbmodes" role="group" aria-label="Lademodus">${opts.map((o) => `<button class="altab sm${ms.state === o ? " on" : ""}" data-act="select-opt" data-eid="${esc(cfg.mode)}" data-opt="${esc(o)}"><span>${esc(WB_MODES[String(o).toLowerCase()] || o)}</span></button>`).join("")}
+    ${opts.length ? `<div class="wbmodes" role="group" aria-label="Lademodus">${opts.map((o) => `<button class="altab sm${ms.state === o ? " on" : ""}" data-act="select-opt" data-eid="${esc(cfg.mode)}" data-opt="${esc(o)}"><span>${esc(wbModeName(W, o))}</span></button>`).join("")}
       ${limSt && /^(number|input_number)\./.test(cfg.limit) ? `<span class="wblim"><small>Ziel</small><button class="sbtn" data-act="num-step" data-eid="${esc(cfg.limit)}" data-step="${-limStep}" title="Ziel senken">${icon("mdi:minus")}</button><b>${lim === null ? "–" : `${NF0.format(lim)} %`}</b><button class="sbtn" data-act="num-step" data-eid="${esc(cfg.limit)}" data-step="${limStep}" title="Ziel erhöhen">${icon("mdi:plus")}</button></span>` : ""}</div>` : ""}`;
   setText(el, ".techs", charging ? `${NF1.format(kw ?? 0)} kW` : connected ? "angesteckt" : "");
 }
 
-export { curveFlow, heatCardHTML, heatHover, techCfg, techWatch, updateHeat, updateWallbox, wbCardHTML };
+export { WB_MODES, wbModeName, curveFlow, heatCardHTML, heatHover, techCfg, techWatch, updateHeat, updateWallbox, wbCardHTML };

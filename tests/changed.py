@@ -51,6 +51,8 @@ GRUPPEN_FUER = {
     "modules/pin.js": {"pin", "klingel", "alarme"},
     "modules/wetterwarnung.js": {"wetterwarnung", "system"},
     "modules/karten.js": {"karten"},  # Karten für eigene Dashboards
+    "modules/assistent.js": {"assistent"},  # Einrichtungsassistent
+    "modules/erkennung.js": {"assistent", "energie", "technik", "wetterwarnung", "termine", "klingel", "karten"},
     "karten-loader.js": {"karten"},  # Lader der Karten (auf jeder Seite von Home Assistant)
     # alle Gruppen: grundlagen, modell, basis, bausteine, aktualisierer, bindungen, hausschnitt, stile,
     # warnungen, version, panel.js, panel-ansichten, panel-aktionen, panel-einstellungen, panel-kompakt

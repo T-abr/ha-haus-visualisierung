@@ -5,6 +5,7 @@ import { axisCut, axisKey, DAY_MS, finite, longEnsure, longSeries, rangeChips, r
 import { trendEnsure, trendSeries } from "./klima.js";
 import { enPriceHTML, priceInfo, unitFactor, updateEnPrice } from "./strompreis.js";
 import { headerOf } from "./solar.js";
+import { energieAuto } from "./erkennung.js";
 
 /* ---------- Energie-Seite: Fluss, Kennzahlen, Bilanz heute, Verlauf 24 h bzw. Energie je Tag/Monat ---------- */
 /* Quellen: „Energie auf dem Dach“ (PV, Akku-Ladestand, Hausverbrauch, Netz), Speicher-Leistung und Wallbox.
@@ -26,7 +27,8 @@ function energyCfg(h, L, tech, price) {
   const pv = S(H.pv), grid = S(H.grid), house = S(H.power), soc = S(H.battery);
   const wb = (tech && tech.wb && tech.wb.power) || "";
   const lbl = (e) => `${e} ${h.states[e].attributes.friendly_name || ""}`;
-  const bat = S(E.battery_power) || Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "power" && ![pv, grid, house, wb].includes(e)
+  const A = energieAuto(h), autoBat = A.battery_power && ![pv, grid, house, wb].includes(A.battery_power) ? A.battery_power : "";
+  const bat = S(E.battery_power) || autoBat || Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === "power" && ![pv, grid, house, wb].includes(e)
     && BAT_RE.test(lbl(e)) && !BAT_NOT.test(lbl(e))) || "";
   if (!pv && !grid && !house && !bat) return null;
   return { pv, grid, house, soc, bat, wb, wbOn: (tech && tech.wb && tech.wb.charging) || "", gridInv: !!E.grid_invert, batInv: !!E.battery_invert, price: (price && price.sensor) || "" };

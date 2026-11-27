@@ -2,6 +2,7 @@
 
 import { esc, icon, NF0, NF1, num, powerW, setHidden, setHtml, setText } from "./grundlagen.js";
 import { finite, TREND_BUCKET } from "./verlauf.js";
+import { labelled } from "./erkennung.js";
 
 /* ---------- Preissensor erkennen ---------- */
 /* Erkannt wird ein Sensor mit Einheit „…/kWh“ oder „…/MWh“ (z. B. Tibber, Nordpool, EPEX Spot, Energi Data Service, evcc).
@@ -39,7 +40,8 @@ function priceCfg(h, L) {
       const cand = Object.keys(h.states).filter((e) => isPrice(e) && !SKIP_RE.test(lbl(e)));
       const score = (e) => (hasList(h.states[e]) ? 2 : 0) + (NAME_RE.test(lbl(e)) ? 1 : 0);
       cand.sort((a, b) => score(b) - score(a) || a.localeCompare(b));
-      sensor = cand[0] || ""; auto = !!sensor;
+      // Label „Haus Strompreis“ geht vor
+      sensor = labelled(h, "haus_strompreis").find(isPrice) || cand[0] || ""; auto = !!sensor;
     }
   }
   const ct = (v, d) => (finite(Number(v)) ? Number(v) / 100 : d);

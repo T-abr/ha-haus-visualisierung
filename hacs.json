@@ -1,4 +1,12 @@
 {
   "name": "Haus Visualisierung",
-  "homeassistant": "2025.1.0"
+  "homeassistant": "2025.1.0",
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "haus_visualisierung.zip",
+  "country": [
+    "DE",
+    "AT",
+    "CH"
+  ]
 }

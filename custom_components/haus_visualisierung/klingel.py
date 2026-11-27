@@ -27,6 +27,7 @@ from homeassistant.util import dt as dt_util
 
 from .alerts import UNAV
 from .const import DOMAIN
+from .erkennung import labelled
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ BELL_EVENT_RE = re.compile(r"ring|press|doorbell|klingel", re.I)
 BELL_CAM_RE = re.compile(r"entry|doorbell|klingel|haust", re.I)
 
 STORAGE_KEY = f"{DOMAIN}_klingel"
-KEEP_DAYS = 7          # Tobias, 26.11.: Standbilder eine Woche aufheben
+KEEP_DAYS = 7          # Standbilder eine Woche aufheben
 KEEP_MAX = 300         # Obergrenze, falls es sehr oft klingelt
 SNAP_GAP = 15          # Sekunden: mehrfaches Drücken kurz hintereinander = ein Bild
 SNAP_WIDTH = 640
@@ -63,9 +64,11 @@ def is_ring(old: State | None, new: State | None) -> bool:
 
 
 def find_bell(hass: HomeAssistant, cfg: dict) -> str | None:
-    """Klingel-Entität: aus den Einstellungen, sonst Ereignis „Klingel“ (UniFi Protect) bzw. passender Name."""
+    """Klingel-Entität: aus den Einstellungen, sonst Label „Haus Klingel“, Ereignis mit device_class doorbell (jede Integration) bzw. passender Name."""
     if cfg.get("entity"):
         return cfg["entity"] if hass.states.get(cfg["entity"]) else None
+    if lab := labelled(hass, "haus_klingel", ("event", "binary_sensor")):
+        return lab[0]
     states = hass.states.async_all(("event", "binary_sensor"))
     pick = next((st for st in states if st.domain == "event" and st.attributes.get("device_class") == "doorbell"), None) \
         or next((st for st in states if BELL_RE.search(st.entity_id)), None)

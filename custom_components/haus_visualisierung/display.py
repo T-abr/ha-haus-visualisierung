@@ -35,6 +35,7 @@ from homeassistant.util import dt as dt_util
 
 from .alerts import UNAV, is_on, num
 from .const import DEFAULT_LAYOUT
+from .erkennung import WASTE_PLATFORMS, labelled, platform_of
 from .klingel import find_bell, find_bell_camera, is_ring
 from .pin import KIND_TXT as PIN_TXT
 from .pin import LOCK_S as PIN_LOCK_S
@@ -627,13 +628,15 @@ class DisplayHub:
         if T.get("enabled") is False:
             return []
         out = []
+        waste_lab = set(labelled(self.hass, "haus_muell", ("calendar",)))
         for eid in sorted(self.hass.states.async_entity_ids("calendar")):
             kind = (T.get("cals") or {}).get(eid)
             if kind == "-":
                 continue
             if kind not in ("waste", "event"):
                 st = self.hass.states.get(eid)
-                kind = "waste" if WASTE_RE.search(f"{eid} {(st.attributes.get('friendly_name') if st else '') or ''}") else ""
+                kind = "waste" if eid in waste_lab or platform_of(self.hass, eid) in WASTE_PLATFORMS or WASTE_RE.search(
+                    f"{eid} {(st.attributes.get('friendly_name') if st else '') or ''}") else ""
             if kind:
                 out.append((eid, kind))
         return out

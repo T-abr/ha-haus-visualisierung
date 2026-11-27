@@ -30,6 +30,7 @@ Backend, je Datei ein Thema (der Docstring am Dateianfang erklärt es):
 - `automations.py` Seite „Automationen“ (Liste, an/aus; nur Admins); anlegen per HA-Konfigurations-API im Frontend
 - `scenes.py` Szenen je Raum (Bereinigen, Schalten) + `scene.py` Entitäten `scene.haus_<id>`
 - `weather.py` Wetterwarnungen; `maintenance.py` Wartung; `pin.py` PIN; `backup.py` Sicherungen
+- `erkennung.py` Rollen-Labels (wie `modules/erkennung.js`)
 - `klingel.py` Klingel/Kamera finden, Standbilder (7 Tage); `zeitleiste.py` Zeitleiste „Was war los?“ (Recorder + Protokoll)
 - `display.py` Inhalte fürs Wanddisplay, `display_setup.py` Einrichten/Flashen, `update.py` Firmware-Update je Display
 
@@ -40,6 +41,9 @@ Frontend (`frontend/`):
   je Schlüssel aus der Überschrift, Punkte ungespeichert, Warnzeichen aus `sec` des Einrichtungs-Checks, „Erweitert“ per
   `advanced()`, gekürzte Hinweise, Suche). Neue Abschnitte: Kurzinfo in `secSummary`, Daten in `SEC_DATA` eintragen.
   Bedienprüfungen klappen mit `auf(pg)` (steckt in `stab()`) alles auf.
+- Erkennung: `erkennung.js` (Labels `haus_*`, Plattform, Gerät, Energie-Dashboard, Standard-Links nur mit Panel); Reihenfolge
+  Einstellungen → Label → Energie-Dashboard/Integration/Gerät → Name. Neue Rolle: `ROLLEN` dort, Tabelle im README.
+  Einrichtungsassistent: `assistent.js` (Seite `einrichtung`, `setup.done`; bestehende Installationen gelten als eingerichtet).
 - `haus-visualisierung.js` Einstieg des Panels (nur beim Öffnen geladen). Panel = `modules/panel.js` plus Mixins
   `panel-*.js` (Ansichten, Einstellungen, Alarmseite, Wandpanel, Klingel, Aktionen, Kompakt).
 - Fachmodule je Thema: `energie`, `klima`, `verlauf`, `rueckblick`, `strompreis`, `prognose`, `wetter`,

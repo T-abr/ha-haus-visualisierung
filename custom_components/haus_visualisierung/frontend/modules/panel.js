@@ -24,12 +24,14 @@ import { EinstellungenMixin } from "./panel-einstellungen.js";
 import { AktionenMixin } from "./panel-aktionen.js";
 import { GuteNachtMixin } from "./gutenacht.js";
 import { SzenenMixin } from "./szenen.js";
+import { AssistentMixin, asFirstRun, asPageHTML } from "./assistent.js";
+import { activeLinks, energyPrefs } from "./erkennung.js";
 
 /* Relative module_url fremder Panels wie bisher gegen den Einstiegspunkt auflösen, nicht gegen modules/. */
 const ENTRY_URL = new URL("../haus-visualisierung.js", import.meta.url);
 
-class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(EinstellungenMixin(KompaktMixin(AnsichtenMixin(
-  AlarmseiteMixin(WandpanelMixin(KlingelMixin(HvBase))))))))) {
+class HausVisualisierungPanel extends AssistentMixin(SzenenMixin(GuteNachtMixin(AktionenMixin(EinstellungenMixin(KompaktMixin(AnsichtenMixin(
+  AlarmseiteMixin(WandpanelMixin(KlingelMixin(HvBase)))))))))) {
   constructor() {
     super();
     this._view = null;
@@ -62,6 +64,8 @@ class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(E
     const old = this._hass;
     super.hass = h;
     if (!h) return;
+    // Energie-Dashboard von Home Assistant einmal lesen (Erkennung der Energiesensoren), danach neu aufbauen
+    if (!old) energyPrefs(h, () => { this._dirty = true; this._schedule(); });
     if (!this._sub && this._connected) this._subscribe();
     if (!old || h.themes !== old.themes) this._applyTheme();
     if (this._extEl && this._extEl.isConnected) this._extEl.hass = h;
@@ -279,7 +283,10 @@ class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(E
     const L = this._layout;
     let view = this._view || L.start_view || "overview";
     const isAdmin = !!(h.user && h.user.is_admin);
-    if ((view === "einstellungen" || view === "automationen") && !isAdmin) view = "overview";
+    // Erste Einrichtung: Assistent statt Startseite (nur Admins, nicht am Wandpanel)
+    if (!this._view && asFirstRun(L, isAdmin) && !this._wallIsOn()) view = "einrichtung";
+    if ((view === "einstellungen" || view === "automationen" || view === "einrichtung") && !isAdmin) view = "overview";
+    if (view !== "einrichtung") this._as = null;
     const active = view === "raum" ? "overview" : view;
 
     // Energie nur, wenn es Energiedaten gibt; Wartung nur mit Aufgaben (Zahl = fällige)
@@ -287,7 +294,7 @@ class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(E
     const nDue = maintOn(L) ? maintDueCount(L) : 0;
     const badge = (k) => (k === "alarme" ? `<i class="nbadge" data-u="navbadge"></i>` : k === "wartung" && nDue ? `<i class="nbadge on wbadge">${nDue}</i>` : "");
     const nav = navList.map(([k, t, i]) => `<button class="nav${active === k ? " active" : ""}" data-act="go" data-to="${k === "overview" ? "" : k}" title="${t}">${icon(i)}${badge(k)}<span>${t}</span></button>`).join("");
-    const links = (L.links || []).filter((l) => l.path).map((l) => `<button class="nav${view === "extern" && panelPathOf(l.path) === this._arg ? " active" : ""}" data-act="link" data-path="${esc(l.path)}" title="${esc(l.title)}">${icon(l.icon || "mdi:link")}<span>${esc(l.title)}</span></button>`).join("");
+    const links = activeLinks(h, L).map((l) => `<button class="nav${view === "extern" && panelPathOf(l.path) === this._arg ? " active" : ""}" data-act="link" data-path="${esc(l.path)}" title="${esc(l.title)}">${icon(l.icon || "mdi:link")}<span>${esc(l.title)}</span></button>`).join("");
 
     let body;
     try {
@@ -307,7 +314,7 @@ class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(E
     this.shadowRoot.innerHTML = `<style>${STYLES}</style>
       <div class="app${L.glass ? " blur" : ""}${this._isNarrow ? " narrow" : ""}${isDense(L) ? " dense" : ""}">
         <div class="bg"></div>
-        <nav class="rail${navList.length + (L.links || []).filter((l) => l.path).length + (isAdmin ? 1 : 0) > 6 ? " many" : ""}">
+        <nav class="rail${navList.length + activeLinks(h, L).length + (isAdmin ? 1 : 0) > 6 ? " many" : ""}">
           <div class="logo">${LOGO}<small>v${VERSION}</small></div>
           ${nav}
           ${links ? `<hr>${links}` : ""}
@@ -437,6 +444,7 @@ class HausVisualisierungPanel extends SzenenMixin(GuteNachtMixin(AktionenMixin(E
       case "wartung": return maintPageHTML(this._layout, !!(this._hass.user && this._hass.user.is_admin));
       case "automationen": return this._hass.user && this._hass.user.is_admin ? autoPageHTML(this) : this._vOverview();
       case "einstellungen": return this._vSettings();
+      case "einrichtung": return asPageHTML(this);
       case "extern": return `<div class="extwrap"><div class="extload">${icon("mdi:loading", "spin")}Lade …</div></div>`;
       default: return this._vOverview();
     }

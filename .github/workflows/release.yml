@@ -82,5 +82,7 @@ jobs:
           target_commitish: ${{ env.SHA }}
           name: Haus Visualisierung ${{ env.TAG }}
           body_path: release_notes.md
-          files: dist/haus_visualisierung_${{ env.TAG }}.zip
+          files: |
+            dist/haus_visualisierung_${{ env.TAG }}.zip
+            dist/haus_visualisierung.zip
           fail_on_unmatched_files: true

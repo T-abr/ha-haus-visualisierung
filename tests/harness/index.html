@@ -7,7 +7,7 @@ await import("./ha-icon-stub.js");
 await import("./haus-visualisierung.js");
 const { makeHass } = await import("./mock-hass.js");
 const q = new URLSearchParams(location.search);
-const api = makeHass({ big: q.has("big"), komfort: q.has("komfort"), ov: q.get("ov") || "haus", hs: q.get("hs") || "kompakt" });
+const api = makeHass({ big: q.has("big"), komfort: q.has("komfort"), ov: q.get("ov") || "haus", hs: q.get("hs") || "kompakt", einrichtung: q.has("einrichtung") });
 window.__api = api; api.noRecorder = q.has("norec");
 const p = document.createElement("haus-visualisierung-panel");
 p.panel = { url_path: "haus-visualisierung", config: { theme: "" } };

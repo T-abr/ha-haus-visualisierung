@@ -5,7 +5,7 @@ import { DOMAIN, VERSION } from "./version.js";
 import { BUILTIN_MODES, dc, entName, esc, HOUSE_MODES, icon, instant, NAV } from "./grundlagen.js";
 import { buildModel, linkMode, PRESENCE_DC } from "./modell.js";
 import { ALARMS } from "./warnungen.js";
-import { techCfg } from "./technik.js";
+import { techCfg, WB_MODES } from "./technik.js";
 import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 import { solarCfg } from "./prognose.js";
 import { simSettingsHTML } from "./anwesenheit.js";
@@ -61,7 +61,8 @@ const EinstellungenMixin = (Base) => class extends Base {
     const jumpBar = jumps.length < 3 ? "" : `<nav class="sjump" aria-label="Abschnitte">${jumps.map((h2, i) => `<button class="altab sm" data-act="s-jump" data-jump-to="${i}">${h2}</button>`).join("")}</nav>
       <select class="inp sjumpsel" data-jump-sel="1" aria-label="Zum Abschnitt springen"><option value="">Zum Abschnitt springen …</option>${jumps.map((h2, i) => `<option value="${i}">${h2.replace(/<span class="instant"[\s\S]*?<\/span>/g, "").replace(/<[^>]+>/g, "").trim()}</option>`).join("")}</select>`;
 
-    return `<div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span><span class="sp"></span></div>
+    return `<div class="ptitle"><h1>Einstellungen</h1><span class="psub">Version ${VERSION} · gilt für alle Geräte</span><span class="sp"></span>
+        <button class="pbtn" data-act="go" data-to="einrichtung" title="Einrichtungsassistent: Erkanntes prüfen und Lücken ergänzen">${icon("mdi:auto-fix")}Assistent</button></div>
       <div class="altabs stabs" role="tablist">${tabs}</div>
       <p class="hint savehint">Änderungen gelten erst nach „Speichern“ unten. Was mit ${instant()} gekennzeichnet ist, wirkt direkt.</p>
       ${tools}
@@ -221,7 +222,7 @@ const EinstellungenMixin = (Base) => class extends Base {
     const shown = new Map(kalCals(h, { ...D, termine: { ...T, enabled: true } }).map((c) => [c.eid, c]));
     const row = (e) => {
       const cur = C[e] || "", auto = calKind(h, { cals: {} }, e), k = shown.get(e);
-      const look = k && k.kind === "event" ? `<div class="srow ksub" style="padding-left:22px"><span class="lbl">Auf der Seite Kalender<small>Farbe und Name, z. B. „Tobias“</small></span>
+      const look = k && k.kind === "event" ? `<div class="srow ksub" style="padding-left:22px"><span class="lbl">Auf der Seite Kalender<small>Farbe und Name, z. B. „Anna“</small></span>
         <input class="inp" type="text" maxlength="40" placeholder="${esc(entName(h, e))}" value="${esc((T.names || {})[e] || "")}" data-term-name="${esc(e)}" aria-label="Name für ${esc(entName(h, e))}">
         <input class="inp kcol" style="width:48px;min-width:48px;padding:3px" type="color" value="${esc(k.color)}" data-term-color="${esc(e)}" aria-label="Farbe für ${esc(entName(h, e))}"></div>` : "";
       return `<div class="srow"><span class="lbl">${esc(entName(h, e))}<small>${esc(e)}</small></span>
@@ -332,17 +333,22 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${fld("wallbox", "range", "Reichweite", "km", AW.range)}
       ${fld("wallbox", "connected", "Fahrzeug angesteckt", "binary_sensor", AW.connected)}
       ${fld("wallbox", "charging", "Lädt", "binary_sensor", AW.charging)}`)}
+      ${this._setWbModes(D, ew)}
     </div>`;
     return `<div class="set glass"><h2>${icon("mdi:heating-coil")}Heizung</h2>
-      <p class="hint">Die Karte „Heizung“ erscheint auf der Raumseite des Heizungsraums: Speicher mit Schichtung und Ladung, Kamin mit Pumpe und die Heizkurve mit Betriebspunkt. Die Heizkurve kommt aus der Integration „Heizkurve Fußbodenheizung“ (Sensor mit Kurvenpunkten), sonst aus den Werten unten. Leere Felder = automatisch.</p>
+      <p class="hint">Die Karte „Heizung“ erscheint auf der Raumseite des Heizungsraums: Speicher mit Schichtung und Ladung, Kamin mit Pumpe, die Heizkurve mit Betriebspunkt und weitere Werte (z. B. einer Wärmepumpe) – jeder Baustein lässt sich abschalten. Die Heizkurve kommt aus der Integration „Heizkurve Fußbodenheizung“ (Sensor mit Kurvenpunkten), sonst aus den Werten unten. Leere Felder = automatisch.</p>
       <p class="hint techfound">${esc(found(eh, [eh && `Raum ${areaName(eh.area)}`, tank.length && `${tank.length} Speicherfühler`, eh && eh.stove && "Kamin", eh && eh.curve && `Heizkurve ${eh.curve}`, eh && eh.mixer && "Mischer"]))}</p>
       ${tg("heating.enabled", H.enabled !== false, "Heizungs-Karte anzeigen")}
       <div class="srow"><span class="lbl">Raum<small>auf dessen Raumseite die Karte steht</small></span>${areaSel("heating.area", H.area, AH.area)}</div>
+      <div class="srow"><span class="lbl">Bausteine<small>was die Karte zeigt – z. B. ohne Kamin oder ohne Schichtspeicher</small></span><div class="tchips">${[["tank", "Speicher", "mdi:storage-tank-outline"], ["stove", "Kamin", "mdi:fireplace"], ["curve", "Heizkurve", "mdi:chart-bell-curve-cumulative"]]
+        .map(([k, t, i]) => `<label class="tchip${(H.parts || {})[k] !== false ? " on" : ""}"><input type="checkbox" data-set="heating.parts.${k}" data-bool="1" ${(H.parts || {})[k] !== false ? "checked" : ""}>${icon(i)}${t}</label>`).join("")}</div></div>
+      <div class="srow"><span class="lbl">Weitere Werte<small>Baustein „Werte“ für Wärmepumpe, Gastherme, Rücklauf, Leistung …; leer = Entitäten mit dem Label „Haus Heizung“${eh && eh.extra && eh.extra.length && !(H.extra || []).length ? ` (${eh.extra.length} erkannt)` : ""}</small></span>
+        <input class="inp w" list="dl-all" data-set="heating.extra" data-csv="1" value="${esc((H.extra || []).join(", "))}" placeholder="sensor.waermepumpe_leistung, sensor.ruecklauf"></div>
       <div class="fl-title">Speicher</div>
       <div class="srow">${tank.length ? `<div class="pins sortl" style="padding-left:0" data-sort="tank" data-axis="x">${tank.map((e) => `<span class="pin sitem" data-sort-id="${esc(e)}" data-drag title="Ziehen: von oben nach unten sortieren">${esc(entName(h, e))}<button data-act="s-tank-del" data-eid="${esc(e)}" title="Entfernen">${icon("mdi:close")}</button></span>`).join("")}</div>` : '<span class="lbl"><small>Keine Speicherfühler gefunden.</small></span>'}</div>
       <div class="srow"><input class="inp w" list="dl-all" placeholder="Fühler hinzufügen, z. B. sensor.speicher_oben" data-tank-input="1"><button class="pbtn" data-act="s-tank-add">${icon("mdi:plus")}Hinzufügen</button>
         ${H.tank && H.tank.length ? `<button class="pbtn" data-act="s-tank-auto">${icon("mdi:auto-fix")}Automatisch</button>` : ""}</div>
-      <p class="hint">Reihenfolge von oben nach unten – am Chip ziehen. ${H.tank && H.tank.length ? "Eigene Auswahl." : "Automatisch: Temperaturfühler mit „Speicher“ oder „Puffer“ im Namen."}</p>
+      <p class="hint">Reihenfolge von oben nach unten – am Chip ziehen. ${H.tank && H.tank.length ? "Eigene Auswahl." : "Automatisch: Fühler mit dem Label „Haus Speicher“, sonst Temperaturfühler mit „Speicher“ oder „Puffer“ im Namen."}</p>
       <div class="srow"><span class="lbl">Speicher kalt / heiß<small>°C für Farbe und Ladung: kalt = 0 %, heiß = 100 %</small></span>
         <input class="inp s" type="number" min="0" max="90" data-set="heating.tank_min" data-num="1" value="${H.tank_min}"><span class="rl">bis</span>
         <input class="inp s" type="number" min="10" max="99" data-set="heating.tank_max" data-num="1" value="${H.tank_max}"></div>
@@ -361,6 +367,17 @@ const EinstellungenMixin = (Base) => class extends Base {
         ${[["slope", "Steilheit", 0.1, 3, 0.05], ["level", "Niveau K", -15, 15, 0.5], ["room", "Raum °C", 15, 28, 0.5], ["min", "Min °C", 15, 45, 1], ["max", "Max °C", 25, 70, 1], ["limit", "Heizgrenze °C", 5, 25, 1]]
           .map(([k, t, mn, mx, st]) => `<label class="tml"><small>${t}</small><input class="inp xs" type="number" min="${mn}" max="${mx}" step="${st}" data-set="heating.manual.${k}" data-num="1" value="${M[k]}"></label>`).join("")}</div>` : ""}`)}
     </div>`;
+  }
+
+  /** Wallbox: Namen der Lademodi frei zuordnen (Optionen der Auswahl-Entität). */
+  _setWbModes(D, ew) {
+    const ms = ew && ew.mode && this._hass.states[ew.mode];
+    const opts = ms ? (ms.attributes.options || []) : [];
+    if (!opts.length) return "";
+    const names = (D.wallbox && D.wallbox.mode_names) || {};
+    return `<div class="fl-title">Lademodi</div>
+      <p class="hint">Knöpfe der Karte aus den Optionen von ${esc(ew.mode)}. Eigener Name je Modus, „-“ blendet ihn aus; leer = ${opts.some((o) => WB_MODES[String(o).toLowerCase()]) ? "Name wie bei EVCC" : "Name der Option"}.</p>
+      ${opts.map((o) => `<div class="srow"><span class="lbl">${esc(o)}</span><input class="inp" data-wb-mode="${esc(o)}" value="${esc(names[o] || "")}" placeholder="${esc(WB_MODES[String(o).toLowerCase()] || o)}" maxlength="30"></div>`).join("")}`;
   }
 
   /* Beschattung: Hinweise nach Wettervorhersage, Sonnenstand und Ausrichtung der Rollos */
@@ -803,6 +820,16 @@ const EinstellungenMixin = (Base) => class extends Base {
     if (t.dataset && t.dataset.dispAssign && e.type === "change" && this._draft) {
       // Zuordnen wirkt sofort: Entwurf (mit allen offenen Änderungen) speichern, dann bekommt das Gerät seine Inhalte
       if (assignDevice(this._draft, t.dataset.dispAssign, t.value)) this._actionExtra("s-save", t);
+      return;
+    }
+    if (t.dataset && t.dataset.wbMode !== undefined && (e.type === "change" || e.type === "input") && this._draft) {
+      const W = this._draft.wallbox = { ...(this._draft.wallbox || {}) }, N = W.mode_names = { ...(W.mode_names || {}) };
+      const v = String(t.value || "").trim().slice(0, 30);
+      if (v) N[t.dataset.wbMode] = v; else delete N[t.dataset.wbMode];
+      this._dirtySettings = true;
+      const msg = this.shadowRoot.querySelector(".savebar .msg");
+      if (msg) msg.textContent = "Ungespeicherte Änderungen";
+      markDirty(this, (k) => this._tabDirty(k));
       return;
     }
     if (t.dataset && t.dataset.shadeFace && e.type === "change" && this._draft) {
