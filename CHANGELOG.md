@@ -10,6 +10,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ### Tests
 - Backend `test_fotos.py`: neues Link-Format, Auswertung der CloudKit-Datensätze (Aufbau wie die echte Antwort, Bearbeitung am Asset, kein HEIC, keine Videos, Beschriftung), Abruf mit Partition und Token, Fehlermeldungen bei fehlender Freigabe und unbekanntem Link.
 
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 18–21 ms, Raumseite 10 ms, Licht 23 ms, Klima 32 ms, Energie 20 ms, Alarme 6 ms; hass-Setter Übersicht 18–31 µs, Unterseiten 0,3–18 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Klima höher als bei 2.0.1 (23 ms), Energie niedriger (39 ms) – Messschwankung im Container; im Frontend änderten sich nur Hinweistexte in Einstellungen und Assistent.
+
 ## 2.0.1 – 2026-11-27
 
 ### Neu
