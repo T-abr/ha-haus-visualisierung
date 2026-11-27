@@ -177,7 +177,7 @@ DEFAULT_LAYOUT: dict = {
     },
     "termine": {                   # Müllabfuhr und Termine in Kopfzeile und Bildschirmschoner (Kalender-Entitäten)
         "enabled": True, "header": True, "saver": True,
-        "page": True,                  # Seite „Kalender“ (Woche/Monat) im Menü
+        "page": True,                  # Seite „Kalender“ (Monat) im Menü
         "days": 7,                     # so viele Tage im Voraus lesen
         "evening": 17,                 # Abfuhr morgen ab dieser Stunde hervorheben
         "cals": {},                    # {calendar_id: "waste"|"event"|"-"}, fehlt = Müllabfuhr, wenn der Name passt

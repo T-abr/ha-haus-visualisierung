@@ -75,7 +75,7 @@ const AktionenMixin = (Base) => class extends Base {
         try { await this._hass.callWS({ type: `${DOMAIN}/appliance_ack`, appliance: t.dataset.id }); this._toast("Quittiert"); } catch (err) { this._toast(`Quittieren fehlgeschlagen: ${err && err.message ? err.message : err}`); }
         return;
       }
-      case "kal-mode": case "kal-shift": case "kal-today": case "kal-day": kalAction(this, act, t); return;
+      case "kal-shift": case "kal-today": case "kal-day": kalAction(this, act, t); return;
       case "auto-set": autoSet(this, t); return;
       case "auto-form": autoForm(this, t.dataset.open === "1"); return;
       case "auto-create": autoCreate(this); return;

@@ -29,7 +29,7 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   im Alarmmanager, in Kopfzeile, Schoner, am Wanddisplay und per Push; `sensor.haus_wetter`.
 - **Müllabfuhr und Termine**: „Morgen: Gelbe Tonne“ in der Kopfzeile und im Bildschirmschoner, am Vorabend
   hervorgehoben, dazu Termine von heute und morgen; aus Kalendern in Home Assistant (z. B. Waste Collection Schedule).
-- **Familienkalender**: Seite „Kalender“ mit Woche (Raster, am Handy als Liste) und Monat, Farbe und Name je Kalender
+- **Familienkalender**: Seite „Kalender“ als Monatsraster (mehrtägige Termine als Balken, gewählter Tag mit allen Terminen daneben), Farbe und Name je Kalender
   (z. B. ein iCloud-Kalender je Familienmitglied), Müllabfuhr mit Tonnenfarbe; Apple-Kalender siehe unten.
 - **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
   Fälligkeit auf der Seite „Wartung“, „Erledigt“ für alle Benutzer, fällige Aufgaben als Hinweis in den Meldungen.
