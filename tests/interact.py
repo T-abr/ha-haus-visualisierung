@@ -1384,6 +1384,56 @@ def wandpanel():
     check("WP-Handy: Antippen weckt auf", mp.locator(f"{P} .saver").count() == 0)
     ctx.close()
 
+@gruppe("wandpanel")
+def wandpanel_fotos():
+    # ---------- Bildschirmschoner mit Fotos aus einem geteilten iCloud-Album ----------
+    pg.set_viewport_size({"width": 1280, "height": 800})
+    pg.goto(dense + "?wandpanel=1"); pg.wait_for_timeout(500)
+    PP = f"document.querySelector('{P}')"
+    saver = lambda: pg.locator(f"{P} .saver")
+    setwp = lambda js: pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, wallpanel: {{ ...p._wallCfg(), {js} }} }}; }})()")
+    setwp('photos: "https://www.icloud.com/sharedalbum/#B0aTEST1234", photo_sec: 60, black_min: 0, night_dim: false')
+    pg.evaluate(f"(() => {{ const p = {PP}; p._wallActive = Date.now() - 6 * 60000; p._wallTick(); }})()"); pg.wait_for_timeout(600)
+    check("FO: Schoner mit Fotos", saver().count() == 1 and "ph" in saver().get_attribute("class") and pg.locator(f"{P} .saver .svslide").count() >= 1)
+    check("FO: Uhr bleibt sichtbar", ":" in pg.locator(f"{P} .saver .svclock").inner_text())
+    modes = set()
+    for _ in range(2):
+        modes.add(saver().get_attribute("data-ph"))
+        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+    check("FO: Querformat als Vollbild, Hochformat im Rahmen", modes == {"fill", "frame"})
+    pg.wait_for_timeout(1900)
+    check("FO: alte Bilder nach dem Überblenden entfernt", pg.locator(f"{P} .saver .svslide").count() == 1)
+    cap = pg.locator(f"{P} .saver .svcap").inner_text()
+    quer = saver().get_attribute("data-ph") == "fill"
+    check("FO: Beschriftung mit Titel und Datum", "2026" in cap and (("Urlaub" in cap) == quer))
+    for _ in range(3):
+        if saver().get_attribute("data-ph") == "fill":
+            break
+        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+    check("FO: Vollbild zoomt langsam (Ken-Burns)", pg.locator(f"{P} .saver .svslide.fill .kb").count() >= 1)
+    setwp("black_min: 1"); pg.evaluate(f"{PP}._saverUpdate(30, true)"); pg.wait_for_timeout(200)
+    check("FO: im Schwarz-Modus keine Fotos", "ph" not in saver().get_attribute("class") and pg.locator(f"{P} .saver .svslide").count() == 0)
+    setwp("black_min: 0"); pg.evaluate(f"{PP}._saverUpdate(6, true)"); pg.wait_for_timeout(500)
+    check("FO: danach wieder Fotos", "ph" in saver().get_attribute("class"))
+    pg.mouse.click(640, 400); pg.wait_for_timeout(200)
+    check("FO: Tippen beendet den Schoner und den Bildwechsel", saver().count() == 0 and not pg.evaluate(f"{PP}._fotoTimer"))
+    # leeres Album: klassischer Schoner
+    pg.evaluate(f"(() => {{ window.__api.fotos = []; {PP}._fotos = null; }})()")
+    pg.evaluate(f"(() => {{ const p = {PP}; p._wallActive = Date.now() - 6 * 60000; p._wallTick(); }})()"); pg.wait_for_timeout(400)
+    check("FO: ohne Fotos der bisherige Schoner", saver().count() == 1 and "ph" not in saver().get_attribute("class"))
+    pg.mouse.click(640, 400); pg.wait_for_timeout(200)
+    pg.evaluate("delete window.__api.fotos")
+    # Einstellungen: Link, Wechsel, Beschriftung, Stand, „Jetzt laden“
+    pg.evaluate(f"(() => {{ const p = {PP}; p._fotos = null; p._go('einstellungen/displays'); }})()"); pg.wait_for_timeout(400); auf(pg)
+    lnk = pg.locator(f'{P} input[data-set="wallpanel.photos"]')
+    check("FO: Einstellung „Link zum geteilten iCloud-Album“", lnk.count() == 1 and "sharedalbum" in lnk.input_value())
+    check("FO: Wechsel und Beschriftung einstellbar", pg.locator(f'{P} [data-set="wallpanel.photo_sec"]').count() == 1 and pg.locator(f'{P} [data-set="wallpanel.photo_caption"]').count() == 1)
+    pg.wait_for_timeout(300)
+    check("FO: Stand des Albums", "2 Fotos" in pg.locator(f"{P} [data-foto-status]").inner_text())
+    pg.locator(f"{P} [data-act=s-fotos-refresh]").click(); pg.wait_for_timeout(400)
+    check("FO: „Jetzt laden“ liest das Album neu", any(e[1] == "fotos_refresh" for e in pg.evaluate("window.__api.log")))
+    pg.evaluate("localStorage.setItem('hv-wallpanel', '0')")
+
 @gruppe("warnungen")
 def verzoegerung_heizen():
     # ---------- 1.3.1: Verzögerung gilt auch für „Fenster offen beim Heizen“ ----------

@@ -156,6 +156,8 @@ DEFAULT_LAYOUT: dict = {
         # Elemente des Bildschirmschoners (Wandpanel und Wanddisplays)
         "sv_date": True, "sv_weather": True, "sv_forecast": True, "sv_pv": True, "sv_mode": True,
         "sv_appl": True, "sv_shade": True, "sv_status": True,
+        # Fotos aus einem geteilten iCloud-Album (fotos.py): Link, Wechsel in Sekunden, Beschriftung zeigen
+        "photos": "", "photo_sec": 30, "photo_caption": True,
     },
     "shading": {                   # Beschattung: Hinweise nach Vorhersage, Sonnenstand und Ausrichtung
         "enabled": True, "hot": 26,    # heißer Tag ab °C (Vorhersage)

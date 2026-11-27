@@ -424,7 +424,8 @@ def _wallpanel(raw: dict) -> dict:
     out["black_min"] = _int(raw.get("black_min"), 0, 600, out["black_min"])
     out["return_min"] = _int(raw.get("return_min"), 0, 240, out["return_min"])
     for key in ("fullscreen", "hide_sidebar", "wake_alarm", "night_dim", "wander",
-                "sv_date", "sv_weather", "sv_forecast", "sv_pv", "sv_mode", "sv_appl", "sv_shade", "sv_status"):
+                "sv_date", "sv_weather", "sv_forecast", "sv_pv", "sv_mode", "sv_appl", "sv_shade", "sv_status",
+                "photo_caption"):
         if isinstance(raw.get(key), bool):
             out[key] = raw[key]
     for key in ("night_from", "night_to"):
@@ -438,6 +439,9 @@ def _wallpanel(raw: dict) -> dict:
     w = _entity(raw.get("weather"))
     out["weather"] = w if w.startswith("weather.") else ""
     out["wake_entity"] = _entity(raw.get("wake_entity"))
+    link = str(raw.get("photos") or "").strip()[:300]
+    out["photos"] = link if re.fullmatch(r"[A-Za-z0-9:/._#;?=&%-]*", link) else ""
+    out["photo_sec"] = _int(raw.get("photo_sec"), 5, 3600, out["photo_sec"])
     return out
 
 

@@ -292,6 +292,12 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${tg("sv_appl", "Fertige Geräte")}
       ${tg("sv_shade", "Beschattungshinweis")}
       ${tg("sv_status", "Meldungen", "wichtigste Meldung oder „Alles in Ordnung“")}
+      <div class="fl-title">Fotos</div>
+      <p class="hint">Fotos aus Apple Fotos: in der Fotos-App ein geteiltes Album anlegen, unter „Personen“ → „Öffentliche Website“ einschalten und den Link hier eintragen. Die Integration holt die Bilder alle 6 Stunden und speichert sie in Home Assistant. Querformat füllt den Bildschirm und zoomt langsam, Hochformat steht im Rahmen vor einem weichgezeichneten Hintergrund. Nachts und im Schwarz-Modus bleiben die Fotos aus.</p>
+      <div class="srow"><span class="lbl">Link zum geteilten iCloud-Album<small>https://www.icloud.com/sharedalbum/#…; leer = ohne Fotos</small></span><input class="inp w" type="url" data-set="wallpanel.photos" value="${esc(W.photos || "")}" placeholder="https://www.icloud.com/sharedalbum/#…"></div>
+      ${W.photos ? `<div class="srow"><span class="lbl">Bild wechseln alle</span><input class="inp s" type="number" min="5" max="3600" data-set="wallpanel.photo_sec" data-num="1" value="${W.photo_sec}"><span class="rl">s</span></div>
+      ${tg("photo_caption", "Beschriftung", "Titel und Datum des Fotos, falls vorhanden")}
+      <div class="srow"><span class="lbl">Stand<small data-foto-status="1">${this._fotoStatusText()}</small></span><button class="pbtn" data-act="s-fotos-refresh">${icon("mdi:refresh")}Jetzt laden</button></div>` : ""}
       ${tg("wander", "Wandern lassen", "aus = Uhr und Infos bleiben mittig; an = jede Minute ein Stück versetzt gegen Einbrennen (bei OLED sinnvoll, LCDs wie im iPad brennen kaum ein)")}
       ${advanced(`      <div class="srow"><span class="lbl">Wetter<small>leer = automatisch${autoW ? ` (${esc(autoW)})` : ""}</small></span><input class="inp w" list="dl-weather" data-set="wallpanel.weather" value="${esc(W.weather || "")}" placeholder="weather.…"></div>`)}
       <div class="srow"><span class="lbl">Bewegungsmelder am Panel<small>weckt wie eine Berührung, z. B. binary_sensor.flur_bewegung</small></span><input class="inp w" list="dl-motion" data-set="wallpanel.wake_entity" value="${esc(W.wake_entity || "")}" placeholder="binary_sensor.…"></div>
@@ -454,6 +460,22 @@ const EinstellungenMixin = (Base) => class extends Base {
       <div class="srow"><span class="lbl">Automatisch schließen nach<small>Sekunden; nach „Live“ oder „Tür öffnen“ bleibt es offen</small></span><input class="inp s" type="number" min="10" max="600" data-set="doorbell.timeout" data-num="1" value="${B.timeout}"></div>`)}
       <div class="srow"><button class="pbtn" data-act="s-bell-test">${icon("mdi:bell-ring-outline")}Overlay testen</button><span class="lbl"><small>nutzt auch noch nicht gespeicherte Angaben; „Tür öffnen“ löst im Test wirklich aus</small></span></div>
     </div>`;
+  }
+
+  /** Stand des Foto-Albums für die Einstellungen (einmal je Öffnen geholt, „Jetzt laden“ aktualisiert). */
+  _fotoStatusText() {
+    const st = this._fotoStatus;
+    if (!st && !this._fotoLoading && this._hass.callWS) {
+      this._fotoLoading = true;
+      this._hass.callWS({ type: `${DOMAIN}/fotos` }).then((r) => { this._fotoStatus = r; }).catch(() => { this._fotoStatus = { count: 0, updated: 0, error: "Stand nicht abrufbar" }; })
+        .finally(() => { this._fotoLoading = false; if (this._view === "einstellungen") { this._dirty = true; this._flush(); } });
+    }
+    if (!st) return "Lade …";
+    if (st.busy) return "Wird gerade geladen …";
+    if (st.error) return esc(st.error);
+    if (!st.updated) return "Noch nicht geladen – erst speichern, dann „Jetzt laden“";
+    const when = new Date(st.updated * 1000).toLocaleString("de-DE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return `${st.count} ${st.count === 1 ? "Foto" : "Fotos"} · zuletzt geladen ${when}`;
   }
 
   _setPush(D) {

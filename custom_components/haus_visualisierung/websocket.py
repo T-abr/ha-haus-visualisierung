@@ -17,6 +17,7 @@ from .pin import PIN_RE, Throttle, make_hash, verify
 from .const import DOMAIN, HOUSE_MODES, VERSION
 from .maintenance import parse_date
 from .scenes import async_apply, sanitize_scenes
+from .fotos import IMG_URL as FOTO_URL
 from .klingel import IMG_URL
 from .zeitleiste import MAX_DAYS, async_timeline
 
@@ -47,6 +48,8 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_export)
     websocket_api.async_register_command(hass, ws_scene_test)
     websocket_api.async_register_command(hass, ws_zeitleiste)
+    websocket_api.async_register_command(hass, ws_fotos)
+    websocket_api.async_register_command(hass, ws_fotos_refresh)
     display_setup.async_register(hass)
     automations.async_register(hass)
 
@@ -497,3 +500,33 @@ async def ws_zeitleiste(hass: HomeAssistant, connection: websocket_api.ActiveCon
             e["bild"] = async_sign_path(hass, f"{IMG_URL}/{e['bild']}", timedelta(hours=2),
                                         refresh_token_id=connection.refresh_token_id)
     connection.send_result(msg["id"], res)
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/fotos"})
+@callback
+def ws_fotos(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Fotos des geteilten iCloud-Albums für den Bildschirmschoner (signierte Adressen, 24 h gültig)."""
+    from homeassistant.components.http.auth import async_sign_path
+
+    album = hass.data.get(DOMAIN, {}).get("fotos")
+    if album is None:
+        connection.send_result(msg["id"], {"photos": [], "count": 0, "updated": 0, "error": "", "busy": False})
+        return
+    photos = [{"url": async_sign_path(hass, f"{FOTO_URL}/{p['file']}", timedelta(hours=24),
+                                      refresh_token_id=connection.refresh_token_id),
+               "w": p.get("w"), "h": p.get("h"), "caption": p.get("caption", ""), "date": p.get("date", "")}
+              for p in album.photos]
+    connection.send_result(msg["id"], {**album.status(), "photos": photos})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/fotos_refresh"})
+@websocket_api.async_response
+async def ws_fotos_refresh(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Album sofort neu lesen (Knopf „Jetzt laden“ in den Einstellungen); antwortet nach dem Abruf mit dem Stand."""
+    album = hass.data.get(DOMAIN, {}).get("fotos")
+    if album is None:
+        connection.send_error(msg["id"], "not_ready", "Fotos nicht eingerichtet")
+        return
+    await album.async_refresh()
+    connection.send_result(msg["id"], album.status())

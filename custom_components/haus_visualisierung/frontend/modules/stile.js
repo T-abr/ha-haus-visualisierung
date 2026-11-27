@@ -942,6 +942,24 @@ details[open]>summary.shead{padding-bottom:2px}
 @keyframes svpulse{50%{background:rgba(255,80,60,.6)}}
 .saver.night .svbox{opacity:.4}
 .saver.black .svbox{opacity:0}
+/* Fotos im Schoner: Querformat Vollbild mit Ken-Burns, Hochformat im Rahmen vor weichgezeichnetem Hintergrund */
+.svph,.svcap{display:none}.saver.ph .svph{display:block;position:absolute;inset:0;overflow:hidden}
+.svslide{position:absolute;inset:0;opacity:0;transition:opacity 1.5s ease}.svslide.in{opacity:1}
+.svslide i{position:absolute;inset:0;background-size:cover;background-position:center}
+.svslide .kb{animation:svkb linear forwards}@keyframes svkb{from{transform:scale(1)}to{transform:scale(1.12)}}
+.svslide .blur{inset:-40px;filter:blur(36px) brightness(.5) saturate(1.2)}
+.svslide img{position:absolute;left:5vw;top:50%;transform:translateY(-50%);max-width:46vw;max-height:90vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.saver[data-ph=fill] .svph::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(0,0,0,.72),rgba(0,0,0,.25) 38%,transparent 60%)}
+.saver.ph .svbox{position:absolute;z-index:2;padding:0;align-items:flex-start;text-align:left;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.saver.ph .svrow,.saver.ph .svcal{justify-content:flex-start}
+.saver.ph .svstat span,.saver.ph .svcal .svwaste.hot{background:rgba(0,0,0,.35);backdrop-filter:blur(8px)}
+.saver[data-ph=fill] .svbox{left:4vw;right:4vw;bottom:5vh}
+.saver[data-ph=frame] .svbox{left:55vw;right:4vw;top:50%;transform:translateY(-50%)}
+.saver[data-ph=frame] .svclock{font-size:clamp(56px,11vw,132px)}
+.saver.ph .svcap{display:block;position:absolute;z-index:2;right:4vw;top:4vh;max-width:50vw;font-size:clamp(12px,1.6vw,16px);color:rgba(255,255,255,.75);text-shadow:0 1px 4px rgba(0,0,0,.6);text-align:right}
+@media (orientation:portrait){.svslide img{left:50%;top:5vh;transform:translateX(-50%);max-width:90vw;max-height:52vh}
+  .saver[data-ph=frame] .svbox{left:6vw;right:6vw;top:auto;bottom:6vh;transform:none}}
+@media (prefers-reduced-motion:reduce){.svslide .kb{animation:none}}
 .walldev.on .lbl{color:var(--hv-ok)}
 /* Technik: Heizung und Wallbox */
 .tech{padding:12px 16px 14px;margin-bottom:16px}

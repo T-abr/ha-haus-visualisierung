@@ -34,6 +34,7 @@ from .const import (
 from .display import SERVICE_TAP, DisplayHub
 from .display_setup import FIRMWARE_DIR, FIRMWARE_URL, firmware_md5, firmware_version
 from .backup import BackupBook
+from .fotos import FotoView, PhotoAlbum
 from .klingel import KlingelBildView, RingBook
 from .maintenance import MaintenanceBook
 from .store import LayoutStore
@@ -98,6 +99,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Klingel-Standbilder für die Zeitleiste (nur angemeldet bzw. per signierter Adresse)
     hass.http.register_view(KlingelBildView())
+    # Fotos des geteilten iCloud-Albums für den Bildschirmschoner
+    hass.http.register_view(FotoView())
 
     async_register_websocket(hass)
     _LOGGER.info("Haus Visualisierung v%s geladen", VERSION)
@@ -150,6 +153,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     rings.async_start()
     hass.data[DOMAIN]["rings"] = rings
     entry.async_on_unload(rings.async_stop)
+    # Bildschirmschoner: Fotos aus dem geteilten iCloud-Album regelmäßig holen
+    fotos = PhotoAlbum(hass, lambda: hass.data[DOMAIN]["store"].data)
+    await fotos.async_load()
+    fotos.async_start(hass.data[DOMAIN]["store"])
+    hass.data[DOMAIN]["fotos"] = fotos
+    entry.async_on_unload(fotos.async_stop)
     # Hausmodus (select.hausmodus) und Anzahl aktiver Meldungen (sensor.haus_alarme_aktiv)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -166,4 +175,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].pop("monitor", None)
     hass.data[DOMAIN].pop("displays", None)
     hass.data[DOMAIN].pop("rings", None)
+    hass.data[DOMAIN].pop("fotos", None)
     return ok
