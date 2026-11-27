@@ -163,5 +163,7 @@ async def async_timeline(hass: HomeAssistant, layout: dict, rings: list[dict], l
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Zeitleiste: Verlauf nicht lesbar: %s", err)
         hist = None
-    events = build_events(info, hist or {}, rings, log, start, end)
+    # Klingel und Protokoll speichern ts auf 0,1 s gerundet, also bis zu 50 ms in der Zukunft:
+    # ein gerade erst erfasstes Ereignis fiele sonst heraus.
+    events = build_events(info, hist or {}, rings, log, start, end + 0.1)
     return {"from": start, "to": end, "days": days, "recorder": hist is not None, "events": events}

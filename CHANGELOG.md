@@ -4,11 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.0.2 – 2026-11-27
+
 ### Behoben
+- **Zeitleiste: eben erst erfasstes Klingeln fehlte manchmal.** Klingel und Protokoll speichern die Zeit auf 0,1 s gerundet; ein Eintrag aus den letzten 50 ms lag dadurch scheinbar in der Zukunft und wurde ausgefiltert (zeigte sich als sporadischer Fehler in `test_zeitleiste.py`).
 - **Fotos aus iCloud-Alben mit neuem Link-Format.** Apple vergibt für geteilte Alben inzwischen Links der Form `https://photos.icloud.com/shared/album/…` (geteilte Sammlungen). Die Integration erkannte nur das alte Format `https://www.icloud.com/sharedalbum/#…`, fragte deshalb gar nicht bei Apple an, und „Jetzt laden“ blieb bei „Noch nicht geladen“. Neue Links liest `fotos.py` jetzt über dieselbe Schnittstelle wie die Album-Webseite (CloudKit: `records/resolve` liefert Zone, Partition und anonymen Zugang, `records/query` die Fotos seitenweise samt Download-Adressen). Bearbeitete Fotos kommen in der bearbeiteten Fassung, HEIC-Originale werden durch die JPEG-Variante ersetzt, Videos übersprungen. Alte Links funktionieren weiter. Ein nicht erkannter Link meldet jetzt „Link nicht erkannt“ statt still nichts zu tun.
 
 ### Tests
 - Backend `test_fotos.py`: neues Link-Format, Auswertung der CloudKit-Datensätze (Aufbau wie die echte Antwort, Bearbeitung am Asset, kein HEIC, keine Videos, Beschriftung), Abruf mit Partition und Token, Fehlermeldungen bei fehlender Freigabe und unbekanntem Link.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 18–21 ms, Raumseite 10 ms, Licht 23 ms, Klima 32 ms, Energie 20 ms, Alarme 6 ms; hass-Setter Übersicht 18–31 µs, Unterseiten 0,3–18 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Klima höher als bei 2.0.1 (23 ms), Energie niedriger (39 ms) – Messschwankung im Container; im Frontend änderten sich nur Hinweistexte in Einstellungen und Assistent.
 
 ## 2.0.1 – 2026-11-27
 
