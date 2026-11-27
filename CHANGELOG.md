@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.0.2 – 2026-11-27
+
 ### Behoben
 - **Fotos aus iCloud-Alben mit neuem Link-Format.** Apple vergibt für geteilte Alben inzwischen Links der Form `https://photos.icloud.com/shared/album/…` (geteilte Sammlungen). Die Integration erkannte nur das alte Format `https://www.icloud.com/sharedalbum/#…`, fragte deshalb gar nicht bei Apple an, und „Jetzt laden“ blieb bei „Noch nicht geladen“. Neue Links liest `fotos.py` jetzt über dieselbe Schnittstelle wie die Album-Webseite (CloudKit: `records/resolve` liefert Zone, Partition und anonymen Zugang, `records/query` die Fotos seitenweise samt Download-Adressen). Bearbeitete Fotos kommen in der bearbeiteten Fassung, HEIC-Originale werden durch die JPEG-Variante ersetzt, Videos übersprungen. Alte Links funktionieren weiter. Ein nicht erkannter Link meldet jetzt „Link nicht erkannt“ statt still nichts zu tun.
 
