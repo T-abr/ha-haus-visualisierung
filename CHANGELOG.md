@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.0.1 – 2026-11-27
+
 ### Neu
 - **Fotos im Bildschirmschoner aus einem geteilten iCloud-Album.** In Apple Fotos ein geteiltes Album mit „Öffentliche Website“ anlegen und den Link unter Einstellungen → Wandpanel & Displays → Bildschirmschoner → „Fotos“ eintragen (auch im Assistenten, Schritt Kalender). Die Integration (`fotos.py`) liest das Album alle 6 Stunden und nach jeder Änderung des Links, lädt neue Bilder (höchstens 300, bis 2600 px Kantenlänge, ohne Videos) nach `/config/haus_visualisierung/fotos` und gibt sie per signierter Adresse ans Panel. Darstellung automatisch: Querformat als Vollbild mit langsamem Zoom (Ken-Burns) und Verlauf für Uhr und Infos unten links, Hochformat im Rahmen vor demselben Bild weichgezeichnet, Infos daneben. Bildwechsel mit Überblendung in zufälliger Reihenfolge, Dauer einstellbar (Standard 30 s), Beschriftung (Titel · Monat Jahr) abschaltbar, Stand und „Jetzt laden“ in den Einstellungen. Nachts und im Schwarz-Modus zeigt der Schoner wie bisher nur Uhr und Infos.
 
@@ -13,6 +15,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ### Geändert
 - **Release-Workflow committet nicht mehr auf `main`.** `main` ist jetzt per Ruleset geschützt und nimmt nur Pull Requests an; der direkte Push „Version X.Y.Z“ aus dem Workflow würde abgewiesen. Die Version setzt daher der Sammel-PR mit `scripts/bump_version.py`, „Release“ → „Run workflow“ taggt nur noch die Version aus `manifest.json` und veröffentlicht. Die Eingabe „Versionssprung“ entfällt.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 13–20 ms, Raumseite 9 ms, Licht 20 ms, Klima 23 ms, Energie 39 ms, Alarme 9 ms; hass-Setter Übersicht 23–26 µs, Unterseiten 0,2–18 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Energie höher als bei 1.23.0 (23 ms), obwohl die Seite nicht geändert wurde (Messschwankung, wie bei 1.21.0); die Änderungen betreffen nur den Bildschirmschoner, sonst wie bisher.
 
 ## 2.0.0 – 2026-11-27
 
