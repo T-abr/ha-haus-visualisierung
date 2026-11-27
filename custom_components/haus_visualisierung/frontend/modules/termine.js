@@ -65,7 +65,8 @@ function fromApi(eid, kind, ev) {
   const s = parseWhen(ev.start), e = parseWhen(ev.end);
   if (!s) return null;
   const end = e ? e.d : new Date(s.d.getTime() + (s.allDay ? DAY : 3600000));
-  return { eid, kind, title: String(ev.summary || ev.message || "").trim() || "Termin", start: s.d, end, allDay: s.allDay };
+  const where = String(ev.location || "").trim();
+  return { eid, kind, title: String(ev.summary || ev.message || "").trim() || "Termin", start: s.d, end, allDay: s.allDay, ...(where ? { where } : {}) };
 }
 function fromAttrs(eid, kind, st) {
   const a = (st && st.attributes) || {};
@@ -188,4 +189,4 @@ function saverTermHTML(h, L) {
   return parts.join("");
 }
 
-export { binOf, calKind, parseWhen, saverTermHTML, termCals, termEvents, terminBtnHTML, termListen, termSummary, termUnlisten, termWatch, updateTermin, WASTE_RE };
+export { binOf, calKind, fromApi, midnight, parseWhen, saverTermHTML, termCals, termEvents, terminBtnHTML, termListen, termSummary, termUnlisten, termWatch, updateTermin, WASTE_RE };

@@ -4,6 +4,25 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Seite „Kalender“ (Familienkalender):** Termine aller als „Termine“ gewählten Kalender als Woche (sieben Spalten, am Handy als Liste der Tage mit Terminen) oder als Monat (sechs Wochen, bis zu drei Termine je Tag, sonst „+2 weitere“; am Handy farbige Punkte). Blättern mit ‹ ›, „Heute“; ein Tag im Monat öffnet seine Woche, die gewählte Ansicht bleibt je Gerät gemerkt. Mehrtägige Termine stehen an jedem Tag, ganztägige farbig hinterlegt, Ort und Kalender im Tooltip; Müllabfuhr mit Tonnenfarbe und -symbol. Je Kalender lassen sich in den Einstellungen (Darstellung → Müllabfuhr und Termine) Farbe und Anzeigename wählen, etwa ein iCloud-Kalender je Familienmitglied; die Seite ist dort abschaltbar. Sie erscheint im Menü, sobald ein Kalender gezeigt wird, und frischt sich alle 5 Minuten auf (z. B. am Wandpanel). Neue Layout-Schlüssel `termine.page`, `termine.colors`, `termine.names`.
+- **Apple-Kalender:** Anleitung in der README (CalDAV-Integration von Home Assistant mit `https://caldav.icloud.com` und app-spezifischem Passwort), Kurzhinweis in den Einstellungen.
+
+### Behoben
+- **Kopfzeile „Kompakt“: Symbol in Badges ohne Zahl mittig.** Stand keine Zahl daneben (z. B. alle Fenster zu), saß das Symbol 3 px zu weit links, weil das leere Zahlenfeld trotzdem Abstand bekam. Das leere Feld wird jetzt ausgeblendet.
+
+### Verbessert
+- **Lange Listen nutzen auf breiten Monitoren die Breite.** Ab 1200 px Fensterbreite läuft eine Liste mit 8 oder mehr Einträgen über die ganze Seitenbreite und verteilt sich je nach Platz auf 2 oder 3 Spalten (3 ab etwa 1200 px Listenbreite): Batterien („In Ordnung“ usw., Kompakt- und Normalansicht), Automationen, Sicherheit („Fenster & Türen“, Melder, Bewegung) und Wartung. Kurze Abschnitte bleiben nebeneinander wie bisher, Handy und Tablet unverändert.
+
+### Tests
+- Neuer Abschnitt `kalender` (Gruppe kalender): Menüpunkt, Woche mit Uhrzeit, Ort, mehrtägigen Terminen, Farben und Legende, Blättern, Monat mit „+1 weitere“, Tag öffnet Woche, Handy-Liste, nicht lesbarer Kalender, Einstellungen (Name, Farbe, Seite aus).
+- Backend `test_termine.py`: Farben und Namen je Kalender werden geprüft.
+- Kopfzeile: Prüfung, dass das Symbol in einem Badge ohne Zahl waagrecht und senkrecht mittig sitzt.
+- Neuer Abschnitt `lange_listen_mehrspaltig` (Gruppe basis): 2 Spalten bei 1280 px, 3 bei 1440 px, einspaltig unter 1200 px, Handy ohne Überstand, Batterie-Liste über die ganze Breite.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 15–20 ms, Raumseite 13 ms, Licht 30 ms, Klima 35 ms, Energie 23 ms, Alarme 6 ms; hass-Setter Übersicht 27–38 µs, Unterseiten 0,4–20 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Im Rahmen der Messschwankung wie 1.22.0.
+
 ## 1.22.0 – 2026-11-26
 
 ### Neu

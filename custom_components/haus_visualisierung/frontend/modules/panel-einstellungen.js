@@ -10,6 +10,7 @@ import { FACES, guessFace, homeLoc, weatherIdOf } from "./wetter.js";
 import { solarCfg } from "./prognose.js";
 import { simSettingsHTML } from "./anwesenheit.js";
 import { calKind } from "./termine.js";
+import { kalCals } from "./kalender.js";
 import { applList } from "./geraete.js";
 import { maintSettingsHTML } from "./wartung.js";
 import { assignDevice, displayInput, displaySettingsHTML } from "./wanddisplay.js";
@@ -216,17 +217,23 @@ const EinstellungenMixin = (Base) => class extends Base {
     const cals = Object.keys(h.states).filter((e) => e.startsWith("calendar.")).sort((a, b) => entName(h, a).localeCompare(entName(h, b), "de"));
     const KIND = { waste: "Müllabfuhr", event: "Termine", "": "Nicht anzeigen" };
     const tg = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><label class="tgl"><input type="checkbox" data-set="termine.${key}" data-bool="1" ${T[key] !== false ? "checked" : ""}><span></span></label></div>`;
+    // Termin-Kalender bekommen Farbe und Anzeigenamen für die Seite „Kalender“
+    const shown = new Map(kalCals(h, { ...D, termine: { ...T, enabled: true } }).map((c) => [c.eid, c]));
     const row = (e) => {
-      const cur = C[e] || "", auto = calKind(h, { cals: {} }, e);
+      const cur = C[e] || "", auto = calKind(h, { cals: {} }, e), k = shown.get(e);
+      const look = k && k.kind === "event" ? `<div class="srow ksub" style="padding-left:22px"><span class="lbl">Auf der Seite Kalender<small>Farbe und Name, z. B. „Tobias“</small></span>
+        <input class="inp" type="text" maxlength="40" placeholder="${esc(entName(h, e))}" value="${esc((T.names || {})[e] || "")}" data-term-name="${esc(e)}" aria-label="Name für ${esc(entName(h, e))}">
+        <input class="inp kcol" style="width:48px;min-width:48px;padding:3px" type="color" value="${esc(k.color)}" data-term-color="${esc(e)}" aria-label="Farbe für ${esc(entName(h, e))}"></div>` : "";
       return `<div class="srow"><span class="lbl">${esc(entName(h, e))}<small>${esc(e)}</small></span>
         <select class="inp" data-term-cal="${esc(e)}"><option value="">Automatisch (${KIND[auto]})</option>
-        ${[["waste", "Müllabfuhr"], ["event", "Termine"], ["-", "Nicht anzeigen"]].map(([k, t]) => `<option value="${k}" ${cur === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
+        ${[["waste", "Müllabfuhr"], ["event", "Termine"], ["-", "Nicht anzeigen"]].map(([k, t]) => `<option value="${k}" ${cur === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>${look}`;
     };
     return `<div class="set glass" data-sec="termine"><h2>${icon("mdi:trash-can-outline")}Müllabfuhr und Termine</h2>
-      <p class="hint">„Morgen: Gelbe Tonne“ oder „Heute 15:30 Zahnarzt“ in der Kopfzeile und im Bildschirmschoner; am Vorabend der Abfuhr hervorgehoben. Quelle sind Kalender aus Home Assistant, z. B. von Waste Collection Schedule, einer Abfall-Integration, einem ICS-Kalender oder Google/CalDAV. Kalender mit „Abfall“, „Müll“ oder „Tonne“ im Namen zählen automatisch als Müllabfuhr; Familienkalender hier auf „Termine“ stellen.</p>
+      <p class="hint">„Morgen: Gelbe Tonne“ oder „Heute 15:30 Zahnarzt“ in der Kopfzeile und im Bildschirmschoner; am Vorabend der Abfuhr hervorgehoben. Quelle sind Kalender aus Home Assistant, z. B. von Waste Collection Schedule, einer Abfall-Integration, einem ICS-Kalender oder Google/CalDAV. Kalender mit „Abfall“, „Müll“ oder „Tonne“ im Namen zählen automatisch als Müllabfuhr; Familienkalender hier auf „Termine“ stellen. Apple-Kalender (iCloud): Integration „CalDAV“ mit https://caldav.icloud.com, Apple-ID und app-spezifischem Passwort einrichten.</p>
       ${tg("enabled", "Müllabfuhr und Termine zeigen")}
       ${tg("header", "In der Kopfzeile", "der wichtigste nächste Eintrag; am Handy nur die Abfuhr am Vorabend")}
       ${tg("saver", "Im Bildschirmschoner", "Abfuhr und bis zu drei Termine von heute und morgen")}
+      ${tg("page", "Seite „Kalender“", "Familienkalender als Woche oder Monat im Menü")}
       ${advanced(`
       <div class="srow"><span class="lbl">Abfuhr hervorheben ab<small>Uhr am Vorabend; am Morgen der Abfuhr bis 10 Uhr</small></span><input class="inp s" type="number" min="12" max="23" data-set="termine.evening" data-num="1" value="${esc(String(T.evening ?? 17))}"><span class="rl">Uhr</span></div>
       <div class="srow"><span class="lbl">Vorausschau<small>Tage, für den Tooltip in der Kopfzeile</small></span><input class="inp s" type="number" min="1" max="14" data-set="termine.days" data-num="1" value="${esc(String(T.days ?? 7))}"><span class="rl">Tage</span></div>`)}
@@ -767,6 +774,16 @@ const EinstellungenMixin = (Base) => class extends Base {
     if (t.dataset && t.dataset.termCal && e.type === "change" && this._draft) {
       const T = this._draft.termine = { ...(this._draft.termine || {}) }, C = T.cals = { ...(T.cals || {}) };
       if (t.value) C[t.dataset.termCal] = t.value; else delete C[t.dataset.termCal];
+      this._dirtySettings = true;
+      // Farbe und Name gibt es nur bei Termin-Kalendern: Zeile neu aufbauen
+      this._rerenderSettings();
+      return;
+    }
+    if (t.dataset && (t.dataset.termColor || t.dataset.termName) && (e.type === "change" || e.type === "input") && this._draft) {
+      const color = !!t.dataset.termColor, eid = color ? t.dataset.termColor : t.dataset.termName, key = color ? "colors" : "names";
+      const T = this._draft.termine = { ...(this._draft.termine || {}) }, M = T[key] = { ...(T[key] || {}) };
+      const v = String(t.value || "").trim();
+      if (v) M[eid] = color ? v.toLowerCase() : v.slice(0, 40); else delete M[eid];
       this._dirtySettings = true;
       const msg = this.shadowRoot.querySelector(".savebar .msg");
       if (msg) msg.textContent = "Ungespeicherte Änderungen";

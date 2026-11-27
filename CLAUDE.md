@@ -43,7 +43,7 @@ Frontend (`frontend/`):
 - `haus-visualisierung.js` Einstieg des Panels (nur beim Öffnen geladen). Panel = `modules/panel.js` plus Mixins
   `panel-*.js` (Ansichten, Einstellungen, Alarmseite, Wandpanel, Klingel, Aktionen, Kompakt).
 - Fachmodule je Thema: `energie`, `klima`, `verlauf`, `rueckblick`, `strompreis`, `prognose`, `wetter`,
-  `wetterwarnung`, `zeitleiste`, `termine`, `automationen`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
+  `wetterwarnung`, `zeitleiste`, `termine`, `kalender` (Seite Familienkalender), `automationen`, `wartung`, `geraete`, `gutenacht`, `anwesenheit`, `pin`, `system`, `standard`,
   `technik`, `wanddisplay`, `warnungen`, `szenen` (Mixin: Raumkopf-Knöpfe und Editor). Gemeinsam genutzt: `basis`, `grundlagen`, `bausteine`, `modell`,
   `bindungen`, `aktualisierer`, `stile` (Änderungen daran lösen alle Bedienprüfungen aus).
 - Frontend-Version: `modules/version.js` (setzt `bump_version.py` mit). Das Release-ZIP legt `.js.gz` daneben.

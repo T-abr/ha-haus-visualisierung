@@ -104,7 +104,7 @@ function setupChecks(h, L) {
   // Termine
   const T = L.termine || {};
   if (T.enabled !== false && Object.keys(S).some((e) => e.startsWith("calendar.")) && !termCals(h, L).length)
-    push("info", "mdi:calendar-question", "Kein Kalender für Müll und Termine gewählt", "Kalender sind da, aber keiner zählt – Art je Kalender wählen", "darstellung", "muellabfuhr-und-termine");
+    push("info", "mdi:calendar-question", "Kein Kalender für Müll und Termine gewählt", "Kalender sind da, aber keiner zählt – Art je Kalender wählen (Kopfzeile, Schoner und Seite Kalender)", "darstellung", "muellabfuhr-und-termine");
 
   // Meldungen
   const P = L.push || {}, notify = Object.keys((h.services && h.services.notify) || {});

@@ -3,7 +3,7 @@
 
 import { dom, entName, esc, icon, isDense, isOn, num } from "./grundlagen.js";
 import { GROUPS } from "./modell.js";
-import { isBigRoom, roomChipHTML, roomRowHTML, roomTileHTML, rowHTML, tileHTML } from "./bausteine.js";
+import { isBigRoom, langCls, roomChipHTML, roomRowHTML, roomTileHTML, rowHTML, tileHTML } from "./bausteine.js";
 import { focusRooms } from "./aktualisierer.js";
 import { alertsCardHTML } from "./warnungen.js";
 import { trendCardHTML } from "./verlauf.js";
@@ -251,7 +251,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     const cams = m.visibleAreas.flatMap((a) => (a.groups.camera || []).map((e) => [a, e]));
     if (!m.agg.contacts.length && !locks.length && !safety.length && !pres.length && !cams.length)
       return pageEmpty("Sicherheit", "mdi:shield-off-outline", "Keine Fenster-/Türkontakte, Schlösser, Melder oder Kameras gefunden.");
-    const flat = (title, ic, pairs) => pairs.length ? `<div class="section glass"><div class="shead">${icon(ic)}<span class="st">${title}</span></div>
+    const flat = (title, ic, pairs) => pairs.length ? `<div class="section glass${langCls(pairs)}"><div class="shead">${icon(ic)}<span class="st">${title}</span></div>
       <div class="tiles">${pairs.map(([a, e]) => tileHTML(h, e, a, { sub: a.name })).join("")}</div></div>` : "";
     const camLink = (this._layout.links || []).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
     return `<div class="ptitle"><h1>Sicherheit</h1><span class="psub" data-u="chip" data-k="contacts"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span><span class="sp"></span>
@@ -270,7 +270,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     const crit = list.filter((b) => b.v !== null && b.v < L.battery_critical);
     const low = list.filter((b) => b.v !== null && b.v >= L.battery_critical && b.v < L.battery_low);
     const ok = list.filter((b) => b.v === null || b.v >= L.battery_low);
-    const sec = (title, ic, items) => items.length ? `<div class="section glass"><div class="shead">${icon(ic)}<span class="st">${title}</span><span class="gc">${items.length}</span></div>
+    const sec = (title, ic, items) => items.length ? `<div class="section glass${langCls(items)}"><div class="shead">${icon(ic)}<span class="st">${title}</span><span class="gc">${items.length}</span></div>
       <div class="tiles">${items.map((b) => tileHTML(h, b.eid, m.areas.get(b.areaId), { sub: (m.areas.get(b.areaId) || {}).name || "Ohne Bereich" })).join("")}</div></div>` : "";
     return `<div class="ptitle"><h1>Batterien</h1><span class="psub">${list.length} Geräte · kritisch unter ${L.battery_critical} %, schwach unter ${L.battery_low} %</span></div>
       <div class="sgrid">${sec("Kritisch", "mdi:battery-alert-variant-outline", crit)}${sec("Schwach", "mdi:battery-30", low)}${sec("In Ordnung", "mdi:battery-check", ok)}</div>`;

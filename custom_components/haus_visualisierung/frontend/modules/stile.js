@@ -420,7 +420,13 @@ details[open]>summary.shead{padding-bottom:2px}
 /* Breite Monitore: Räume im Raster statt Mehrspaltensatz (der stapelte wenige Räume in 2 Spalten), große Räume doppelt breit */
 @media (min-width:1200px){.rlist{columns:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start}
 .rgroup.big{grid-column:span 2}.rgroup.big .rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-.sgrid>.section.big{grid-column:span 2}}
+.sgrid>.section.big{grid-column:span 2}
+/* Lange Listen (Klasse lang, ab 8 Einträgen): ganze Breite, Einträge je nach Platz 2- oder 3-spaltig */
+.sgrid>.section.lang{grid-column:1/-1}.wgrid:has(>.lang){max-width:none}.wgrid>.auform{max-width:980px}
+.section.lang{container-type:inline-size}
+@container (min-width:720px){.lang>.rows,.lang>.wlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 14px;align-items:start}
+.lang>.wlist{gap:0 28px;align-items:stretch}.lang>.wlist>.wrow:nth-child(2){border-top:0}}
+@container (min-width:1200px){.lang>.rows,.lang>.wlist{grid-template-columns:repeat(3,minmax(0,1fr))}.lang>.wlist>.wrow:nth-child(3){border-top:0}}}
 .ktable{padding:2px 0}
 .ktable.withspark .khead,.ktable.withspark .krow{grid-template-columns:minmax(150px,230px) 70px 96px minmax(170px,440px) minmax(250px,1fr)}
 .kspark{position:relative;display:flex;align-items:center;gap:8px;height:44px;min-width:0;cursor:crosshair;touch-action:pan-y}
@@ -701,7 +707,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .kchip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px 0 10px;border-radius:999px;background:var(--hv-glass);border:1px solid var(--hv-line);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;flex:none;transition:transform .15s}
 .kchip:active{transform:scale(.96)}
 .kchip ha-icon{--mdc-icon-size:18px;color:var(--hv-dim)}
-.kchip.iconly{padding:0 9px}
+.kchip.iconly{padding:0 9px}.kchip .ct:empty{display:none}
 .kchip.warm,.kchip.warm ha-icon{color:var(--hv-warm)}
 .kchip.alert{color:#ffb0a6;border-color:rgba(255,107,91,.45);background:rgba(255,107,91,.12)}.kchip.alert ha-icon{color:var(--hv-alert)}
 .kchip.ok ha-icon{color:var(--hv-ok)}.kchip.heat ha-icon{color:var(--hv-heat)}.kchip.heat{color:#ffc29a}

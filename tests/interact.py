@@ -294,6 +294,40 @@ def grosse_monitore_ausgeklappt():
     pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(500)
     check("GM: beim Vergrößern wieder offen", pg.locator(f"{P} details.section").count() == 0)
 
+@gruppe("basis")
+def lange_listen_mehrspaltig():
+    """Lange Listen (ab 8 Einträgen) nutzen ab 1200 px die ganze Breite: je nach Platz 2 oder 3 Spalten; darunter einspaltig."""
+    spalten = """(sel) => { const R = document.querySelector('haus-visualisierung-panel').shadowRoot, el = R.querySelector(sel);
+      return el ? getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length : -1; }"""
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense); pg.wait_for_timeout(500)
+    pg.evaluate("""(() => { const a = window.__api; for (let i = 1; i <= 12; i++)
+      a.set(`automation.regel_${String(i).padStart(2, '0')}`, i % 3 ? 'on' : 'off', { friendly_name: `Regel ${i}`, id: String(2000 + i), last_triggered: null }); })()""")
+    pg.locator(f'{P} .nav[data-to="automationen"]').click(); pg.wait_for_timeout(400)
+    sec = pg.locator(f"{P} .wgrid > .section.lang")
+    check("LL: Automationen ab 8 Einträgen als lange Liste", sec.count() == 1 and pg.locator(f"{P} .aurow").count() >= 12)
+    pg.set_viewport_size({"width": 1280, "height": 1000}); pg.wait_for_timeout(300)
+    check("LL: 1280 px – Automationen zweispaltig, ohne Höchstbreite", pg.evaluate(spalten, ".lang > .wlist") == 2
+          and pg.evaluate(f"{PP}.shadowRoot.querySelector('.wgrid').getBoundingClientRect().width") > 1000)
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(300)
+    check("LL: 1440 px – Automationen dreispaltig", pg.evaluate(spalten, ".lang > .wlist") == 3)
+    pg.set_viewport_size({"width": 1100, "height": 900}); pg.wait_for_timeout(300)
+    check("LL: unter 1200 px einspaltig wie bisher", pg.evaluate(spalten, ".lang > .wlist") in (0, 1)
+          and pg.evaluate(f"{PP}.shadowRoot.querySelector('.wgrid').getBoundingClientRect().width") <= 980)
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    check("LL: Handy – nichts ragt aus der Seite", not pg.evaluate(WIDE))
+    # Batterien: lange Zeilenliste über die ganze Breite des Rasters, kurze Abschnitte bleiben eine Spalte
+    pg.set_viewport_size({"width": 1920, "height": 1000})
+    pg.goto(dense + "?view=batterien"); pg.wait_for_timeout(400)
+    check("LL: wenige Batterien – keine lange Liste", pg.locator(f"{P} .sgrid > .section.lang").count() == 0)
+    pg.evaluate(f"""(() => {{ const g = {PP}.shadowRoot.querySelector('.sgrid'), row = g.querySelector('.rows > *');
+      const s = document.createElement('div'); s.className = 'section glass lang'; s.innerHTML = '<div class="shead">Test</div><div class="rows"></div>';
+      for (let i = 0; i < 12; i++) s.lastChild.appendChild(row.cloneNode(true)); g.appendChild(s); }})()""")
+    pg.wait_for_timeout(200)
+    breite = pg.evaluate(f"(() => {{ const g = {PP}.shadowRoot.querySelector('.sgrid'), s = g.querySelector('.section.lang'); return [g.getBoundingClientRect().width, s.getBoundingClientRect().width]; }})()")
+    check("LL: Batterien – lange Liste über die ganze Breite, dreispaltig", abs(breite[0] - breite[1]) < 2 and pg.evaluate(spalten, ".lang > .rows") == 3)
+    pg.set_viewport_size({"width": 1440, "height": 1000}); pg.wait_for_timeout(300)
+
 @gruppe("panels")
 def eingebettete_panels():
     # ---------- Eingebettete Panels ----------
@@ -346,6 +380,13 @@ def kopfzeile():
     check("K-Kopf: Standard Kompakt, Licht-Zahl", k.locator(".ct").inner_text() == "6" and k.get_attribute("title") == "6 Lichter an")
     check("K-Kopf: offenes Fenster rot", "alert" in pg.locator(f"{P} .kchip[data-k=contacts]").get_attribute("class"))
     check("K-Kopf: Batterien gezählt (Diagnose-Entitäten)", pg.locator(f"{P} .kchip[data-k=batt] .ct").inner_text() == "2")
+    # Chip ohne Zahl (z. B. alle Fenster zu): leeres .ct darf das Symbol nicht verschieben
+    mitte = pg.evaluate(f"""(() => {{ const R = document.querySelector('{P}').shadowRoot;
+      const c = R.querySelector('.kchip').cloneNode(true); c.className = 'kchip iconly'; c.hidden = false; c.querySelector('.ct').textContent = '';
+      R.querySelector('.kchips').append(c);
+      const a = c.getBoundingClientRect(), i = c.querySelector('ha-icon').getBoundingClientRect(); c.remove();
+      return Math.round((Math.abs((a.left + a.width / 2) - (i.left + i.width / 2)) + Math.abs((a.top + a.height / 2) - (i.top + i.height / 2))) * 10) / 10; }})()""")
+    check(f"K-Kopf: Symbol ohne Zahl mittig (Abweichung {mitte} px)", mitte <= 1)
     hdr = pg.evaluate(f"(() => {{ const R = document.querySelector('{P}').shadowRoot; const d = R.querySelector('.dtop').getBoundingClientRect(); const w = R.querySelector('.hright').getBoundingClientRect(); return [Math.round(d.height), Math.round(w.top - d.top)]; }})()")
     check("K-Kopf: eine Zeile, Wetter/Personen oben", hdr[0] <= 50 and hdr[1] <= 10)
     pg.evaluate("window.__api.set('light.flur_decke', 'on')"); pg.wait_for_timeout(150)
@@ -1784,6 +1825,94 @@ def termine():
     check("TE: gespeichert (Art je Kalender, Kopfzeile aus, Vorabend 18 Uhr)", saved and saved["cals"].get("calendar.familie") == "event" and saved["header"] is False and saved["evening"] == 18)
     tp.goto(dense); tp.wait_for_timeout(500)
     check("TE: Kopfzeile abgeschaltet – kein Knopf", tp.locator(f"{P} .termin").count() == 0)
+    ctx.close()
+
+@gruppe("kalender")
+def kalender():
+    # ---------- Seite „Kalender“: Familienkalender als Woche (Raster, Handy: Liste) und Monat ----------
+    from datetime import datetime, timezone
+    # feste Uhrzeit: Donnerstag, 26.11.2026, 10:00 in Berlin
+    ctx = b.new_context(viewport={"width": 1440, "height": 1000}, timezone_id="Europe/Berlin", locale="de-DE")
+    ctx.clock.set_fixed_time(datetime(2026, 11, 26, 9, 0, tzinfo=timezone.utc))
+    kp = ctx.new_page(); kp.on("pageerror", lambda e: errs.append(str(e)))
+    KP = "document.querySelector('haus-visualisierung-panel')"
+    kp.goto(dense); kp.wait_for_timeout(500)
+    check("KA: ohne Kalender kein Menüpunkt", kp.locator(f"{P} .nav[data-to=kalender]").count() == 0)
+    kp.evaluate(f"""(() => {{ const a = window.__api; a.calFail = false;
+      a.calEvents = {{
+        'calendar.icloud_tobias': [
+          {{ summary: 'Zahnarzt', location: 'Praxis Dr. Weiß', start: {{ dateTime: '2026-11-24T15:30:00+01:00' }}, end: {{ dateTime: '2026-11-24T16:00:00+01:00' }} }},
+          {{ summary: 'Urlaub', start: {{ date: '2026-11-27' }}, end: {{ date: '2026-11-30' }} }},
+          {{ summary: 'Silvester', start: {{ dateTime: '2026-12-31T19:00:00+01:00' }}, end: {{ dateTime: '2026-12-31T23:00:00+01:00' }} }} ],
+        'calendar.icloud_anna': [
+          {{ summary: 'Turnen', start: {{ dateTime: '2026-11-26T17:00:00+01:00' }}, end: {{ dateTime: '2026-11-26T18:00:00+01:00' }} }},
+          {{ summary: 'Chor <b>', start: {{ dateTime: '2026-11-26T19:00:00+01:00' }}, end: {{ dateTime: '2026-11-26T20:00:00+01:00' }} }},
+          {{ summary: 'Elternabend', start: {{ dateTime: '2026-11-26T20:00:00+01:00' }}, end: {{ dateTime: '2026-11-26T21:00:00+01:00' }} }},
+          {{ summary: 'Kino', start: {{ dateTime: '2026-11-26T21:30:00+01:00' }}, end: {{ dateTime: '2026-11-26T23:00:00+01:00' }} }} ],
+        'calendar.abfall': [ {{ summary: 'Gelbe Tonne', start: {{ date: '2026-11-25' }}, end: {{ date: '2026-11-26' }} }} ] }};
+      a.set('calendar.icloud_tobias', 'off', {{ friendly_name: 'Tobias (iCloud)' }});
+      a.set('calendar.icloud_anna', 'off', {{ friendly_name: 'Anna (iCloud)' }});
+      a.set('calendar.abfall', 'off', {{ friendly_name: 'Abfall' }});
+      const p = {KP}; p._layout = {{ ...p._layout, termine: {{ ...p._layout.termine, cals: {{ 'calendar.icloud_tobias': 'event', 'calendar.icloud_anna': 'event' }},
+        names: {{ 'calendar.icloud_tobias': 'Tobias' }}, colors: {{ 'calendar.icloud_anna': '#ff0000' }} }} }}; p._dirty = true; p._schedule(); }})()"""); kp.wait_for_timeout(400)
+    nav = kp.locator(f"{P} .nav[data-to=kalender]")
+    check("KA: Menüpunkt mit Kalendern", nav.count() == 1)
+    nav.first.click(); kp.wait_for_timeout(500)
+    days = kp.locator(f"{P} .kweek .kday")
+    check("KA: Woche als Raster mit 7 Tagen", days.count() == 7)
+    check("KA: KW und Zeitraum im Titel", "KW 48" in kp.locator(f"{P} .ptitle .psub").inner_text() and "23." in kp.locator(f"{P} .ptitle .psub").inner_text())
+    check("KA: heute markiert (Donnerstag)", "26." in kp.locator(f"{P} .kday.today .khead").inner_text())
+    di = kp.locator(f"{P} .kday[data-day='2026-11-24']")
+    check("KA: Termin mit Uhrzeit am richtigen Tag", "15:30" in di.inner_text() and "Zahnarzt" in di.inner_text() and "Praxis Dr. Weiß" in di.inner_text())
+    check("KA: vergangene Tage gedimmt", "past" in (di.get_attribute("class") or "") and "past" not in (kp.locator(f"{P} .kday.today").get_attribute("class") or ""))
+    check("KA: mehrtägiger Termin an jedem Tag (Fr–So)", all("Urlaub" in kp.locator(f"{P} .kday[data-day='{d}']").inner_text() for d in ("2026-11-27", "2026-11-28", "2026-11-29")))
+    check("KA: Müllabfuhr mit Tonnenfarbe", "#f2c230" in (kp.locator(f"{P} .kday[data-day='2026-11-25'] .kev").first.get_attribute("style") or ""))
+    check("KA: Farbe aus den Einstellungen", "#ff0000" in (kp.locator(f"{P} .kday.today .kev").first.get_attribute("style") or ""))
+    check("KA: Titel wird maskiert", kp.locator(f"{P} .kday.today .kev b").count() == 0 and "Chor <b>" in kp.locator(f"{P} .kday.today").inner_text())
+    leg = kp.locator(f"{P} .kleg").inner_text()
+    check("KA: Legende mit Anzeigenamen", "Tobias" in leg and "Anna (iCloud)" in leg and "Müllabfuhr" in leg and "Tobias (iCloud)" not in leg)
+    tip = kp.locator(f"{P} .kday[data-day='2026-11-24'] .kev").first.get_attribute("title") or ""
+    check("KA: Tooltip mit Zeit, Kalender und Ort", "15:30–16:00" in tip and "Tobias · Praxis Dr. Weiß" in tip)
+    # blättern
+    kp.locator(f"{P} [data-act=kal-shift][data-d='1']").click(); kp.wait_for_timeout(300)
+    check("KA: nächste Woche (KW 49)", "KW 49" in kp.locator(f"{P} .ptitle .psub").inner_text() and kp.locator(f"{P} .kday.today").count() == 0)
+    kp.locator(f"{P} [data-act=kal-today]").click(); kp.wait_for_timeout(300)
+    check("KA: Heute springt zurück", "KW 48" in kp.locator(f"{P} .ptitle .psub").inner_text())
+    # Monat
+    kp.locator(f"{P} [data-act=kal-mode][data-mode=monat]").click(); kp.wait_for_timeout(400)
+    cells = kp.locator(f"{P} .kmonth .kcell")
+    check("KA: Monat mit 6 Wochen", cells.count() == 42 and "November 2026" in kp.locator(f"{P} .ptitle .psub").inner_text())
+    check("KA: Monat – höchstens 3 Termine, Rest als „+1 weitere“", "+1 weitere" in kp.locator(f"{P} .kcell.today").inner_text() and kp.locator(f"{P} .kcell.today .kev").count() == 3)
+    check("KA: Monat gemerkt", kp.evaluate("localStorage.getItem('hv-kal-mode')") == "monat")
+    kp.locator(f"{P} [data-act=kal-shift][data-d='1']").click(); kp.wait_for_timeout(300)
+    check("KA: nächster Monat (Silvester)", "Dezember 2026" in kp.locator(f"{P} .ptitle .psub").inner_text() and "Silvester" in kp.locator(f"{P} .kcell[data-day='2026-12-31']").inner_text())
+    kp.locator(f"{P} .kcell[data-day='2026-12-31']").click(); kp.wait_for_timeout(300)
+    check("KA: Tag antippen öffnet seine Woche", kp.locator(f"{P} .kweek").count() == 1 and "KW 53" in kp.locator(f"{P} .ptitle .psub").inner_text())
+    kp.locator(f"{P} [data-act=kal-today]").click(); kp.wait_for_timeout(300)
+    # Handy: Woche als Liste, nur Tage mit Terminen und heute
+    kp.set_viewport_size({"width": 390, "height": 844}); kp.wait_for_timeout(500)
+    check("KA: Handy – Woche als Liste", kp.locator(f"{P} .klist").count() == 1 and kp.locator(f"{P} .kweek").count() == 0)
+    check("KA: Handy – nur Tage mit Terminen", kp.locator(f"{P} .klist .kday").count() == 6 and kp.locator(f"{P} .klist .kday[data-day='2026-11-23']").count() == 0)
+    kp.set_viewport_size({"width": 1440, "height": 1000})
+    # Fehler eines Kalenders
+    kp.evaluate(f"(() => {{ window.__api.calFail = true; const p = {KP}; p._kal.ref = new Date(2027, 2, 1); p._dirty = true; p._schedule(); }})()"); kp.wait_for_timeout(500)
+    check("KA: nicht lesbarer Kalender wird genannt", "Nicht lesbar" in kp.locator(f"{P} .main").inner_text())
+    kp.evaluate("window.__api.calFail = false")
+    # Einstellungen: Seite abschaltbar, Farbe und Name je Termin-Kalender
+    kp.evaluate(f"{KP}._go('einstellungen/darstellung')"); kp.wait_for_timeout(500); auf(kp)
+    sec = kp.locator(f"{P} .set[data-sec=termine]")
+    check("KA: Einstellungen – Farbe und Name nur bei Termin-Kalendern", sec.locator("input[data-term-color]").count() == 2 and sec.locator('input[data-term-color="calendar.abfall"]').count() == 0)
+    check("KA: Einstellungen – Farbe vorbelegt", sec.locator('input[data-term-color="calendar.icloud_anna"]').input_value() == "#ff0000")
+    nm = sec.locator('input[data-term-name="calendar.icloud_anna"]')
+    nm.fill("Anna"); nm.dispatch_event("change")
+    cl = sec.locator('input[data-term-color="calendar.icloud_tobias"]')
+    cl.evaluate("e => { e.value = '#00aa00'; e.dispatchEvent(new Event('change', { bubbles: true })); }")
+    pgsw = sec.locator('input[data-set="termine.page"]')
+    pgsw.evaluate("e => { e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); }")
+    kp.locator(f"{P} [data-act=s-save]").click(); kp.wait_for_timeout(300)
+    saved = kp.evaluate("window.__api.hass.callWS({type:'x/info'}).then(r => r.layout.termine)")
+    check("KA: gespeichert (Name, Farbe, Seite aus)", saved and saved["names"].get("calendar.icloud_anna") == "Anna" and saved["colors"].get("calendar.icloud_tobias") == "#00aa00" and saved["page"] is False)
+    check("KA: Seite aus – kein Menüpunkt", kp.locator(f"{P} .nav[data-to=kalender]").count() == 0)
     ctx.close()
 
 @gruppe("prognose")

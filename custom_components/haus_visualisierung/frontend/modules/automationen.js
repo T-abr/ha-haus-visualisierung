@@ -6,6 +6,7 @@
 
 import { DOMAIN } from "./version.js";
 import { esc, icon, relTime, setText } from "./grundlagen.js";
+import { langCls } from "./bausteine.js";
 
 const NEW_PATH = "/config/automation/edit/new";
 /** Stand vom Backend: { items, at, loading, error } */
@@ -170,7 +171,7 @@ function autoPageHTML(p) {
   return `<div class="ptitle"><h1>Automationen</h1><span class="psub" data-u="autosum">${items.length} ${items.length === 1 ? "Automation" : "Automationen"} · ${nOn} aktiv</span><span class="sp"></span>${add}</div>
     <div class="wgrid">${form}
       <input class="inp ausearch" type="search" placeholder="Suchen (Name, Bereich, Beschreibung)" value="${esc(QUERY)}" data-auto="search" aria-label="Automationen durchsuchen">
-      <div class="section glass"><div class="wlist">${items.map((a) => rowHTML(a, h)).join("")}</div>
+      <div class="section glass${langCls(items)}"><div class="wlist">${items.map((a) => rowHTML(a, h)).join("")}</div>
       <p class="hint auempty"${items.some((a) => matches(a, QUERY)) ? " hidden" : ""}>Keine Automation passt zur Suche.</p></div></div>`;
 }
 
