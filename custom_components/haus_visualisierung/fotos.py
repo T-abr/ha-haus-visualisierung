@@ -1,9 +1,14 @@
 """Fotos für den Bildschirmschoner aus einem geteilten iCloud-Album („Öffentliche Website“).
 
 Apple Fotos ist aus dem Browser nicht erreichbar. Ein geteiltes Album mit öffentlichem Link schon: Die Integration
-liest es regelmäßig über dieselbe Schnittstelle wie die Album-Webseite (sharedstreams: ``webstream`` liefert die
-Fotos, ``webasseturls`` die Download-Adressen), legt die Bilder unter /config/haus_visualisierung/fotos ab und
-gibt sie über eine signierte Adresse ans Panel (FotoView). Videos werden übersprungen.
+liest es regelmäßig über dieselbe Schnittstelle wie die Album-Webseite, legt die Bilder unter
+/config/haus_visualisierung/fotos ab und gibt sie über eine signierte Adresse ans Panel (FotoView). Videos werden
+übersprungen. Zwei Link-Formate:
+
+- neu (``https://photos.icloud.com/shared/album/<Schlüssel>``, geteilte Sammlungen): CloudKit. ``records/resolve``
+  liefert Zone, Partition und einen anonymen Zugangs-Token, ``records/query`` die Fotos samt Download-Adressen.
+- alt (``https://www.icloud.com/sharedalbum/#<Token>``): sharedstreams, ``webstream`` liefert die Fotos,
+  ``webasseturls`` die Download-Adressen.
 
 Link: Einstellungen → Wandpanel & Displays → Bildschirmschoner → „Fotos aus iCloud-Album“ (``wallpanel.photos``).
 """
@@ -11,6 +16,9 @@ Link: Einstellungen → Wandpanel & Displays → Bildschirmschoner → „Fotos 
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import json
 import logging
 import re
 import time
@@ -37,6 +45,8 @@ STORAGE_KEY = f"{DOMAIN}_fotos"
 IMG_URL = f"/api/{DOMAIN}/foto"
 NAME_RE = re.compile(r"^[A-Za-z0-9-]{1,80}\.jpg$")
 TOKEN_RE = re.compile(r"^[A-Za-z0-9]{6,40}$")
+CK_KEY_RE = re.compile(r"/shared/album/([A-Za-z0-9_-]{10,80})")
+CK_PREFIX = "ck:"   # Kennung für Schlüssel im neuen Format (CloudKit)
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 REFRESH = timedelta(hours=6)   # Album so oft neu lesen
@@ -44,12 +54,29 @@ MAX_PHOTOS = 300               # neueste Fotos behalten
 MAX_EDGE = 2600                # größte Variante bis zu dieser Kantenlänge (iPad Pro: 2732)
 MAX_BYTES = 25_000_000
 URL_BATCH = 25                 # Fotos je webasseturls-Anfrage
+CK_PAGE = 200                  # Datensätze je CloudKit-Abfrage (Foto = Asset + Master)
+CK_PAGES = 20                  # höchstens so viele Seiten lesen
+CK_BASE = "https://ckdatabasews.icloud.com"
+CK_PATH = "/database/1/com.apple.photos.cloud/production"
+CK_HEADERS = {"Origin": "https://photos.icloud.com", "Referer": "https://photos.icloud.com/",
+              "Content-Type": "text/plain"}
+CK_QUERY = "CPLAssetAndMasterByAssetDateWithoutHiddenOrDeleted"
+CK_RES = ("resJPEGFull", "resJPEGMed", "resJPEGThumb", "resOriginal")   # Bildvarianten in CloudKit-Datensätzen
+CK_KEYS = [f"{r}{k}" for r in CK_RES for k in ("Res", "Width", "Height", "FileType")] + [
+    "itemType", "assetDate", "addedDate", "masterRef", "captionEnc", "titleEnc", "isHidden"]
 TIMEOUT = aiohttp.ClientTimeout(total=60)
 
 
 def album_token(link: str) -> str | None:
-    """Token aus dem Album-Link (https://www.icloud.com/sharedalbum/#B0…) oder der Token selbst."""
+    """Token aus dem Album-Link oder der Token selbst.
+
+    Neues Format https://photos.icloud.com/shared/album/<Schlüssel> → ``ck:<Schlüssel>``;
+    altes Format https://www.icloud.com/sharedalbum/#B0… → ``B0…``.
+    """
     s = (link or "").strip()
+    m = CK_KEY_RE.search(s.split("?", 1)[0].split("#", 1)[0])
+    if m:
+        return CK_PREFIX + m.group(1)
     if "#" in s:
         s = s.split("#", 1)[1]
     s = s.split(";", 1)[0].strip("/ ")
@@ -110,6 +137,83 @@ def asset_urls(data: dict) -> dict[str, str]:
         host = (info.get("hosts") or [loc])[0]
         res[chk] = f"{info.get('scheme') or 'https'}://{host}{path}"
     return res
+
+
+def _ck_val(fields: dict, key: str) -> Any:
+    v = fields.get(key)
+    return v.get("value") if isinstance(v, dict) else None
+
+
+def _ck_text(fields: dict, key: str) -> str:
+    """Text aus einem *Enc-Feld (in geteilten Alben Base64-Text, bei Struktur-Daten eine bplist → leer)."""
+    raw = _ck_val(fields, key)
+    if not isinstance(raw, str) or not raw:
+        return ""
+    try:
+        b = base64.b64decode(raw, validate=True)
+    except ValueError:
+        return ""
+    if b.startswith(b"bplist"):
+        return ""
+    try:
+        return b.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        return ""
+
+
+def ck_variants(fields: dict) -> list[tuple[int, int, str, str]]:
+    """JPEG-Varianten eines Datensatzes als (Breite, Höhe, checksum, Adresse)."""
+    out = []
+    for r in CK_RES:
+        res = _ck_val(fields, f"{r}Res")
+        if not isinstance(res, dict) or not res.get("downloadURL"):
+            continue
+        ftype = str(_ck_val(fields, f"{r}FileType") or ("public.jpeg" if r != "resOriginal" else ""))
+        if ftype != "public.jpeg":
+            continue   # HEIC/PNG-Originale zeigen nicht alle Browser an
+        try:
+            w, h = int(_ck_val(fields, f"{r}Width") or 0), int(_ck_val(fields, f"{r}Height") or 0)
+        except (TypeError, ValueError):
+            continue
+        if w > 0 and h > 0:
+            url = str(res["downloadURL"]).replace("${f}", "foto.jpg")
+            out.append((w, h, str(res.get("fileChecksum") or url), url))
+    return out
+
+
+def _is_video(fields: dict) -> bool:
+    t = str(_ck_val(fields, "itemType") or "").lower()
+    return any(x in t for x in ("movie", "mpeg", "video", "avi")) or bool(_ck_val(fields, "resVidMedRes"))
+
+
+def parse_ck(records: list[dict]) -> list[dict]:
+    """Fotos aus CloudKit-Datensätzen (CPLAsset + CPLMaster), neueste zuerst, Videos weggelassen.
+
+    Bearbeitete Fotos tragen ihre Varianten am Asset, sonst gilt der Master.
+    """
+    masters = {r.get("recordName"): r.get("fields") or {} for r in records if r.get("recordType") == "CPLMaster"}
+    out = []
+    for r in records:
+        if r.get("recordType") != "CPLAsset" or r.get("deleted"):
+            continue
+        f = r.get("fields") or {}
+        ref = _ck_val(f, "masterRef")
+        m = masters.get(ref.get("recordName")) if isinstance(ref, dict) else None
+        if m is None or _is_video(m) or _ck_val(f, "isHidden"):
+            continue
+        opts = ck_variants(f) or ck_variants(m)
+        if not opts:
+            continue
+        fit = [o for o in opts if max(o[0], o[1]) <= MAX_EDGE]
+        w, h, chk, url = max(fit, key=lambda o: o[0] * o[1]) if fit else min(opts, key=lambda o: o[0] * o[1])
+        name = str(r.get("recordName") or "")
+        ts = _ck_val(f, "assetDate") or _ck_val(f, "addedDate")
+        date = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts / 1000)) if isinstance(ts, (int, float)) else ""
+        out.append({"id": hashlib.sha1(name.encode()).hexdigest()[:24], "w": w, "h": h, "checksum": chk,
+                    "url": url, "caption": (_ck_text(f, "captionEnc") or _ck_text(f, "titleEnc"))[:200],
+                    "date": date})
+    out.sort(key=lambda p: p["date"], reverse=True)
+    return out[:MAX_PHOTOS]
 
 
 class PhotoAlbum:
@@ -173,15 +277,20 @@ class PhotoAlbum:
     async def _refresh(self) -> None:
         token = self.link_token()
         if not token:
-            if self.token or self.photos:
-                self.token, self.photos, self.error = None, [], ""
+            link = str((self._layout().get("wallpanel") or {}).get("photos") or "").strip()
+            # Link eingetragen, aber nicht als Album-Link erkannt: sagen, statt still nichts zu tun
+            error = "Link nicht erkannt – erwartet wird https://photos.icloud.com/shared/album/…" if link else ""
+            if self.token or self.photos or self.error != error:
+                self.token, self.photos, self.error = None, [], error
                 await self.hass.async_add_executor_job(self._clean, set())
+                if link:
+                    self.updated = time.time()
                 self._save()
             return
         try:
             await self._sync(token)
             self.error = ""
-        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError, TypeError, AttributeError) as err:
             self.error = f"Album nicht lesbar: {err}"[:200]
             _LOGGER.warning("Fotos: %s", self.error)
         self.updated = time.time()
@@ -201,17 +310,64 @@ class PhotoAlbum:
                 return host, data if isinstance(data, dict) else {}
         raise ValueError("zu viele Umleitungen")
 
+    async def _ck_post(self, session: aiohttp.ClientSession, url: str, body: dict, params: dict) -> dict:
+        """POST an CloudKit; Fehler mit verständlicher Meldung."""
+        async with session.post(url, params={"remapEnums": "true", **params}, data=json.dumps(body),
+                                headers=CK_HEADERS, timeout=TIMEOUT) as r:
+            data = await r.json(content_type=None)
+            if r.status in (401, 403, 404) or (isinstance(data, dict) and data.get("serverErrorCode")):
+                code = data.get("serverErrorCode") if isinstance(data, dict) else None
+                raise ValueError(f"Album nicht freigegeben ({code or r.status}) – ist „Öffentliche Website“ eingeschaltet?")
+            r.raise_for_status()
+            return data if isinstance(data, dict) else {}
+
+    async def _ck_list(self, session: aiohttp.ClientSession, key: str) -> list[dict]:
+        """Fotos eines Albums im neuen Format (CloudKit, geteilte Sammlung)."""
+        res = await self._ck_post(session, f"{CK_BASE}{CK_PATH}/public/records/resolve",
+                                  {"shortGUIDs": [{"value": key, "shouldFetchRootRecord": True}]},
+                                  {"sharing_url_key": key})
+        info = (res.get("results") or [{}])[0]
+        access = info.get("anonymousPublicAccess") or {}
+        zone, tok = info.get("zoneID"), access.get("token")
+        if not zone or not tok:
+            raise ValueError("Album nicht freigegeben – ist „Öffentliche Website“ eingeschaltet?")
+        part = str(access.get("databasePartition") or CK_BASE).rstrip("/").removesuffix(":443")
+        if not re.fullmatch(r"https://[A-Za-z0-9.-]+\.icloud\.com", part):
+            part = CK_BASE
+        url = f"{part}{CK_PATH}/shared/records/query"
+        params = {"sharing_url_key": key, "publicAccessAuthToken": tok}
+        query = {"recordType": CK_QUERY, "filterBy": [
+            {"fieldName": "startRank", "fieldValue": {"type": "INT64", "value": 0}, "comparator": "EQUALS"},
+            {"fieldName": "direction", "fieldValue": {"type": "STRING", "value": "ASCENDING"}, "comparator": "EQUALS"}]}
+        records: list[dict] = []
+        marker = None
+        for _ in range(CK_PAGES):
+            body = {"zoneID": zone, "resultsLimit": CK_PAGE, "query": query, "desiredKeys": CK_KEYS}
+            if marker:
+                body["continuationMarker"] = marker
+            data = await self._ck_post(session, url, body, params)
+            records.extend(r for r in data.get("records") or [] if isinstance(r, dict))
+            marker = data.get("continuationMarker")
+            if not marker:
+                break
+        return parse_ck(records)
+
     async def _sync(self, token: str) -> None:
         session = async_get_clientsession(self.hass)
-        host, stream = await self._post(session, album_host(token), token, "webstream", {"streamCtag": None})
-        wanted = parse_stream(stream)
         have = {p["id"]: p for p in self.photos} if token == self.token else {}
-        new = [p for p in wanted if p["id"] not in have or have[p["id"]].get("checksum") != p["checksum"]]
         urls: dict[str, str] = {}
-        for i in range(0, len(new), URL_BATCH):
-            _host, data = await self._post(session, host, token, "webasseturls",
-                                           {"photoGuids": [p["id"] for p in new[i:i + URL_BATCH]]})
-            urls.update(asset_urls(data))
+        if token.startswith(CK_PREFIX):
+            wanted = await self._ck_list(session, token[len(CK_PREFIX):])
+            urls = {p["checksum"]: p.pop("url") for p in wanted}
+            new = [p for p in wanted if p["id"] not in have or have[p["id"]].get("checksum") != p["checksum"]]
+        else:
+            host, stream = await self._post(session, album_host(token), token, "webstream", {"streamCtag": None})
+            wanted = parse_stream(stream)
+            new = [p for p in wanted if p["id"] not in have or have[p["id"]].get("checksum") != p["checksum"]]
+            for i in range(0, len(new), URL_BATCH):
+                _host, data = await self._post(session, host, token, "webasseturls",
+                                               {"photoGuids": [p["id"] for p in new[i:i + URL_BATCH]]})
+                urls.update(asset_urls(data))
         await self.hass.async_add_executor_job(self.dir.mkdir, 0o755, True, True)
         got: dict[str, dict] = {}
         for p in new:
