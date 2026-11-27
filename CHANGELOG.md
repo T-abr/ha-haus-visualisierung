@@ -4,11 +4,16 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.0.3 – 2026-11-27
+
 ### Behoben
 - **Fotos erschienen nicht im Bildschirmschoner.** Die Integration speicherte größere Bilder abgeschnitten: Beim Download las sie nur den ersten Block der Antwort statt der ganzen Datei. Jetzt wird jedes Bild vollständig gelesen; schon gespeicherte Fotos werden beim nächsten Abruf einmal neu geladen. Außerdem fragt ein Wandpanel, das die Fotoliste vor dem ersten Abruf leer bekommen hat, alle 2 Minuten neu statt erst nach einer Stunde.
 
 ### Tests
 - Backend `test_fotos.py`: großes Bild wird vollständig gespeichert, Fotos älterer Versionen werden einmal neu geladen.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 17–24 ms, Raumseite 14 ms, Licht 29 ms, Klima 27 ms, Energie 20 ms, Alarme 10 ms; hass-Setter Übersicht 20–35 µs, Unterseiten 0,3–24 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Im Rahmen der Messschwankung wie 2.0.2; im Frontend änderte sich nur das Nachfragen der Fotoliste im Bildschirmschoner.
 
 ## 2.0.2 – 2026-11-27
 
