@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.23.0 – 2026-11-27
+
 ### Neu
 - **Seite „Kalender“ (Familienkalender):** Termine aller als „Termine“ gewählten Kalender als Woche (sieben Spalten, am Handy als Liste der Tage mit Terminen) oder als Monat (sechs Wochen, bis zu drei Termine je Tag, sonst „+2 weitere“; am Handy farbige Punkte). Blättern mit ‹ ›, „Heute“; ein Tag im Monat öffnet seine Woche, die gewählte Ansicht bleibt je Gerät gemerkt. Mehrtägige Termine stehen an jedem Tag, ganztägige farbig hinterlegt, Ort und Kalender im Tooltip; Müllabfuhr mit Tonnenfarbe und -symbol. Je Kalender lassen sich in den Einstellungen (Darstellung → Müllabfuhr und Termine) Farbe und Anzeigename wählen, etwa ein iCloud-Kalender je Familienmitglied; die Seite ist dort abschaltbar. Sie erscheint im Menü, sobald ein Kalender gezeigt wird, und frischt sich alle 5 Minuten auf (z. B. am Wandpanel). Neue Layout-Schlüssel `termine.page`, `termine.colors`, `termine.names`.
 - **Apple-Kalender:** Anleitung in der README (CalDAV-Integration von Home Assistant mit `https://caldav.icloud.com` und app-spezifischem Passwort), Kurzhinweis in den Einstellungen.
