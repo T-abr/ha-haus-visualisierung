@@ -3,6 +3,7 @@
 
 import { dc, dom, entName, esc, icon, setText } from "./grundlagen.js";
 import { pinOk } from "./pin.js";
+import { activeLinks, labelled } from "./erkennung.js";
 
 const KlingelMixin = (Base) => class extends Base {
   /* ---------- Klingel-Overlay ---------- */
@@ -11,7 +12,8 @@ const KlingelMixin = (Base) => class extends Base {
     if (cfg.entity) return h.states[cfg.entity] ? cfg.entity : null;
     if (this._bellAuto !== undefined && this._bellAutoFor === h.entities) return this._bellAuto;
     const all = Object.values(h.states);
-    const pick = all.find((st) => dom(st.entity_id) === "event" && dc(st) === "doorbell")
+    // Label „Haus Klingel“, dann Ereignis mit device_class doorbell (jede Integration), dann Name – wie klingel.py
+    const pick = labelled(h, "haus_klingel").filter((e) => ["event", "binary_sensor"].includes(dom(e))).map((e) => h.states[e])[0] || all.find((st) => dom(st.entity_id) === "event" && dc(st) === "doorbell")
       || all.find((st) => ["event", "binary_sensor"].includes(dom(st.entity_id)) && /(doorbell|klingel)/i.test(st.entity_id));
     this._bellAutoFor = h.entities;
     this._bellAuto = pick ? pick.entity_id : null;
@@ -47,7 +49,7 @@ const KlingelMixin = (Base) => class extends Base {
     this._wallActive = Date.now();
     this._closeConfirm(false);
     const lock = cfg.lock && h.states[cfg.lock] ? cfg.lock : "";
-    const protect = (this._layout.links || []).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
+    const protect = activeLinks(this._hass, this._layout).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
     const el = document.createElement("div");
     el.className = "bellbg";
     el.innerHTML = `<div class="bell glass" role="dialog" aria-modal="true">

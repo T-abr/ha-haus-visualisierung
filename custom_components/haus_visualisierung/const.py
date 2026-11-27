@@ -144,6 +144,8 @@ DEFAULT_LAYOUT: dict = {
         "stove": "", "stove_pump": "", "stove_hot": 50, "curve": "", "mixer": "", "flow": "", "outdoor": "",
         "manual_curve": False,
         "manual": {"slope": 0.3, "level": 0, "room": 20, "min": 22, "max": 40, "limit": 16},
+        "parts": {"tank": True, "stove": True, "curve": True},  # Bausteine der Karte
+        "extra": [],                   # Baustein „Werte“: weitere Entitäten (Wärmepumpe, Rücklauf …); leer = Label „Haus Heizung“
     },
     "wallpanel": {                 # Wandpanel (welches Gerät eins ist, merkt sich der Browser)
         "saver_min": 5, "black_min": 0, "return_min": 2, "fullscreen": True, "hide_sidebar": True,
@@ -182,7 +184,7 @@ DEFAULT_LAYOUT: dict = {
         "evening": 17,                 # Abfuhr morgen ab dieser Stunde hervorheben
         "cals": {},                    # {calendar_id: "waste"|"event"|"-"}, fehlt = Müllabfuhr, wenn der Name passt
         "colors": {},                  # {calendar_id: "#rrggbb"} Farbe auf der Seite Kalender, fehlt = feste Reihe
-        "names": {},                   # {calendar_id: "Tobias"} Anzeigename, fehlt = Name der Entität
+        "names": {},                   # {calendar_id: "Anna"} Anzeigename, fehlt = Name der Entität
     },
     "appliances": {                # Haushaltsgeräte: „läuft“/„fertig“, Energie und Kosten je Durchgang (appliances.py)
         "enabled": True,
@@ -197,6 +199,7 @@ DEFAULT_LAYOUT: dict = {
     "wallbox": {                   # Technik: Karte „Wallbox“ (EVCC u. a.)
         "enabled": True, "area": "", "power": "", "mode": "", "soc": "", "limit": "",
         "energy": "", "connected": "", "charging": "", "range": "",
+        "mode_names": {},              # {Option des Lademodus: Anzeigename | "-" (ausblenden)}; fehlt = EVCC-Namen bzw. Option
     },
     "doorbell": {                  # Klingel-Overlay im Panel
         "enabled": True,
@@ -206,6 +209,9 @@ DEFAULT_LAYOUT: dict = {
         "timeout": 60,                 # Sekunden bis zum automatischen Schließen
         "pulse": 2,                    # Schalter nach … s wieder aus (0 = nur ein)
         "snapshots": True,             # Standbild bei jedem Klingeln für die Zeitleiste merken (7 Tage)
+    },
+    "setup": {                     # Einrichtungsassistent im Panel
+        "done": False,                 # False = Assistent beim ersten Öffnen zeigen (bestehende Installationen: True, siehe store.py)
     },
     "header_style": "kompakt",     # kompakt | chips | satz | leiste
     "overview_style": "auto",      # auto | haus | cockpit | spalten | fokus (nur Kompakt)

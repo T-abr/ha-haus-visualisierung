@@ -38,7 +38,7 @@ function outdoorClim(h, m) {
   if (w && rh === null && finite(w.attributes.humidity)) rh = w.attributes.humidity;
   return { ...o, t, rh };
 }
-const isIndoor = (m, a) => !OUTDOOR_RE.test(a.name) && !m.outdoor.some((f) => f.areas.includes(a));
+const isIndoor = (m, a) => !a.outdoor && !OUTDOOR_RE.test(a.name) && !m.outdoor.some((f) => f.areas.includes(a));
 const humRooms = (m) => m.visibleAreas.filter((a) => a.humId && isIndoor(m, a));
 
 /** Lädt fehlende Verläufe gesammelt; cb läuft nach dem Laden. Ergebnis: true, solange noch geladen wird. */

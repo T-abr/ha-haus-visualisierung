@@ -8,6 +8,7 @@ import { roomTileHTML } from "./bausteine.js";
 import { STYLES } from "./stile.js";
 import { HvBase } from "./basis.js";
 import { houseHTML } from "./hausschnitt.js";
+import { activeLinks } from "./erkennung.js";
 
 /* ------------------------------------------------------------------------ */
 /*  Karten für eigene Dashboards                                             */
@@ -39,7 +40,7 @@ class HvCardBase extends HvBase {
       const to = t.dataset.to || "";
       this._navigate(`/haus-visualisierung${to ? `/${to}` : ""}`);
     }
-    if (act === "roof") { const l = (this._layout.links || [])[0]; if (l && l.path) this._navigate(l.path); }
+    if (act === "roof") { const l = activeLinks(this._hass, this._layout)[0]; if (l && l.path) this._navigate(l.path); }
   }
   getCardSize() { return 3; }
 }

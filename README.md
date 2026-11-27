@@ -1,8 +1,94 @@
 # Haus Visualisierung 1.23.1
 
-Eigenes Home-Assistant-Panel, das sich wie eine Dashboard-Strategy aus Etagen, Bereichen und Geräten
-selbst aufbaut – mit eigenem Design, Alarmmanager und Hausmodus. Läuft auf einem Raspberry Pi ohne Last:
-das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser schickt.
+Ein eigenes Panel für Home Assistant, das das ganze Haus auf einen Blick zeigt: Räume, Licht, Rollos, Klima,
+Energie, Sicherheit und Alarme – mit eigenem Design, Alarmmanager und Hausmodus. Es baut sich wie eine
+Dashboard-Strategy selbst aus Etagen, Bereichen und Geräten auf. Ein **Einrichtungsassistent** zeigt beim ersten
+Öffnen, was erkannt wurde, und fragt nur dort nach, wo etwas fehlt. Läuft auf einem Raspberry Pi ohne Last: das
+Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser schickt.
+
+[![HACS](https://img.shields.io/badge/HACS-Benutzerdefiniert-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-ab%202025.1-18BCF2.svg)
+![Sprache](https://img.shields.io/badge/Oberfl%C3%A4che-Deutsch-lightgrey.svg)
+
+| Übersicht | Heizung | Einrichtungsassistent |
+| --- | --- | --- |
+| [![Übersicht mit Hausschnitt, Räumen und Meldungen](docs/bilder/uebersicht.png)](docs/bilder/uebersicht.png) | [![Heizungskarte mit Speicher, Kamin und Heizkurve](docs/bilder/heizung.png)](docs/bilder/heizung.png) | [![Assistent: erkannte Energiesensoren mit Herkunft](docs/bilder/assistent.png)](docs/bilder/assistent.png) |
+
+*Bilder aus der Testumgebung mit Beispieldaten.*
+
+## Auf einen Blick
+
+- **Baut sich selbst auf:** Etagen und Bereiche aus Home Assistant, Geräte nach Art (Licht, Rollo, Fenster, Klima …).
+  Keine YAML-Karten, kein Zusammenklicken von Dashboards.
+- **Erkennt, statt zu fragen:** Energie aus dem Energie-Dashboard von Home Assistant, Wallboxen über ihre Integration,
+  Klingeln über die Geräteklasse, Müllkalender über die Integration – und was nicht passt, ordnest du mit einem
+  **Label** in Home Assistant zu (siehe unten).
+- **Für den Alltag:** Alarmmanager mit Push und Eskalation, Hausmodus (Zuhause, Nacht, Abwesend, Urlaub),
+  Gute-Nacht-Check, Wetterwarnungen, Müllabfuhr, Familienkalender, Wartungsplaner, Szenen je Raum.
+- **An der Wand:** Wandpanel-Modus mit Bildschirmschoner und eigene Wanddisplays (ESP32-S3 mit ESPHome), im Panel
+  eingerichtet und geflasht.
+- **Oberfläche auf Deutsch.**
+
+## Installation
+
+### Über HACS
+
+1. HACS → ⋮ (oben rechts) → **Benutzerdefinierte Repositories** → `https://github.com/T-abr/ha-haus-visualisierung`,
+   Typ **Integration** → Hinzufügen.
+2. „Haus Visualisierung“ suchen, **Herunterladen**, Home Assistant neu starten.
+3. Einstellungen → Geräte & Dienste → Integration hinzufügen → „Haus Visualisierung“.
+
+Updates kommen danach über HACS.
+
+### Von Hand
+
+1. ZIP `haus_visualisierung_vX.Y.Z.zip` aus den [Releases](https://github.com/T-abr/ha-haus-visualisierung/releases)
+   laden und entpacken.
+2. `custom_components/haus_visualisierung` nach `/config/custom_components/` kopieren.
+3. Home Assistant neu starten und die Integration hinzufügen (wie oben, Schritt 3).
+
+Voraussetzung: Home Assistant ab 2025.1, Bereiche (und am besten Etagen) angelegt und Geräte zugeordnet.
+
+## Erste Einrichtung
+
+Beim ersten Öffnen des Panels startet der **Einrichtungsassistent** (nur für Administratoren). Er geht die Themen
+nacheinander durch – **Räume, Energie, Wetter, Sicherheit, Heizung & Wallbox, Kalender, Push** – und zeigt bei jedem,
+was automatisch erkannt wurde und woher (Label, Energie-Dashboard, Integration, Name). Zur Auswahl stehen nur
+passende Entitäten (z. B. bei „PV-Leistung“ nur Sensoren in W oder kW). „Automatisch“ lässt die Erkennung
+entscheiden. Gespeichert wird bei jedem Schrittwechsel; „Später“ schließt den Assistenten.
+
+Den Assistenten startest du jederzeit erneut über **Einstellungen → Assistent**, um etwas zu ergänzen – etwa nach
+einer neuen Wallbox oder einem neuen Kalender. Alles Weitere (Warnregeln, Hausmodus, Wanddisplays, Darstellung)
+steht in den Einstellungen; der Reiter „Prüfen & Sichern“ meldet, was noch fehlt.
+
+### Erkennung und Labels
+
+Die Visualisierung sucht in dieser Reihenfolge: **Einstellungen → Label → Energie-Dashboard, Integration, Gerät,
+Geräteklasse → Name**. Wo die Erkennung nicht trifft, genügt ein Label in Home Assistant (Einstellungen → Bereiche,
+Labels & Zonen → Labels) an der Entität, am Gerät oder – bei Räumen – am Bereich. Home Assistant bildet die ID aus dem
+Namen: aus „Haus PV“ wird `haus_pv`.
+
+| Label | ID | Bedeutung |
+| --- | --- | --- |
+| Haus PV | `haus_pv` | PV-Leistung |
+| Haus Netz | `haus_netz` | Netz-Leistung (Bezug positiv) |
+| Haus Verbrauch | `haus_verbrauch` | Hausverbrauch |
+| Haus Akku | `haus_akku` | Akku-Ladestand |
+| Haus Akku Leistung | `haus_akku_leistung` | Speicher-Leistung (Laden positiv) |
+| Haus Strompreis | `haus_strompreis` | Strompreis-Sensor |
+| Haus Wallbox | `haus_wallbox` | Wallbox (am Gerät: alle seine Entitäten) |
+| Haus Heizung | `haus_heizung` | am Bereich: Heizungsraum; an Entitäten: Baustein „Werte“ der Heizungskarte |
+| Haus Speicher | `haus_speicher` | Speicherfühler (oben/mitte/unten nach Namen) |
+| Haus Kamin | `haus_kamin` | Kamin-Temperatur |
+| Haus Kamin Pumpe | `haus_kamin_pumpe` | Kamin-Pumpe |
+| Haus Vorlauf | `haus_vorlauf` | Vorlauf-Temperatur |
+| Haus Außen | `haus_aussen` | am Bereich: Außenbereich; an Sensoren: Außenfühler |
+| Haus Regensensor | `haus_regensensor` | Regensensor |
+| Haus Markise | `haus_markise` | Markise (Sturmwarnung) |
+| Haus Klingel | `haus_klingel` | Klingel-Auslöser |
+| Haus Müll | `haus_muell` | Kalender der Müllabfuhr |
+
+Entitäten mit dem Label `no_dboard` blendet die Visualisierung aus.
 
 ## Funktionen
 
@@ -15,9 +101,11 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
 - **Energie**: Energiefluss mit PV, Netz, Speicher, Wallbox und Haus, Autarkie und Eigenverbrauch jetzt und heute,
   Leistung der letzten 24 Stunden, Energie je Tag für Woche und Monat bzw. je Monat fürs Jahr; ein Tipp aufs Dach
   öffnet die Seite.
-- **Heizung** im Heizungsraum: Speicher mit Schichtung und Ladung, Kamin mit Pumpe, Heizkurve mit Betriebspunkt
-  und Mischer (passt zur Integration „Heizkurve Fußbodenheizung“).
-- **Wallbox** in der Einfahrt: Ladeleistung, Ladestand, Reichweite, Lademodus und Ziel (EVCC und andere).
+- **Heizung** im Heizungsraum, aus Bausteinen: Speicher mit Schichtung und Ladung, Kamin mit Pumpe, Heizkurve mit
+  Betriebspunkt und Mischer (passt zur Integration „Heizkurve Fußbodenheizung“) und „Werte“ für beliebige Entitäten,
+  z. B. einer Wärmepumpe oder Gastherme. Jeder Baustein lässt sich abschalten.
+- **Wallbox** in der Einfahrt: Ladeleistung, Ladestand, Reichweite, Lademodus und Ziel (EVCC, go-e, Easee, KEBA,
+  openWB, OCPP und andere – erkannt über die Integration). Die Lademodi heißen wie bei EVCC oder frei benannt.
 - **Szenen je Raum**: Stimmungen wie Kino oder Essen im Panel anlegen (Lichter mit Helligkeit und Farbe, Rollos mit
   Position, Schalter; Vorlage aus dem aktuellen Zustand) und auf der Raumseite oder im Schnellzugriff mit einem Tipp
   schalten. Jede Szene ist eine Entität `scene.haus_…` im Raum – auch als Kachel am Wanddisplay und in Automationen.
@@ -53,7 +141,8 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   herunterladen und einspielen.
 - **PIN für heikle Aktionen**: Tür öffnen, Alarm aus, Abwesend/Urlaub nur mit PIN – an Wandpanels und Wanddisplays oder
   überall; die PIN bleibt in Home Assistant. Wanddisplays (Firmware ab 0.7.0) fragen sie mit einem Tastenfeld ab.
-- **Eingebettete Panels** (Solar, Protect, Dashboards) mit fester Navigation und Haus-Farben.
+- **Eingebettete Panels** (Solar, Protect, Dashboards) mit fester Navigation und Haus-Farben; Verknüpfungen auf
+  Panels, die nicht installiert sind, blendet das Menü aus.
 - **Klingel-Overlay** mit Kamera, Live-Bild und Türöffner (Schalter, Taste, Schloss).
 - **Zeitleiste „Was war los?“** auf der Seite Sicherheit: Türen und Schlösser, Klingeln mit Standbild, Bewegung,
   Hausmodus und Alarme der letzten 1–14 Tage, nach Tag gruppiert und filterbar. Klingel-Standbilder bleiben 7 Tage
@@ -69,20 +158,7 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   `haus_visualisierung_modus`.
 - Karten `custom:haus-raum-card` und `custom:haus-hausschnitt-card` für eigene Dashboards.
 
-## Installation
-
-1. ZIP `haus_visualisierung_vX.Y.Z.zip` aus den [Releases](https://github.com/T-abr/ha-haus-visualisierung/releases)
-   laden und entpacken (oder das Repository klonen).
-2. `custom_components/haus_visualisierung` nach `/config/custom_components/` kopieren.
-3. Home Assistant neu starten.
-4. Einstellungen → Geräte & Dienste → Integration hinzufügen → „Haus Visualisierung“.
-
-**HACS:** Das Repository ist für HACS vorbereitet (`hacs.json`). HACS installiert aber nur aus öffentlichen
-Repositories. Solange dieses privat ist, geht die Installation nur wie oben beschrieben. Wird es öffentlich:
-HACS → ⋮ → Benutzerdefinierte Repositories → `https://github.com/T-abr/ha-haus-visualisierung`, Typ Integration,
-dann „Haus Visualisierung“ herunterladen und Home Assistant neu starten. Updates kommen danach per Klick.
-
-Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
+## Kalender
 
 ### Apple-Kalender (iCloud) einbinden
 

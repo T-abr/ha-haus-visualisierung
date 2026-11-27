@@ -18,6 +18,7 @@ import { rbCard } from "./rueckblick.js";
 import { zlCard } from "./zeitleiste.js";
 import { headerOf, svJumpsHTML } from "./solar.js";
 import { energyPills, houseHTML, pageEmpty, sectionHTML } from "./hausschnitt.js";
+import { activeLinks } from "./erkennung.js";
 
 const AnsichtenMixin = (Base) => class extends Base {
   _topbar() {
@@ -231,7 +232,7 @@ const AnsichtenMixin = (Base) => class extends Base {
     const c = this._model.energy;
     if (!c) return pageEmpty("Energie", "mdi:lightning-bolt-outline", "Keine Energiedaten gefunden. Unter Einstellungen → Energie PV-Leistung, Netz, Hausverbrauch oder Speicher eintragen.");
     const L = this._layout, T = this._model.tech || {};
-    const solar = (L.links || []).find((l) => l.path && /(solar|pv|energ)/i.test(`${l.path} ${l.title}`));
+    const solar = activeLinks(this._hass, L).find((l) => l.path && /(solar|pv|energ)/i.test(`${l.path} ${l.title}`));
     const tr = L.show_trends !== false;
     return `<div class="ptitle"><h1>Energie</h1><span class="psub ensub"><span class="ct"></span></span><span class="sp"></span>
       ${svJumpsHTML(this._hass) || (solar ? `<button class="pbtn" data-act="link" data-path="${esc(solar.path)}">${icon(solar.icon || "mdi:solar-power-variant")}${esc(solar.title)}</button>` : "")}</div>
@@ -253,7 +254,7 @@ const AnsichtenMixin = (Base) => class extends Base {
       return pageEmpty("Sicherheit", "mdi:shield-off-outline", "Keine Fenster-/Türkontakte, Schlösser, Melder oder Kameras gefunden.");
     const flat = (title, ic, pairs) => pairs.length ? `<div class="section glass${langCls(pairs)}"><div class="shead">${icon(ic)}<span class="st">${title}</span></div>
       <div class="tiles">${pairs.map(([a, e]) => tileHTML(h, e, a, { sub: a.name })).join("")}</div></div>` : "";
-    const camLink = (this._layout.links || []).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
+    const camLink = activeLinks(this._hass, this._layout).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
     return `<div class="ptitle"><h1>Sicherheit</h1><span class="psub" data-u="chip" data-k="contacts"><span class="ic" hidden>${icon("mdi:circle")}</span><span class="ct"></span></span><span class="sp"></span>
         ${camLink ? `<button class="pbtn" data-act="link" data-path="${esc(camLink.path)}">${icon(camLink.icon || "mdi:cctv")}${esc(camLink.title)}</button>` : ""}</div>
       <div class="sgrid">${flat("Melder & Alarm", "mdi:smoke-detector-variant", safety)}${flat("Schlösser", "mdi:lock", locks)}${flat("Bewegung & Präsenz", "mdi:motion-sensor", pres)}${flat("Kameras", "mdi:cctv", cams)}</div>

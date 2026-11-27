@@ -3,6 +3,7 @@
 
 import { esc, icon, NF0 } from "./grundlagen.js";
 import { weatherIdOf } from "./wetter.js";
+import { labelled } from "./erkennung.js";
 
 const AWNING_RE = /(markise|awning|sonnensegel)/i;
 const RAIN_RE = /(regen|rain)/i, RAIN_SKIP = /(wasser|water|leak|keller|regenwasser|zisterne|tank|menge|amount|rate|total|heute|today)/i;
@@ -11,6 +12,16 @@ const RAIN_RE = /(regen|rain)/i, RAIN_SKIP = /(wasser|water|leak|keller|regenwas
 function wxAuto(h) {
   const S = h.states, ids = Object.keys(S);
   const dwd = ids.filter((e) => e.startsWith("sensor.") && "warning_count" in S[e].attributes && ("region_name" in S[e].attributes || "region_id" in S[e].attributes));
+  const rainLab = labelled(h, "haus_regensensor").filter((e) => e.startsWith("binary_sensor."));
+  const awnLab = labelled(h, "haus_markise").filter((e) => e.startsWith("cover."));
+  if (rainLab.length || awnLab.length) {
+    // Label geht vor (wie weather.py), der Rest bleibt automatisch
+    const a = wxAutoName(h, S, ids, dwd);
+    return { dwd, rain: rainLab[0] || a.rain, awnings: awnLab.length ? awnLab : a.awnings };
+  }
+  return wxAutoName(h, S, ids, dwd);
+}
+function wxAutoName(h, S, ids, dwd) {
   const rain = ids.find((e) => e.startsWith("binary_sensor.") && RAIN_RE.test(`${e} ${S[e].attributes.friendly_name || ""}`) && !RAIN_SKIP.test(`${e} ${S[e].attributes.friendly_name || ""}`)) || "";
   const awnings = ids.filter((e) => e.startsWith("cover.") && (S[e].attributes.device_class === "awning" || AWNING_RE.test(`${e} ${S[e].attributes.friendly_name || ""}`)));
   return { dwd, rain, awnings };

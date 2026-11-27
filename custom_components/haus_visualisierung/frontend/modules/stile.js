@@ -952,6 +952,9 @@ details[open]>summary.shead{padding-bottom:2px}
 .heatgrid{display:grid;grid-template-columns:minmax(170px,.8fr) minmax(170px,.8fr) minmax(300px,2fr);gap:12px}
 .heatgrid[data-n="2"]{grid-template-columns:minmax(170px,1fr) minmax(300px,2fr)}
 .heatgrid[data-n="1"]{grid-template-columns:minmax(0,1fr)}
+.heatgrid .hextra{grid-column:1/-1}.hxl{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.hx{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border-radius:10px;background:var(--hv-surface2,rgba(255,255,255,.04));border:1px solid var(--hv-line);color:inherit;font:inherit;cursor:pointer;text-align:left;min-width:0}
+.hx small{color:var(--hv-dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}.hx b{font-size:15px}
 .hpanel{background:var(--hv-surface);border:1px solid var(--hv-line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .hpt{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}.hpt ha-icon{--mdc-icon-size:17px;color:var(--hv-dim)}
 .hpt .chip{margin-left:auto;font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--hv-surface-2);color:var(--hv-dim)}

@@ -38,6 +38,7 @@ from .alarms import ACKED, MUTED, AlarmBook
 from homeassistant.util import dt as dt_util
 
 from .const import BUILTIN_MODES, DOMAIN, HOUSE_MODE_NAMES, HOUSE_MODES, PANEL_URL_PATH
+from .erkennung import labelled
 from .maintenance import due_info, due_text
 from .mode import HouseMode
 from .presence import PresenceSimulator
@@ -360,7 +361,7 @@ class AlertMonitor:
             area = area_reg.async_get_area(room.area_id)
             room.temp_id, room.hum_id = self._room_climate(room, area)
             floor = floor_reg.async_get_floor(area.floor_id) if area and area.floor_id else None
-            room.indoor = not OUTDOOR_RE.search(room.name) and not (
+            room.indoor = not OUTDOOR_RE.search(room.name) and not (area and "haus_aussen" in (area.labels or ())) and not (
                 floor and (floor.floor_id in outdoor_floors or OUTDOOR_RE.search(floor.name))
             )
         self._rooms = list(rooms.values())
@@ -400,6 +401,11 @@ class AlertMonitor:
         hass, layout = self.hass, self.layout
         out: dict[str, str] = {}
         pick = (layout.get("heating") or {}).get("outdoor")
+        # Label „Haus Außen“ vor den Namen
+        for e in labelled(hass, "haus_aussen", ("sensor",)):
+            dc = (hass.states.get(e).attributes or {}).get("device_class")
+            if dc in ("temperature", "humidity") and dc not in out:
+                out[dc] = e
         for st in hass.states.async_all("sensor"):
             dc = st.attributes.get("device_class")
             label = f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"

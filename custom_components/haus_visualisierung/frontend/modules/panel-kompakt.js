@@ -8,6 +8,7 @@ import { trendCardHTML } from "./verlauf.js";
 import { sparkHTML } from "./klima.js";
 import { pageEmpty } from "./hausschnitt.js";
 import { zlCard } from "./zeitleiste.js";
+import { activeLinks } from "./erkennung.js";
 
 const KompaktMixin = (Base) => class extends Base {
   /* ---------- Kompakt-Seiten ---------- */
@@ -123,7 +124,7 @@ const KompaktMixin = (Base) => class extends Base {
     const contacts = pairs("contact"), safety = pairs("safety"), locks = pairs("lock"), pres = pairs("presence"), cams = pairs("camera");
     if (!contacts.length && !safety.length && !locks.length && !pres.length && !cams.length)
       return pageEmpty("Sicherheit", "mdi:shield-off-outline", "Keine Fenster-/Türkontakte, Schlösser, Melder oder Kameras gefunden.");
-    const camLink = (this._layout.links || []).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
+    const camLink = activeLinks(this._hass, this._layout).find((l) => /protect|kamera|camera/i.test(`${l.path} ${l.title}`));
     const sec = (title, ic, list, collapsed) => {
       if (!list.length) return "";
       collapsed = collapsed && !weit(); // große Monitore: immer offen

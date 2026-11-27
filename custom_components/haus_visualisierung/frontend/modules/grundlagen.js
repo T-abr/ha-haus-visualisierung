@@ -17,7 +17,7 @@ const DEFAULT_LAYOUT = {
   start_view: "overview", battery_critical: 15, battery_low: 35, density: "kompakt", header_style: "kompakt", overview_style: "auto",
   confirm_quick: true, show_trends: true, scenes: {},
   heating: { enabled: true, area: "", tank: [], tank_min: 30, tank_max: 65, stove: "", stove_pump: "", stove_hot: 50, curve: "", mixer: "", flow: "", outdoor: "",
-    manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 } },
+    manual_curve: false, manual: { slope: 0.3, level: 0, room: 20, min: 22, max: 40, limit: 16 }, parts: { tank: true, stove: true, curve: true }, extra: [] },
   wallpanel: { saver_min: 5, black_min: 0, return_min: 2, fullscreen: true, hide_sidebar: true, wake_alarm: true, night_dim: true, wander: false, weather: "", wake_entity: "",
     night_from: "23:00", night_to: "06:00", clock_size: "l", sv_indoor: "",
     sv_date: true, sv_weather: true, sv_forecast: true, sv_pv: true, sv_mode: true, sv_appl: true, sv_shade: true, sv_status: true },
@@ -28,7 +28,9 @@ const DEFAULT_LAYOUT = {
   appliances: { enabled: true, auto: true, items: [] },
   maintenance: { enabled: true, lead_days: 14, tasks: [] },
   displays: [],
-  wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "" },
+  wallbox: { enabled: true, area: "", power: "", mode: "", soc: "", limit: "", energy: "", connected: "", charging: "", range: "", mode_names: {} },
+  /* Einrichtungsassistent: ohne Angabe vom Server gilt er als erledigt (kein Assistent, bevor das Layout geladen ist) */
+  setup: { done: true },
   doorbell: { enabled: true, entity: "", camera: "", lock: "", timeout: 60, pulse: 2 },
   push: { enabled: true, targets: [], levels: { alarm: true, warn: true, info: true }, resolved: "clear", cooldown: 10, critical: true, persistent: false },
   alerts: {
@@ -58,8 +60,10 @@ const withDefaults = (l) => {
     house_mode: { ...structuredClone(DEFAULT_LAYOUT.house_mode), ...((l && l.house_mode) || {}), arm: { ...DEFAULT_LAYOUT.house_mode.arm, ...((l && l.house_mode && l.house_mode.arm) || {}) } },
     presence_sim: { ...structuredClone(DEFAULT_LAYOUT.presence_sim), ...((l && l.presence_sim) || {}) },
     doorbell: { ...DEFAULT_LAYOUT.doorbell, ...((l && l.doorbell) || {}) },
-    heating: { ...structuredClone(DEFAULT_LAYOUT.heating), ...((l && l.heating) || {}), manual: { ...DEFAULT_LAYOUT.heating.manual, ...((l && l.heating && l.heating.manual) || {}) } },
-    wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}) },
+    heating: { ...structuredClone(DEFAULT_LAYOUT.heating), ...((l && l.heating) || {}), manual: { ...DEFAULT_LAYOUT.heating.manual, ...((l && l.heating && l.heating.manual) || {}) },
+      parts: { ...DEFAULT_LAYOUT.heating.parts, ...((l && l.heating && l.heating.parts) || {}) } },
+    setup: { ...DEFAULT_LAYOUT.setup, ...((l && l.setup) || {}) },
+    wallbox: { ...DEFAULT_LAYOUT.wallbox, ...((l && l.wallbox) || {}), mode_names: { ...((l && l.wallbox && l.wallbox.mode_names) || {}) } },
     energy: { ...DEFAULT_LAYOUT.energy, ...((l && l.energy) || {}) },
     price: { ...DEFAULT_LAYOUT.price, ...((l && l.price) || {}) },
     wallpanel: { ...DEFAULT_LAYOUT.wallpanel, ...((l && l.wallpanel) || {}) },
@@ -338,8 +342,16 @@ const TECH_RE = /(vorlauf|r(ü|ue)cklauf|speicher|puffer|kessel|kamin|solar|koll
 const OUTDOOR_RE = /(au(ß|ss)en|garten|drau(ß|ss)en|outdoor|grundst(ü|ue)ck)/i;
 // Fühler im Wintergarten oder Gartenhaus messen nicht die Außentemperatur
 const NOT_OUTDOOR_SENSOR_RE = /(winter ?garten|garten ?haus|gartenh(ü|ue)tte)/i;
-/** Erster Außenfühler einer Geräteklasse nach Namen (Entitäts-ID + Anzeigename), wie im Backend (alerts.py). */
-const outdoorSensor = (h, cls) => Object.keys(h.states).find((e) => {
+/** Hat die Entität (oder ihr Gerät) dieses Label? */
+const hasLabel = (h, e, id) => {
+  const r = (h.entities || {})[e];
+  if (!r) return false;
+  if ((r.labels || []).includes(id)) return true;
+  const d = r.device_id && h.devices && h.devices[r.device_id];
+  return !!(d && (d.labels || []).includes(id));
+};
+/** Erster Außenfühler einer Geräteklasse: Label „Haus Außen“, sonst nach Namen (Entitäts-ID + Anzeigename), wie im Backend (alerts.py). */
+const outdoorSensor = (h, cls) => Object.keys(h.states).find((e) => e.startsWith("sensor.") && dc(h.states[e]) === cls && hasLabel(h, e, "haus_aussen")) || Object.keys(h.states).find((e) => {
   if (!e.startsWith("sensor.") || dc(h.states[e]) !== cls) return false;
   const l = `${e} ${h.states[e].attributes.friendly_name || ""}`;
   return OUTDOOR_RE.test(l) && !NOT_OUTDOOR_SENSOR_RE.test(l);
@@ -389,4 +401,4 @@ const UPD = {};
 const WEIT_MQ = "(min-width:1200px)";
 const weit = () => typeof matchMedia === "function" && matchMedia(WEIT_MQ).matches;
 
-export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, instant, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, outdoorSensor, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, weit, WEIT_MQ, withDefaults };
+export { areaIcon, batteryIcon, BUILTIN_MODES, dc, DEFAULT_LAYOUT, dom, entIcon, entName, esc, fmtPower, fmtState, hasLabel, hideHaChrome, HOUSE_MODES, HV_BLUR, HV_HA_VARS, hvThemeCss, icon, installNavGuard, instant, isDense, isOn, isUnav, MODE_ICON, MODE_NAME, NAV, NF0, NF1, num, OUTDOOR_RE, outdoorSensor, panelPathOf, powerW, relTime, setHidden, setHtml, setIcon, setText, setWidth, TECH_RE, themeFrame, UNAV, UPD, weit, WEIT_MQ, withDefaults };

@@ -24,6 +24,8 @@ from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
+from .erkennung import labelled
+
 _LOGGER = logging.getLogger(__name__)
 
 REFRESH_S = 15 * 60
@@ -152,6 +154,8 @@ class WeatherWatch:
         e = self.cfg.get("rain_sensor") or ""
         if e and self.hass.states.get(e):
             return e
+        if lab := labelled(self.hass, "haus_regensensor", ("binary_sensor",)):
+            return lab[0]
         for st in self.hass.states.async_all("binary_sensor"):
             label = f"{st.entity_id} {st.attributes.get('friendly_name') or ''}"
             if RAIN_SENSOR_RE.search(label) and not RAIN_SENSOR_SKIP.search(label):
@@ -162,6 +166,9 @@ class WeatherWatch:
         picked = [e for e in self.cfg.get("awnings") or [] if self.hass.states.get(e)]
         if picked:
             return picked
+        lab = labelled(self.hass, "haus_markise", ("cover",))
+        if lab:
+            return lab
         out = []
         for r in self.monitor._rooms:
             for e in r.groups.get("cover", []):

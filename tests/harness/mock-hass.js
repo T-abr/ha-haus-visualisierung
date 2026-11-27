@@ -2,7 +2,7 @@ import { evaluate as evalAlertRules, MOLD } from "./mock-alerts.js";
 
 // Nachgebautes hass-Objekt mit Registern, Zuständen und Diensten.
 import { withDefaults } from "./modules/grundlagen.js";
-export function makeHass({ big = false, komfort = false, ov = "haus", hs = "kompakt" } = {}) {
+export function makeHass({ big = false, komfort = false, ov = "haus", hs = "kompakt", einrichtung = false } = {}) {
   const states = {}, entities = {}, devices = {}, areas = {}, floors = {};
   const now = new Date().toISOString();
   const floor = (id, name, level) => (floors[id] = { floor_id: id, name, level, icon: null, aliases: [] });
@@ -112,7 +112,9 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     ent("sensor.growatt_modbus_battery_soc", 78, { friendly_name: "Akku", device_class: "battery", unit_of_measurement: "%" });
     ent("sensor.hausverbrauch_ac", 612, { friendly_name: "Hausverbrauch", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
     // Bilanz: 3240 PV + 5532 Netz = 612 Haus + 7360 Wallbox + 800 Speicher (lädt)
-    ent("sensor.netz_leistung", 5532, { friendly_name: "Netz", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
+    ent("sensor.netz_leistung", 5532, { friendly_name: "Netz", device_class: "power", unit_of_measurement: "W", state_class: "measurement" }, null, { device_id: "zaehler" });
+    // Stromzähler im Energie-Dashboard (energy/get_prefs): Zähler und Leistung am selben Gerät
+    ent("sensor.netz_bezug_gesamt", 12345, { friendly_name: "Netz Bezug", device_class: "energy", unit_of_measurement: "kWh", state_class: "total_increasing" }, null, { device_id: "zaehler" });
     ent("sensor.growatt_modbus_battery_power", 800, { friendly_name: "Akku Leistung", device_class: "power", unit_of_measurement: "W", state_class: "measurement" });
     // Dynamischer Strompreis wie Nordpool: Stundenpreise heute und morgen (günstig nachts und mittags 12–15 Uhr)
     {
@@ -150,6 +152,8 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
     favorites: ["scene.wohnzimmer_gemutlich", "sensor.kamin_temperatur", "lock.haustur", "switch.waschmaschine"],
     header: { pv: "sensor.growatt_modbus_pv_power", battery: "sensor.growatt_modbus_battery_soc", power: "sensor.hausverbrauch_ac", grid: "sensor.netz_leistung" },
   };
+  // ?einrichtung: frische Installation – Assistent startet, Energie-Felder leer (automatisch erkannt)
+  if (einrichtung) { layout.setup = { done: false }; layout.header = { pv: "", battery: "", power: "", grid: "" }; }
   const listeners = [];
   const DE = { on: "An", off: "Aus", home: "Zuhause", not_home: "Unterwegs", unavailable: "Nicht verfügbar", unknown: "Unbekannt", locked: "Verriegelt", unlocked: "Entriegelt", docked: "Angedockt", idle: "Bereit" };
   const fmt = (st) => {
@@ -199,6 +203,7 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       throw new Error(`unbekannt: ${method} ${path}`);
     },
     callWS: async (msg) => {
+      if (msg.type === "energy/get_prefs") { api.log.push(["ws", "energy_prefs"]); return { energy_sources: [{ type: "grid", flow_from: [{ stat_energy_from: "sensor.netz_bezug_gesamt" }], flow_to: [] }], device_consumption: [] }; }
       // Standard-Dashboard: Home Assistant speichert es je Benutzer bzw. für alle (Schlüssel „core“)
       if (msg.type === "frontend/set_user_data" || msg.type === "frontend/set_system_data") {
         api.log.push(["ws", msg.type, msg]);

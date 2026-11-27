@@ -225,6 +225,9 @@ def _heating(raw: dict) -> dict:
     if out["tank_max"] <= out["tank_min"]:
         out["tank_max"] = min(99, out["tank_min"] + 10)
     out["stove_hot"] = _int(raw.get("stove_hot"), 20, 120, out["stove_hot"])
+    parts = raw.get("parts") if isinstance(raw.get("parts"), dict) else {}
+    out["parts"] = {k: parts[k] if isinstance(parts.get(k), bool) else v for k, v in out["parts"].items()}
+    out["extra"] = [e for e in (_entity(x) for x in raw.get("extra", []) if isinstance(raw.get("extra"), list)) if e][:12]
     man = raw.get("manual") if isinstance(raw.get("manual"), dict) else {}
     out["manual"] = {k: _num(man.get(k), lo, hi, out["manual"][k]) for k, (lo, hi) in _MANUAL.items()}
     if out["manual"]["max"] <= out["manual"]["min"]:
@@ -239,6 +242,8 @@ def _wallbox(raw: dict) -> dict:
     out["area"] = str(raw.get("area", ""))[:60] if isinstance(raw.get("area"), str) else ""
     for key in ("power", "mode", "soc", "limit", "energy", "connected", "charging", "range"):
         out[key] = _entity(raw.get(key))
+    names = raw.get("mode_names") if isinstance(raw.get("mode_names"), dict) else {}
+    out["mode_names"] = {str(k)[:60]: v.strip()[:30] for k, v in list(names.items())[:20] if isinstance(v, str) and v.strip()}
     return out
 
 
@@ -559,6 +564,8 @@ def sanitize(raw: Any) -> dict:
         result["scenes"] = sanitize_scenes(raw["scenes"])
     if isinstance(raw.get("confirm_quick"), bool):
         result["confirm_quick"] = raw["confirm_quick"]
+    if isinstance(raw.get("setup"), dict) and isinstance(raw["setup"].get("done"), bool):
+        result["setup"]["done"] = raw["setup"]["done"]
 
     if raw.get("header_style") in ("chips", "kompakt", "satz", "leiste"):
         result["header_style"] = raw["header_style"]
@@ -582,7 +589,11 @@ class LayoutStore:
         self._listeners: set[Callable[[dict], None]] = set()
 
     async def async_load(self) -> None:
-        self._data = sanitize(await self._store.async_load())
+        raw = await self._store.async_load()
+        # Installationen von vor dem Einrichtungsassistenten: schon eingerichtet, Assistent nicht ungefragt zeigen
+        if isinstance(raw, dict) and raw and "setup" not in raw:
+            raw = {**raw, "setup": {"done": True}}
+        self._data = sanitize(raw)
 
     @property
     def data(self) -> dict:

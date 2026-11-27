@@ -5,7 +5,8 @@
  * Termine zählen, steht in den Einstellungen (termine.cals); Kalender mit „Abfall“, „Müll“, „Tonne“ … im Namen
  * gelten ohne Einstellung als Müllabfuhr. */
 
-import { esc, icon, setHidden, setIcon, setText } from "./grundlagen.js";
+import { esc, hasLabel, icon, setHidden, setIcon, setText } from "./grundlagen.js";
+import { isWastePlatform } from "./erkennung.js";
 
 const WASTE_RE = /abfall|m(ü|ue|u)ll|waste|tonne|abfuhr|wertstoff|entsorg|recycl|garbage|trash/i;
 
@@ -32,6 +33,7 @@ function calKind(h, T, eid) {
   if (set === "waste" || set === "event") return set;
   if (set === "-") return "";
   const st = h.states[eid];
+  if (hasLabel(h, eid, "haus_muell") || isWastePlatform(h, eid)) return "waste";
   return WASTE_RE.test(`${eid} ${(st && st.attributes.friendly_name) || ""}`) ? "waste" : "";
 }
 /** Kalender, die gezeigt werden: [{ eid, kind }] */

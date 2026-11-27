@@ -2920,6 +2920,74 @@ def zeitleiste():
     check("ZL: Einstellung „Standbild bei jedem Klingeln merken“, Standard an", tg.count() == 1 and tg.is_checked() and "7 Tage" in pg.locator(f"{P} .set:has([data-set='doorbell.snapshots'])").inner_text())
 
 
+@gruppe("assistent")
+def einrichtungsassistent():
+    # ---------- Einrichtungsassistent: erster Start, Erkanntes, Speichern je Schritt, erneut starten ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?einrichtung"); pg.wait_for_timeout(800)
+    check("AS: erster Start zeigt den Assistenten mit 8 Schritten", pg.locator(f"{P} .asstep").count() == 1 and pg.locator(f"{P} .asnav .altab").count() == 8
+          and "erste Einrichtung" in pg.locator(f"{P} .ptitle").inner_text())
+    check("AS: Räume – Etagen und Bereiche erkannt", "15 Bereiche" in pg.locator(f"{P} .asfound").inner_text())
+    pg.locator(f'{P} [data-as-area="garten"]').evaluate("e => e.click()"); pg.wait_for_timeout(200)
+    pg.locator(f"{P} .asbar .primary").click(); pg.wait_for_timeout(400)
+    check("AS: Weiter speichert die Änderung (Garten ausgeblendet)", "garten" in pg.evaluate(f"{PP}._layout.hidden_areas"))
+    grid = pg.locator(f'{P} select[data-as="header.grid"] option').first.inner_text()
+    check("AS: Netz aus dem Energie-Dashboard (Leistung am Gerät des Zählers)", "Netz" in grid and "Energie-Dashboard" in grid)
+    pv = pg.locator(f'{P} select[data-as="header.pv"] option').first.inner_text()
+    check("AS: PV nach dem Namen erkannt", "PV-Leistung" in pv)
+    opts = pg.evaluate(f"[...{R}.querySelectorAll('select[data-as=\"header.pv\"] option')].map(o => o.value).filter(Boolean)")
+    art = pg.evaluate(f"({opts!r}).every(e => ['W', 'kW'].includes(window.__api.hass.states[e].attributes.unit_of_measurement) || window.__api.hass.states[e].attributes.device_class === 'power')")
+    check("AS: Auswahl nur nach Art (Leistung)", bool(opts) and art)
+    pg.locator(f'{P} select[data-as="header.pv"]').select_option("sensor.growatt_modbus_pv_power"); pg.wait_for_timeout(200)
+    pg.locator(f'{P} .asnav .altab[data-step="7"]').click(); pg.wait_for_timeout(400)
+    check("AS: Sprung zu Fertig speichert den Schritt", pg.evaluate(f"{PP}._layout.header.pv") == "sensor.growatt_modbus_pv_power"
+          and pg.locator(f"{P} .asstep[data-step=fertig]").count() == 1 and "haus_pv" in pg.locator(f"{P} .astab").text_content())
+    pg.locator(f"{P} [data-act=as-done]").click(); pg.wait_for_timeout(500)
+    check("AS: Fertig – erledigt und Startseite", pg.evaluate(f"{PP}._layout.setup.done") is True and pg.locator(f"{P} .asstep").count() == 0)
+    pg.goto(dense + "?view=einstellungen"); pg.wait_for_timeout(600)
+    pg.locator(f'{P} .ptitle [data-to="einrichtung"]').click(); pg.wait_for_timeout(400)
+    check("AS: aus den Einstellungen erneut startbar (ergänzen)", pg.locator(f"{P} .asstep").count() == 1 and "ergänzen" in pg.locator(f"{P} .ptitle").inner_text())
+    pg.goto(dense); pg.wait_for_timeout(600)
+    check("AS: eingerichtete Installation ohne Assistent", pg.locator(f"{P} .asstep").count() == 0)
+
+
+@gruppe("assistent")
+def allgemein_erkennung():
+    # ---------- Labels, Bausteine der Heizungskarte, Lademodi, Standard-Links nur mit Panel ----------
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    pg.goto(dense + "?view=raum/heizungsraum"); pg.wait_for_timeout(600)
+    pg.evaluate("""(() => {
+      const a = window.__api, e = 'sensor.fbh_vorlauf_soll';
+      a.hass.entities = { ...a.hass.entities, [e]: { ...a.hass.entities[e], labels: ['haus_heizung'] } };
+      a.set(e, a.hass.states[e].state);
+    })()"""); pg.wait_for_timeout(400)
+    check("AL: Label „Haus Heizung“ → Baustein „Werte“", pg.locator(f"{P} .heat .hextra .hx").count() == 1)
+    pg.evaluate("""(() => {
+      const L = structuredClone(document.querySelector('haus-visualisierung-panel')._layout);
+      L.heating = { ...L.heating, parts: { tank: true, stove: false, curve: true } };
+      L.wallbox = { ...L.wallbox, mode_names: { minpv: '-', pv: 'Sonne' } };
+      window.__api.layoutCb({ layout: L });
+    })()"""); pg.wait_for_timeout(400)
+    check("AL: Baustein Kamin abgeschaltet", pg.locator(f"{P} .heat .stove").count() == 0 and pg.locator(f"{P} .heat .tank").count() == 1)
+    pg.goto(dense + "?view=raum/einfahrt"); pg.wait_for_timeout(500)
+    pg.evaluate("""(() => {
+      const L = structuredClone(document.querySelector('haus-visualisierung-panel')._layout);
+      L.wallbox = { ...L.wallbox, mode_names: { minpv: '-', pv: 'Sonne' } };
+      window.__api.layoutCb({ layout: L });
+    })()"""); pg.wait_for_timeout(400)
+    md = pg.locator(f"{P} .wbmodes .altab")
+    check("AL: Lademodi frei benannt, „-“ blendet aus", md.count() == 3 and "Sonne" == pg.locator(f"{P} .wbmodes .altab.on").inner_text().strip())
+    check("AL: Standard-Link Kameras mit installiertem Panel", pg.locator(f'{P} .rail [data-path="/protect-visualisierung"]').count() == 1)
+    pg.evaluate("""(() => { const a = window.__api, P = { ...a.hass.panels }; delete P['protect-visualisierung']; a.hass.panels = P; a.set('sensor.evcc_ladeleistung', 7360); })()"""); pg.wait_for_timeout(200)
+    pg.evaluate(f"{PP}._dirty = true; {PP}._flush()")
+    check("AL: Standard-Link ohne installiertes Panel ausgeblendet", pg.locator(f'{P} .rail [data-path="/protect-visualisierung"]').count() == 0)
+    pg.goto(dense + "?view=einstellungen/technik"); pg.wait_for_timeout(600); auf(pg)
+    check("AL: Einstellungen – Bausteine, weitere Werte und Lademodi", pg.locator(f'{P} [data-set="heating.parts.stove"]').count() == 1
+          and pg.locator(f'{P} [data-set="heating.extra"]').count() == 1)
+    stab(pg, "energie")
+    check("AL: Lademodi in den Wallbox-Einstellungen", pg.locator(f"{P} [data-wb-mode]").count() == 4)
+
+
 def auswahl(args):
     """Abschnitte zu den Namen (Gruppe oder Abschnitt) auf der Kommandozeile; ohne Namen alle."""
     if not args:
