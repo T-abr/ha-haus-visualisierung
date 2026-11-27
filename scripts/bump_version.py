@@ -6,7 +6,7 @@
 Einzige Quelle ist manifest.json. Das Skript überträgt die Nummer nach const.py und ins
 Frontend (frontend/modules/version.js) und macht aus „## Unveröffentlicht“ im CHANGELOG.md den neuen Versionsabschnitt.
 Ohne Abschnitt „### Performance“ (Ergebnis von tests/perf/measure.py) wird keine Version gesetzt.
---immer (so ruft es der Release-Workflow auf): fehlt „### Performance“, gibt es nur eine Warnung; fehlt
+--immer: fehlt „### Performance“, gibt es nur eine Warnung; fehlt
 „## Unveröffentlicht“, bekommt die neue Version einen leeren Abschnitt.
 """
 import argparse

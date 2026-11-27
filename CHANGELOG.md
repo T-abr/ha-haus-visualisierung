@@ -11,6 +11,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 - Backend `test_fotos.py`: Link und Server aus dem Token, Auswahl der Bildvariante, Videos übersprungen, Umleitung auf die richtige Partition, Ablage und signierte Auslieferung, kein erneuter Download, Aufräumen beim Leeren des Links, Fehler bei Album ohne öffentliche Website.
 - Bedienprüfungen `wandpanel_fotos`: Vollbild/Rahmen je Ausrichtung, Ken-Burns, Überblendung, Schwarz-Modus ohne Fotos, leeres Album, Einstellungen mit Stand und „Jetzt laden“.
 
+### Geändert
+- **Release-Workflow committet nicht mehr auf `main`.** `main` ist jetzt per Ruleset geschützt und nimmt nur Pull Requests an; der direkte Push „Version X.Y.Z“ aus dem Workflow würde abgewiesen. Die Version setzt daher der Sammel-PR mit `scripts/bump_version.py`, „Release“ → „Run workflow“ taggt nur noch die Version aus `manifest.json` und veröffentlicht. Die Eingabe „Versionssprung“ entfällt.
+
 ## 2.0.0 – 2026-11-27
 
 ### Neu
