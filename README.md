@@ -1,4 +1,4 @@
-# Haus Visualisierung 2.0.2
+# Haus Visualisierung 2.0.3
 
 Ein eigenes Panel für Home Assistant, das das ganze Haus auf einen Blick zeigt: Räume, Licht, Rollos, Klima,
 Energie, Sicherheit und Alarme – mit eigenem Design, Alarmmanager und Hausmodus. Es baut sich wie eine

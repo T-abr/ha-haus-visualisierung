@@ -216,6 +216,25 @@ def parse_ck(records: list[dict]) -> list[dict]:
     return out[:MAX_PHOTOS]
 
 
+def _stale(old: dict | None, new: dict) -> bool:
+    """Neu laden, wenn unbekannt, geändert oder von einer älteren Version gespeichert (damals teils abgeschnitten, ohne ``full``)."""
+    return not old or old.get("checksum") != new["checksum"] or not old.get("full")
+
+
+async def _read_all(r: aiohttp.ClientResponse) -> bytes:
+    """Ganze Antwort lesen, höchstens MAX_BYTES + 1 Byte.
+
+    ``r.content.read(n)`` liefert nur, was gerade im Puffer liegt (oft der erste Block), nicht n Byte;
+    damit wurden größere Bilder abgeschnitten gespeichert.
+    """
+    buf = bytearray()
+    async for chunk in r.content.iter_chunked(1 << 16):
+        buf.extend(chunk)
+        if len(buf) > MAX_BYTES:
+            break
+    return bytes(buf)
+
+
 class PhotoAlbum:
     """Hält die Fotos des geteilten Albums lokal vor."""
 
@@ -359,11 +378,11 @@ class PhotoAlbum:
         if token.startswith(CK_PREFIX):
             wanted = await self._ck_list(session, token[len(CK_PREFIX):])
             urls = {p["checksum"]: p.pop("url") for p in wanted}
-            new = [p for p in wanted if p["id"] not in have or have[p["id"]].get("checksum") != p["checksum"]]
+            new = [p for p in wanted if _stale(have.get(p["id"]), p)]
         else:
             host, stream = await self._post(session, album_host(token), token, "webstream", {"streamCtag": None})
             wanted = parse_stream(stream)
-            new = [p for p in wanted if p["id"] not in have or have[p["id"]].get("checksum") != p["checksum"]]
+            new = [p for p in wanted if _stale(have.get(p["id"]), p)]
             for i in range(0, len(new), URL_BATCH):
                 _host, data = await self._post(session, host, token, "webasseturls",
                                                {"photoGuids": [p["id"] for p in new[i:i + URL_BATCH]]})
@@ -377,7 +396,7 @@ class PhotoAlbum:
             try:
                 async with session.get(url, timeout=TIMEOUT) as r:
                     r.raise_for_status()
-                    body = await r.content.read(MAX_BYTES + 1)
+                    body = await _read_all(r)
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
                 _LOGGER.debug("Fotos: %s nicht geladen: %s", p["id"], err)
                 continue
@@ -385,7 +404,7 @@ class PhotoAlbum:
                 continue
             name = f"{p['id']}.jpg"
             await self.hass.async_add_executor_job((self.dir / name).write_bytes, body)
-            got[p["id"]] = {**p, "file": name}
+            got[p["id"]] = {**p, "file": name, "full": True}
         self.token = token
         self.photos = [got.get(p["id"]) or {**have[p["id"]], "caption": p["caption"]}
                        for p in wanted if p["id"] in got or p["id"] in have]

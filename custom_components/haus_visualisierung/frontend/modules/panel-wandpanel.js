@@ -172,10 +172,11 @@ const WandpanelMixin = (Base) => class extends Base {
 
   /* ---------- Fotos aus dem geteilten iCloud-Album (Backend: fotos.py) ---------- */
 
-  /** Liste der Fotos holen (signierte Adressen 24 h gültig, daher stündlich neu) und gemischt merken. */
+  /** Liste der Fotos holen (signierte Adressen 24 h gültig, daher stündlich neu) und gemischt merken.
+   *  Leere Liste alle 2 min neu fragen: sonst sieht ein Wandpanel, das vor dem ersten Abruf geladen hat, eine Stunde lang nichts. */
   _fotoLoad() {
     if (this._fotoLoading || !this._hass || !this._hass.callWS) return;
-    if (this._fotos && Date.now() - this._fotosAt < 3600e3) return;
+    if (this._fotos && Date.now() - this._fotosAt < (this._fotos.length ? 3600e3 : 120e3)) return;
     this._fotoLoading = true;
     this._hass.callWS({ type: `${DOMAIN}/fotos` })
       .then((r) => { this._fotos = shuffle((r && r.photos) || []); this._fotoIdx = 0; })
