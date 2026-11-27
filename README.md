@@ -198,7 +198,8 @@ Die CalDAV-Integration fragt iCloud etwa alle 15 Minuten ab; neue Termine ersche
 - CI: GitHub Actions (`.github/workflows/tests.yml`) prüft bei jedem Pull Request und Push auf `main`
   die Versionen, die Backend-Tests und die Bedienprüfungen.
 - Version setzen: `python3 scripts/bump_version.py patch|minor|major`, ZIP bauen: `python3 scripts/build_zip.py`.
-- Release: nach dem Merge auf GitHub → Actions → „Release“ → „Run workflow“ und den Versionssprung wählen
-  (patch/minor/major). Der Workflow erhöht die Version mit `bump_version.py`, committet „Version X.Y.Z“ auf `main`,
-  legt den Tag `v<Version>` an, baut das ZIP und veröffentlicht das Release mit dem CHANGELOG-Abschnitt.
-  „keiner“ übernimmt die Version aus `manifest.json`; ebenso ein von Hand gepushter Tag `vX.Y.Z` (muss dazu passen).
+- Release: `main` nimmt nur Pull Requests an, daher setzt der Sammel-PR die neue Version mit `bump_version.py`
+  (CHANGELOG-Abschnitt „Unveröffentlicht“ → neue Version). Nach dem Merge auf GitHub → Actions → „Release“ →
+  „Run workflow“: Der Workflow übernimmt die Version aus `manifest.json`, legt den Tag `v<Version>` an, baut das ZIP
+  und veröffentlicht das Release mit dem CHANGELOG-Abschnitt. Ein von Hand gepushter Tag `vX.Y.Z` (muss zur Version
+  passen) startet ihn ebenfalls.

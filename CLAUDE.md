@@ -8,10 +8,12 @@ Tests, Version und ZIP: Abschnitt „Entwicklung“ in `README.md`. Hier steht n
 - Entscheidungen (auch kleine) bei Tobias erfragen, nicht selbst treffen. Firmware nie ungefragt bauen.
 - Keine Screenshots oder Mockups, außer sie sind ausdrücklich gewünscht.
 - Kein Release aus einem Thread: keine Tags pushen. Release macht Tobias über Actions → „Release“ → „Run workflow“;
-  der Workflow setzt dabei die Version (Eingabe patch/minor/major), Threads ändern die Versionsnummer nicht.
+  der Workflow taggt nur die Version aus `manifest.json`. `main` ist per Ruleset geschützt (nur Pull Requests), daher
+  setzt der Release-Thread die Version im Sammel-PR mit `scripts/bump_version.py patch|minor|major` (Sprung bei
+  Tobias erfragen); Feature-Threads ändern die Versionsnummer nicht.
 - Änderungen ins CHANGELOG unter `## Unveröffentlicht`, gegliedert mit `### Neu`, `### Behoben`, `### Geändert`/`### Verbessert`, `### Tests`.
   Vor einem Release gehört dort ein Abschnitt `### Performance` hin (Ergebnis von `python3 tests/perf/measure.py`,
-  siehe `PERFORMANCE.md`); fehlt er, läuft der Workflow trotzdem durch (nur Warnung).
+  siehe `PERFORMANCE.md`), ohne ihn setzt `bump_version.py` keine Version.
 - Sparsam arbeiten: ein Thread pro Anforderung, danach schließen. Nach dem Öffnen eines PRs nicht auf die CI warten
   und nicht selbst mergen; gemergt wird gesammelt im Release-Thread. Keine Zwischenstände melden, nur Ergebnis oder
   Frage (Fortschritt nur in der Checkliste). Große Dateien nicht komplett lesen, sondern gezielt suchen (`grep`, Ausschnitte).
