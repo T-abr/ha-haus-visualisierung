@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 1.23.1 – 2026-11-27
+
 ### Geändert
 - **Seite „Kalender“ ist jetzt eine Monatsansicht.** Wochenansicht, Handy-Liste und Umschalter Woche/Monat entfallen. Das Raster zeigt nur die Wochen des Monats (4–6 statt immer 6) und füllt die Bildschirmhöhe. Mehrtägige Termine laufen als durchgehender Balken über ihre Tage (bis zu drei Zeilen je Woche), dazu je Tag bis zu drei weitere Termine mit Uhrzeit, sonst „+2 weitere“. Ein Tag antippen (Start: heute) zeigt alle seine Termine mit Uhrzeit, Kalender und Ort in einer Liste neben dem Raster, auf schmalen Bildschirmen darunter; am Handy bleibt das Raster mit farbigen Punkten. ‹ › blättern monatsweise, „Heute“ springt zurück, ein Tag aus dem Vor- oder Folgemonat wechselt den Monat.
 
