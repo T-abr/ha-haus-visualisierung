@@ -24,7 +24,7 @@ const DEFAULT_LAYOUT = {
   shading: { enabled: true, hot: 26, facing: {} },
   forecast: { enabled: true, solar: true, solar_today: "", solar_tomorrow: "" },
   weather_alerts: { enabled: true, dwd: [], dwd_min: 2, rain: true, rain_min: 60, rain_mm: 0.3, rain_sensor: "", wind: true, wind_kmh: 50, awnings: [] },
-  termine: { enabled: true, header: true, saver: true, days: 7, evening: 17, cals: {} },
+  termine: { enabled: true, header: true, saver: true, page: true, days: 7, evening: 17, cals: {}, colors: {}, names: {} },
   appliances: { enabled: true, auto: true, items: [] },
   maintenance: { enabled: true, lead_days: 14, tasks: [] },
   displays: [],
@@ -66,7 +66,8 @@ const withDefaults = (l) => {
     forecast: { ...DEFAULT_LAYOUT.forecast, ...((l && l.forecast) || {}) },
     weather_alerts: { ...structuredClone(DEFAULT_LAYOUT.weather_alerts), ...((l && l.weather_alerts) || {}) },
     pin: { ...DEFAULT_LAYOUT.pin, ...((l && l.pin) || {}) },
-    termine: { ...DEFAULT_LAYOUT.termine, ...((l && l.termine) || {}), cals: { ...((l && l.termine && l.termine.cals) || {}) } },
+    termine: { ...DEFAULT_LAYOUT.termine, ...((l && l.termine) || {}), cals: { ...((l && l.termine && l.termine.cals) || {}) },
+      colors: { ...((l && l.termine && l.termine.colors) || {}) }, names: { ...((l && l.termine && l.termine.names) || {}) } },
     appliances: { ...DEFAULT_LAYOUT.appliances, ...((l && l.appliances) || {}), items: Array.isArray(l && l.appliances && l.appliances.items) ? l.appliances.items : [] },
     displays: Array.isArray(l && l.displays) ? l.displays : [],
     maintenance: { ...DEFAULT_LAYOUT.maintenance, ...((l && l.maintenance) || {}), tasks: Array.isArray(l && l.maintenance && l.maintenance.tasks) ? l.maintenance.tasks : [] },
@@ -374,6 +375,7 @@ const NAV = [
   ["sicherheit", "Sicherheit", "mdi:shield-home"],
   ["alarme", "Alarme", "mdi:bell-ring-outline"],
   ["batterien", "Batterien", "mdi:battery-heart-variant"],
+  ["kalender", "Kalender", "mdi:calendar-month"], // nur mit Kalendern (kalender.js)
   ["wartung", "Wartung", "mdi:wrench-clock"],
   ["automationen", "Automationen", "mdi:robot"], // nur Administratoren
 ];

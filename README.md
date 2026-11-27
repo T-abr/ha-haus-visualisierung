@@ -29,6 +29,8 @@ das Panel nutzt nur die Zustände, die Home Assistant ohnehin an den Browser sch
   im Alarmmanager, in Kopfzeile, Schoner, am Wanddisplay und per Push; `sensor.haus_wetter`.
 - **Müllabfuhr und Termine**: „Morgen: Gelbe Tonne“ in der Kopfzeile und im Bildschirmschoner, am Vorabend
   hervorgehoben, dazu Termine von heute und morgen; aus Kalendern in Home Assistant (z. B. Waste Collection Schedule).
+- **Familienkalender**: Seite „Kalender“ mit Woche (Raster, am Handy als Liste) und Monat, Farbe und Name je Kalender
+  (z. B. ein iCloud-Kalender je Familienmitglied), Müllabfuhr mit Tonnenfarbe; Apple-Kalender siehe unten.
 - **Wartungsplaner**: wiederkehrende Aufgaben (Filter, Rauchmelder, Kaminkehrer, Heizungswartung …) mit Intervall und
   Fälligkeit auf der Seite „Wartung“, „Erledigt“ für alle Benutzer, fällige Aufgaben als Hinweis in den Meldungen.
 - **Automationen** (nur für Administratoren): alle Automationen von Home Assistant mit Bereich, Beschreibung und
@@ -81,6 +83,20 @@ HACS → ⋮ → Benutzerdefinierte Repositories → `https://github.com/T-abr/h
 dann „Haus Visualisierung“ herunterladen und Home Assistant neu starten. Updates kommen danach per Klick.
 
 Voraussetzung: Home Assistant ab 2025.1, Bereiche und Etagen angelegt.
+
+### Apple-Kalender (iCloud) einbinden
+
+Die Visualisierung liest Kalender-Entitäten (`calendar.*`). Für den Apple-Kalender:
+
+1. Auf [appleid.apple.com](https://appleid.apple.com) → Anmelden und Sicherheit → App-spezifische Passwörter ein
+   Passwort erzeugen (z. B. „Home Assistant“).
+2. In Home Assistant: Einstellungen → Geräte & Dienste → Integration hinzufügen → „CalDAV“. URL
+   `https://caldav.icloud.com`, Benutzername = Apple-ID (E-Mail), Passwort = das app-spezifische Passwort,
+   SSL prüfen an. Jeder iCloud-Kalender (auch geteilte Familienkalender) wird eine eigene Entität.
+3. In der Visualisierung: Einstellungen → Darstellung → Müllabfuhr und Termine, die Kalender auf „Termine“ stellen
+   und je Kalender Farbe und Namen wählen. Danach erscheint im Menü die Seite „Kalender“.
+
+Die CalDAV-Integration fragt iCloud etwa alle 15 Minuten ab; neue Termine erscheinen also mit etwas Verzögerung.
 
 ## Entwicklung
 
