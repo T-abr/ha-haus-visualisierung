@@ -4,6 +4,13 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Fotos im Bildschirmschoner aus einem geteilten iCloud-Album.** In Apple Fotos ein geteiltes Album mit „Öffentliche Website“ anlegen und den Link unter Einstellungen → Wandpanel & Displays → Bildschirmschoner → „Fotos“ eintragen (auch im Assistenten, Schritt Kalender). Die Integration (`fotos.py`) liest das Album alle 6 Stunden und nach jeder Änderung des Links, lädt neue Bilder (höchstens 300, bis 2600 px Kantenlänge, ohne Videos) nach `/config/haus_visualisierung/fotos` und gibt sie per signierter Adresse ans Panel. Darstellung automatisch: Querformat als Vollbild mit langsamem Zoom (Ken-Burns) und Verlauf für Uhr und Infos unten links, Hochformat im Rahmen vor demselben Bild weichgezeichnet, Infos daneben. Bildwechsel mit Überblendung in zufälliger Reihenfolge, Dauer einstellbar (Standard 30 s), Beschriftung (Titel · Monat Jahr) abschaltbar, Stand und „Jetzt laden“ in den Einstellungen. Nachts und im Schwarz-Modus zeigt der Schoner wie bisher nur Uhr und Infos.
+
+### Tests
+- Backend `test_fotos.py`: Link und Server aus dem Token, Auswahl der Bildvariante, Videos übersprungen, Umleitung auf die richtige Partition, Ablage und signierte Auslieferung, kein erneuter Download, Aufräumen beim Leeren des Links, Fehler bei Album ohne öffentliche Website.
+- Bedienprüfungen `wandpanel_fotos`: Vollbild/Rahmen je Ausrichtung, Ken-Burns, Überblendung, Schwarz-Modus ohne Fotos, leeres Album, Einstellungen mit Stand und „Jetzt laden“.
+
 ## 2.0.0 – 2026-11-27
 
 ### Neu

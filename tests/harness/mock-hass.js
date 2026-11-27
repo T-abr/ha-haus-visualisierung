@@ -237,6 +237,15 @@ export function makeHass({ big = false, komfort = false, ov = "haus", hs = "komp
       if (msg.type.endsWith("/alarm_code")) { api.log.push(["ws", "alarm_code", msg]); api.alarmSnap.mode = { ...(api.alarmSnap.mode || {}), code: !!msg.code }; api.alarmPush(); return { code: !!msg.code }; }
       if (msg.type.endsWith("/alarm_log")) { api.log.push(["ws", "alarm_log", msg]); return { log: api.alarmSnap.log.filter((e) => e.ts >= Date.now() / 1000 - msg.days * 86400), stats: api.alarmStats || [] }; }
       if (msg.type.endsWith("/presence_sim")) { api.log.push(["ws", "presence_sim", {}]); return api.simInfo || { active: true, source: "2026-11-16", note: "", planned: 2, next: [{ ts: Date.now() / 1000 + 3600, entity: "light.flur_decke", name: "Flur Decke", action: "an" }, { ts: Date.now() / 1000 + 7200, entity: "cover.buro_rollo", name: "Büro Rollo", action: "zu" }], log: [{ ts: Date.now() / 1000 - 600, type: "start", text: "Simulation gestartet (Hausmodus Urlaub)" }, { ts: Date.now() / 1000 - 300, type: "schalten", text: "Wohnzimmer Decke an", entity: "light.wohnzimmer_decke" }] }; }
+      // Fotos (wie fotos.py): Liste aus dem geteilten iCloud-Album, hier SVG-Platzhalter quer und hoch
+      if (msg.type.endsWith("/fotos_refresh")) { api.log.push(["ws", "fotos_refresh", {}]); return { count: 2, updated: Date.now() / 1000, error: "", busy: false }; }
+      if (msg.type.endsWith("/fotos")) {
+        const svg = (w, h, c) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="${c}"/></svg>`)}`;
+        const photos = api.fotos !== undefined ? api.fotos : [
+          { url: svg(1600, 1000, "#c86"), w: 1600, h: 1000, caption: "Urlaub", date: "2026-10-12T10:00:00Z" },
+          { url: svg(1000, 1500, "#68c"), w: 1000, h: 1500, caption: "", date: "2026-09-01T10:00:00Z" }];
+        return { count: photos.length, updated: photos.length ? Date.now() / 1000 - 600 : 0, error: "", busy: false, photos };
+      }
       if (msg.type.endsWith("/push_info")) return { services: ["mobile_app_iphone_tobias", "mobile_app_pixel", "persistent_notification"], targets: ["mobile_app_iphone_tobias", "mobile_app_pixel"], active: [] };
       if (msg.type.endsWith("/push_test")) { api.log.push(["ws", "push_test", {}]); return { targets: (layout.push && layout.push.targets && layout.push.targets.length) ? layout.push.targets : ["mobile_app_iphone_tobias", "mobile_app_pixel"] }; }
       // PIN (wie websocket.py): gespeichert wird im Backend; hier im Klartext im Testzustand

@@ -1,6 +1,7 @@
 /* Haus Visualisierung – Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite.
  * Wird in panel.js mit den anderen Teilen zur Klasse des Panels zusammengesetzt. */
 
+import { DOMAIN } from "./version.js";
 import { DEFAULT_LAYOUT, esc, icon, isOn, MODE_ICON, MODE_NAME, NF0, NF1, num, powerW, setHtml, setText } from "./grundlagen.js";
 import { WEATHER_ICON } from "./aktualisierer.js";
 import { curMode, evalAlerts, LEVEL_ICON, LEVELS } from "./warnungen.js";
@@ -28,6 +29,16 @@ function indoorTemp(h, m, which) {
   const a = m.areas.get(which), t = a && a.tempId ? num(h.states[a.tempId]) : null;
   return t !== null ? { name: a.name, t } : null;
 }
+
+/** Foto füllt den Bildschirm, wenn es dieselbe Ausrichtung hat (Querformat auf quer stehendem Tablet), sonst Rahmen. */
+const photoFills = (ph, w, h) => !(ph.w && ph.h) || (ph.w >= ph.h) === (w >= h);
+/** Beschriftung eines Fotos: Titel · Monat Jahr. */
+function photoCaption(ph) {
+  const d = ph.date ? new Date(ph.date) : null;
+  const when = d && !isNaN(d) ? d.toLocaleDateString("de-DE", { month: "short", year: "numeric" }) : "";
+  return [ph.caption, when].filter(Boolean).join(" · ");
+}
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 const WandpanelMixin = (Base) => class extends Base {
   /* ---------- Wandpanel: Vollbild, Bildschirmschoner, Rückkehr zur Startseite ---------- */
@@ -140,6 +151,7 @@ const WandpanelMixin = (Base) => class extends Base {
   _saverHide() {
     if (!this._saverOn) return;
     this._saverOn = false;
+    clearTimeout(this._fotoTimer); this._fotoTimer = null;
     const s = this.shadowRoot.querySelector(".saver");
     if (s) s.remove();
   }
@@ -151,10 +163,60 @@ const WandpanelMixin = (Base) => class extends Base {
     d.className = "saver";
     d.setAttribute("role", "button");
     d.setAttribute("aria-label", "Bildschirmschoner – tippen zum Aufwecken");
-    d.innerHTML = `<div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svhint"></div><div class="svcal"></div><div class="svstat"></div></div>`;
+    d.innerHTML = `<div class="svph"></div><div class="svcap"></div><div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svhint"></div><div class="svcal"></div><div class="svstat"></div></div>`;
     this.shadowRoot.appendChild(d);
     this._saverMin = null;
+    this._fotoCur = null;
     this._saverUpdate((Date.now() - (this._wallActive || Date.now())) / 60000, true);
+  }
+
+  /* ---------- Fotos aus dem geteilten iCloud-Album (Backend: fotos.py) ---------- */
+
+  /** Liste der Fotos holen (signierte Adressen 24 h gültig, daher stündlich neu) und gemischt merken. */
+  _fotoLoad() {
+    if (this._fotoLoading || !this._hass || !this._hass.callWS) return;
+    if (this._fotos && Date.now() - this._fotosAt < 3600e3) return;
+    this._fotoLoading = true;
+    this._hass.callWS({ type: `${DOMAIN}/fotos` })
+      .then((r) => { this._fotos = shuffle((r && r.photos) || []); this._fotoIdx = 0; })
+      .catch(() => { this._fotos = []; })
+      .finally(() => { this._fotosAt = Date.now(); this._fotoLoading = false; if (this._saverOn) { this._saverDirty = true; this._saverUpdate((Date.now() - (this._wallActive || Date.now())) / 60000); } });
+  }
+
+  /** Nächstes Foto vorladen und überblenden; Querformat als Vollbild mit langsamem Zoom, Hochformat im Rahmen. */
+  _fotoNext() {
+    clearTimeout(this._fotoTimer); this._fotoTimer = null;
+    const el = this.shadowRoot.querySelector(".saver");
+    const list = this._fotos || [];
+    if (!el || !el.classList.contains("ph") || !list.length) return;
+    const W = this._wallCfg(), sec = Math.max(5, Number(W.photo_sec) || 30);
+    const ph = list[(this._fotoIdx = ((this._fotoIdx || 0) + (this._fotoCur ? 1 : 0)) % list.length)];
+    this._fotoCur = ph;
+    const img = new Image();
+    const show = () => {
+      if (!this._saverOn || !el.isConnected) return;
+      const fill = photoFills(ph, innerWidth, innerHeight), url = `url("${String(ph.url).replace(/"/g, "%22")}")`;
+      const s = document.createElement("div");
+      s.className = `svslide ${fill ? "fill" : "frame"}`;
+      if (fill) {
+        // Ken-Burns: Richtung je Bild zufällig, Dauer = Anzeigedauer plus Überblendung
+        const k = Math.floor(Math.random() * 4), ox = [20, 80, 30, 70][k], oy = [30, 70, 75, 25][k];
+        s.innerHTML = `<i class="kb" style="background-image:${url};transform-origin:${ox}% ${oy}%;animation-duration:${sec + 3}s"></i>`;
+      } else {
+        s.innerHTML = `<i class="blur" style="background-image:${url}"></i><img src="${esc(ph.url)}" alt="">`;
+      }
+      const box = el.querySelector(".svph");
+      box.appendChild(s);
+      requestAnimationFrame(() => s.classList.add("in"));
+      // ältere Bilder nach der Überblendung entfernen
+      setTimeout(() => { [...box.children].slice(0, -1).forEach((c) => c.remove()); }, 1800);
+      el.dataset.ph = fill ? "fill" : "frame";
+      setText(el, ".svcap", W.photo_caption ? photoCaption(ph) : "");
+      this._fotoTimer = setTimeout(() => this._fotoNext(), sec * 1000);
+    };
+    img.onload = show;
+    img.onerror = () => { this._fotoTimer = setTimeout(() => this._fotoNext(), 3000); };
+    img.src = ph.url;
   }
 
   _saverUpdate(idle, force = false) {
@@ -165,6 +227,14 @@ const WandpanelMixin = (Base) => class extends Base {
     const night = W.night_dim && (curMode() === "nacht" || inNight(now, W.night_from, W.night_to));
     el.classList.toggle("black", black);
     el.classList.toggle("night", night && !black);
+    // Fotos: nur tagsüber und nicht im Schwarz-Modus
+    if (W.photos) this._fotoLoad();
+    const phOn = !!W.photos && !black && !night && !!(this._fotos && this._fotos.length);
+    if (phOn !== el.classList.contains("ph")) {
+      el.classList.toggle("ph", phOn);
+      if (phOn) this._fotoNext();
+      else { clearTimeout(this._fotoTimer); this._fotoTimer = null; el.querySelector(".svph").innerHTML = ""; setText(el, ".svcap", ""); delete el.dataset.ph; }
+    }
     const minute = Math.floor(now.getTime() / 60000);
     if (!force && this._saverMin === minute && !this._saverDirty) return;
     this._saverMin = minute; this._saverDirty = false;
@@ -201,7 +271,7 @@ const WandpanelMixin = (Base) => class extends Base {
     // Standard: mittig. Auf Wunsch gegen Einbrennen jede Minute ein Stück versetzen.
     const box = el.querySelector(".svbox");
     const k = minute % 9, dx = ((k % 3) - 1) * 6, dy = (Math.floor(k / 3) - 1) * 5;
-    box.style.transform = W.wander ? `translate(${dx}vw,${dy}vh)` : "";
+    box.style.transform = W.wander && !el.classList.contains("ph") ? `translate(${dx}vw,${dy}vh)` : "";
   }
 };
 

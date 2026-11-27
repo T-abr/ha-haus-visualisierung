@@ -113,7 +113,7 @@ function secSummary(k, p, D, checks) {
     case "wandpanel": {
       const W = D.wallpanel || {};
       if (p._wallIsOn && p._wallIsOn()) return "dieses Gerät ist ein Wandpanel";
-      return W.saver_min ? `Bildschirmschoner nach ${W.saver_min} min` : "ohne Bildschirmschoner";
+      return W.saver_min ? `Bildschirmschoner nach ${W.saver_min} min${W.photos ? " mit Fotos" : ""}` : "ohne Bildschirmschoner";
     }
     case "wanddisplays": return (D.displays || []).length ? n(D.displays.length, "Display", "Displays") : "keins eingerichtet";
     case "aussehen": return D.density === "komfort" ? "Komfort" : `Kompakt · Übersicht ${OVERVIEW[D.overview_style || "auto"] || ""}`;

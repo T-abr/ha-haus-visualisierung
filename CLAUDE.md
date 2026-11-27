@@ -32,6 +32,7 @@ Backend, je Datei ein Thema (der Docstring am Dateianfang erklärt es):
 - `weather.py` Wetterwarnungen; `maintenance.py` Wartung; `pin.py` PIN; `backup.py` Sicherungen
 - `erkennung.py` Rollen-Labels (wie `modules/erkennung.js`)
 - `klingel.py` Klingel/Kamera finden, Standbilder (7 Tage); `zeitleiste.py` Zeitleiste „Was war los?“ (Recorder + Protokoll)
+- `fotos.py` Fotos fürs Wandpanel aus geteiltem iCloud-Album (Abruf alle 6 h, Ablage, signierte Auslieferung)
 - `display.py` Inhalte fürs Wanddisplay, `display_setup.py` Einrichten/Flashen, `update.py` Firmware-Update je Display
 
 Frontend (`frontend/`):

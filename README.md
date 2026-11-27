@@ -133,6 +133,10 @@ Entitäten mit dem Label `no_dboard` blendet die Visualisierung aus.
 - **Wandpanel-Modus** je Gerät (auch per `?wandpanel=1`): Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr,
   Wetter, Hausmodus und Meldungen (Elemente, Innentemperatur, Uhrgröße und Nachtzeit einstellbar, gilt auch für die
   Wanddisplays), automatische Rückkehr zur Startseite; Klingel, Alarme und Bewegung wecken auf.
+- **Fotos im Bildschirmschoner** aus Apple Fotos: geteiltes iCloud-Album mit „Öffentliche Website“, Link unter
+  Einstellungen → Wandpanel & Displays (oder im Assistenten). Die Integration holt die Bilder alle 6 Stunden und
+  speichert sie unter `/config/haus_visualisierung/fotos`; Querformat läuft als Vollbild mit langsamem Zoom,
+  Hochformat im Rahmen vor weichgezeichnetem Hintergrund, Uhr und Infos bleiben darüber. Nachts keine Fotos.
 - **Als Standard-Dashboard** (Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“): Home Assistant öffnet
   statt der Übersicht die Visualisierung, für den eigenen Benutzer, für alle oder nur auf diesem Gerät.
 - **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Energie, Technik, Wandpanel & Displays, Darstellung, Prüfen & Sichern) mit Sprungleiste und Sortieren per Ziehen.
