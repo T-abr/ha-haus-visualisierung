@@ -267,7 +267,7 @@ function stepKalender(p) {
     ${rows || '<p class="hint">Keine Kalender gefunden – z. B. Waste Collection Schedule, CalDAV (iCloud), Google Kalender oder Lokaler Kalender einrichten.</p>'}
     <h2 style="margin-top:18px">${icon("mdi:image-multiple-outline")}Fotos im Bildschirmschoner</h2>
     <p class="hint">Optional: Fotos aus Apple Fotos auf dem Wandpanel. In der Fotos-App ein geteiltes Album anlegen, unter „Personen“ → „Öffentliche Website“ einschalten und den Link hier eintragen.</p>
-    <div class="srow"><span class="lbl">Link zum geteilten iCloud-Album<small>leer = ohne Fotos</small></span><input class="inp w" type="url" data-as="wallpanel.photos" value="${esc((p._as.draft.wallpanel || {}).photos || "")}" placeholder="https://www.icloud.com/sharedalbum/#…"></div>`;
+    <div class="srow"><span class="lbl">Link zum geteilten iCloud-Album<small>leer = ohne Fotos</small></span><input class="inp w" type="url" data-as="wallpanel.photos" value="${esc((p._as.draft.wallpanel || {}).photos || "")}" placeholder="https://photos.icloud.com/shared/album/…"></div>`;
 }
 
 function stepPush(p) {
