@@ -1829,7 +1829,7 @@ def termine():
 
 @gruppe("kalender")
 def kalender():
-    # ---------- Seite „Kalender“: Familienkalender als Woche (Raster, Handy: Liste) und Monat ----------
+    # ---------- Seite „Kalender“: Familienkalender als Monatsraster mit Tagesliste ----------
     from datetime import datetime, timezone
     # feste Uhrzeit: Donnerstag, 26.11.2026, 10:00 in Berlin
     ctx = b.new_context(viewport={"width": 1440, "height": 1000}, timezone_id="Europe/Berlin", locale="de-DE")
@@ -1858,41 +1858,41 @@ def kalender():
     nav = kp.locator(f"{P} .nav[data-to=kalender]")
     check("KA: Menüpunkt mit Kalendern", nav.count() == 1)
     nav.first.click(); kp.wait_for_timeout(500)
-    days = kp.locator(f"{P} .kweek .kday")
-    check("KA: Woche als Raster mit 7 Tagen", days.count() == 7)
-    check("KA: KW und Zeitraum im Titel", "KW 48" in kp.locator(f"{P} .ptitle .psub").inner_text() and "23." in kp.locator(f"{P} .ptitle .psub").inner_text())
-    check("KA: heute markiert (Donnerstag)", "26." in kp.locator(f"{P} .kday.today .khead").inner_text())
-    di = kp.locator(f"{P} .kday[data-day='2026-11-24']")
-    check("KA: Termin mit Uhrzeit am richtigen Tag", "15:30" in di.inner_text() and "Zahnarzt" in di.inner_text() and "Praxis Dr. Weiß" in di.inner_text())
-    check("KA: vergangene Tage gedimmt", "past" in (di.get_attribute("class") or "") and "past" not in (kp.locator(f"{P} .kday.today").get_attribute("class") or ""))
-    check("KA: mehrtägiger Termin an jedem Tag (Fr–So)", all("Urlaub" in kp.locator(f"{P} .kday[data-day='{d}']").inner_text() for d in ("2026-11-27", "2026-11-28", "2026-11-29")))
-    check("KA: Müllabfuhr mit Tonnenfarbe", "#f2c230" in (kp.locator(f"{P} .kday[data-day='2026-11-25'] .kev").first.get_attribute("style") or ""))
-    check("KA: Farbe aus den Einstellungen", "#ff0000" in (kp.locator(f"{P} .kday.today .kev").first.get_attribute("style") or ""))
-    check("KA: Titel wird maskiert", kp.locator(f"{P} .kday.today .kev b").count() == 0 and "Chor <b>" in kp.locator(f"{P} .kday.today").inner_text())
+    M = f"{P} .kmonth"
+    check("KA: Monat als Raster mit 6 Wochen (November 2026)", kp.locator(f"{M} .kwk").count() == 6 and kp.locator(f"{M} .kcell").count() == 42 and "November 2026" in kp.locator(f"{P} .ptitle .psub").inner_text())
+    check("KA: keine Wochenansicht und kein Umschalter mehr", kp.locator(f"{P} .kweek, {P} [data-act=kal-mode]").count() == 0)
+    check("KA: heute markiert und gewählt (Donnerstag)", kp.locator(f"{M} .kcell.today.sel[data-day='2026-11-26']").count() == 1)
+    check("KA: Raster – höchstens 3 Termine je Tag, Rest als „+1 weitere“", kp.locator(f"{M} .kev[data-day='2026-11-26']").count() == 3 and "+1 weitere" in kp.locator(f"{M} .kwk").nth(4).inner_text())
+    bar = kp.locator(f"{M} .kspan", has_text="Urlaub")
+    check("KA: mehrtägiger Termin als ein Balken über Fr–So", bar.count() == 1 and "grid-column:5 / span 3" in (bar.get_attribute("style") or ""))
+    check("KA: Müllabfuhr mit Tonnenfarbe", "#f2c230" in (kp.locator(f"{M} .kev[data-day='2026-11-25']").first.get_attribute("style") or ""))
+    check("KA: Farbe aus den Einstellungen", "#ff0000" in (kp.locator(f"{M} .kev[data-day='2026-11-26']").first.get_attribute("style") or ""))
+    dl = kp.locator(f"{P} .kdlist")
+    check("KA: Tagesliste für heute mit allen 4 Terminen", "heute" in dl.locator("h2").inner_text() and "Donnerstag, 26. November" in dl.inner_text() and dl.locator(".kdi").count() == 4)
+    check("KA: Titel wird maskiert", dl.locator("b").count() == 0 and "Chor <b>" in dl.inner_text() and kp.locator(f"{M} .kev b").count() == 0)
+    check("KA: Tagesliste neben dem Raster (breit)", (dl.bounding_box() or {}).get("x", 0) > (kp.locator(M).bounding_box() or {}).get("x", 0) + 500)
     leg = kp.locator(f"{P} .kleg").inner_text()
     check("KA: Legende mit Anzeigenamen", "Tobias" in leg and "Anna (iCloud)" in leg and "Müllabfuhr" in leg and "Tobias (iCloud)" not in leg)
-    tip = kp.locator(f"{P} .kday[data-day='2026-11-24'] .kev").first.get_attribute("title") or ""
-    check("KA: Tooltip mit Zeit, Kalender und Ort", "15:30–16:00" in tip and "Tobias · Praxis Dr. Weiß" in tip)
+    # Tag wählen
+    kp.locator(f"{M} .kcell[data-day='2026-11-24']").click(); kp.wait_for_timeout(300)
+    t = dl.inner_text()
+    check("KA: Tag antippen zeigt Uhrzeit, Kalender und Ort", "15:30–16:00" in t and "Zahnarzt" in t and "Tobias · Praxis Dr. Weiß" in t and kp.locator(f"{M} .kcell.sel[data-day='2026-11-24']").count() == 1)
+    kp.locator(f"{M} .kcell[data-day='2026-11-28']").click(); kp.wait_for_timeout(300)
+    check("KA: mehrtägig in der Tagesliste „bis 29.11.“", "bis 29.11." in dl.inner_text() and "Urlaub" in dl.inner_text())
     # blättern
     kp.locator(f"{P} [data-act=kal-shift][data-d='1']").click(); kp.wait_for_timeout(300)
-    check("KA: nächste Woche (KW 49)", "KW 49" in kp.locator(f"{P} .ptitle .psub").inner_text() and kp.locator(f"{P} .kday.today").count() == 0)
+    check("KA: nächster Monat (Dezember, Silvester)", "Dezember 2026" in kp.locator(f"{P} .ptitle .psub").inner_text() and "Silvester" in kp.locator(f"{M} .kwk").last.inner_text() and kp.locator(f"{M} .kcell.today").count() == 0)
+    check("KA: Dezember mit 5 Wochen, Erster gewählt", kp.locator(f"{M} .kwk").count() == 5 and kp.locator(f"{M} .kcell.sel[data-day='2026-12-01']").count() == 1)
+    kp.locator(f"{M} .kcell[data-day='2027-01-03']").click(); kp.wait_for_timeout(300)
+    check("KA: Tag aus dem Folgemonat wechselt den Monat", "Januar 2027" in kp.locator(f"{P} .ptitle .psub").inner_text() and kp.locator(f"{M} .kcell.sel[data-day='2027-01-03']").count() == 1)
     kp.locator(f"{P} [data-act=kal-today]").click(); kp.wait_for_timeout(300)
-    check("KA: Heute springt zurück", "KW 48" in kp.locator(f"{P} .ptitle .psub").inner_text())
-    # Monat
-    kp.locator(f"{P} [data-act=kal-mode][data-mode=monat]").click(); kp.wait_for_timeout(400)
-    cells = kp.locator(f"{P} .kmonth .kcell")
-    check("KA: Monat mit 6 Wochen", cells.count() == 42 and "November 2026" in kp.locator(f"{P} .ptitle .psub").inner_text())
-    check("KA: Monat – höchstens 3 Termine, Rest als „+1 weitere“", "+1 weitere" in kp.locator(f"{P} .kcell.today").inner_text() and kp.locator(f"{P} .kcell.today .kev").count() == 3)
-    check("KA: Monat gemerkt", kp.evaluate("localStorage.getItem('hv-kal-mode')") == "monat")
-    kp.locator(f"{P} [data-act=kal-shift][data-d='1']").click(); kp.wait_for_timeout(300)
-    check("KA: nächster Monat (Silvester)", "Dezember 2026" in kp.locator(f"{P} .ptitle .psub").inner_text() and "Silvester" in kp.locator(f"{P} .kcell[data-day='2026-12-31']").inner_text())
-    kp.locator(f"{P} .kcell[data-day='2026-12-31']").click(); kp.wait_for_timeout(300)
-    check("KA: Tag antippen öffnet seine Woche", kp.locator(f"{P} .kweek").count() == 1 and "KW 53" in kp.locator(f"{P} .ptitle .psub").inner_text())
-    kp.locator(f"{P} [data-act=kal-today]").click(); kp.wait_for_timeout(300)
-    # Handy: Woche als Liste, nur Tage mit Terminen und heute
+    check("KA: Heute springt zurück", "November 2026" in kp.locator(f"{P} .ptitle .psub").inner_text() and kp.locator(f"{M} .kcell.sel[data-day='2026-11-26']").count() == 1)
+    # Handy: Raster mit Punkten, Tagesliste darunter
     kp.set_viewport_size({"width": 390, "height": 844}); kp.wait_for_timeout(500)
-    check("KA: Handy – Woche als Liste", kp.locator(f"{P} .klist").count() == 1 and kp.locator(f"{P} .kweek").count() == 0)
-    check("KA: Handy – nur Tage mit Terminen", kp.locator(f"{P} .klist .kday").count() == 6 and kp.locator(f"{P} .klist .kday[data-day='2026-11-23']").count() == 0)
+    check("KA: Handy – Raster mit Punkten", kp.locator(f"{M} .kmini .kcell").count() == 42 and kp.locator(f"{M} .kcell.today .kdots i").count() == 4 and kp.locator(f"{M} .kev").count() == 0)
+    dlb, mb = dl.bounding_box() or {}, kp.locator(M).bounding_box() or {}
+    check("KA: Handy – Tagesliste unter dem Raster", dlb.get("y", 0) >= mb.get("y", 0) + mb.get("height", 0) - 1)
+    check("KA: Handy – kein waagrechter Überstand", kp.evaluate(f"(() => {{ const m = {KP}.shadowRoot.querySelector('.main'); return m.scrollWidth <= m.clientWidth + 1; }})()"))
     kp.set_viewport_size({"width": 1440, "height": 1000})
     # Fehler eines Kalenders
     kp.evaluate(f"(() => {{ window.__api.calFail = true; const p = {KP}; p._kal.ref = new Date(2027, 2, 1); p._dirty = true; p._schedule(); }})()"); kp.wait_for_timeout(500)

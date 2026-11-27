@@ -1,4 +1,6 @@
-/* Haus Visualisierung – Seite „Kalender“: Familienkalender als Woche (Raster, am Handy als Liste) oder Monat.
+/* Haus Visualisierung – Seite „Kalender“: Familienkalender als Monatsraster. Mehrtägige Termine laufen als Balken
+ * über ihre Tage, je Tag stehen bis zu drei weitere Termine im Raster; der gewählte Tag (Start: heute) zeigt alle
+ * Termine mit Uhrzeit, Kalender und Ort daneben (schmale Bildschirme: darunter, am Handy Punkte statt Titel im Raster).
  * Quelle sind dieselben Kalender-Entitäten wie für Kopfzeile und Bildschirmschoner (termine.js), z. B. der Apple-
  * Kalender über die CalDAV-Integration von Home Assistant. Farbe und Anzeigename je Kalender stehen in den
  * Einstellungen (termine.colors, termine.names); ohne Einstellung kommt die Farbe aus einer festen Reihe, der Name
@@ -12,43 +14,49 @@ const DAY = 86400000;
 const PALETTE = ["#5aa0ff", "#f06292", "#4cbf6b", "#ffb74d", "#ba68c8", "#4dd0e1", "#e57373", "#aed581"];
 const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const REFRESH = 5 * 60000;
+const LANES = 3;   // Zeilen für mehrtägige Balken je Woche
+const SINGLE = 3;  // weitere Termine je Tag im Raster
 
 const CSS = `
 .kbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.kbar .altab.on{background:var(--hv-surface-2);color:var(--hv-text)}
 .kleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:-6px 0 14px;font-size:13px;color:var(--hv-dim)}
 .kleg span{display:inline-flex;align-items:center;gap:6px}
 .kleg i{width:10px;height:10px;border-radius:50%;background:var(--kc)}
-.kweek{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
-.kday{padding:10px 8px;min-height:180px;display:flex;flex-direction:column;gap:6px}
-.kday.past{opacity:.6}
-.kday.today{border-color:var(--hv-accent);box-shadow:inset 0 0 0 1px var(--hv-accent)}
-.khead{display:flex;align-items:baseline;gap:6px;font-size:13px;color:var(--hv-dim);padding:0 2px 4px;border-bottom:1px solid var(--hv-line)}
-.khead b{font-size:20px;font-weight:400;color:var(--hv-text)}
-.kday.today .khead b{color:var(--hv-accent)}
-.kev{display:block;padding:5px 7px;border-radius:8px;font-size:12.5px;line-height:1.3;background:var(--hv-surface);border-left:3px solid var(--kc);overflow:hidden;text-overflow:ellipsis;word-break:break-word}
-.kev.ad{background:color-mix(in srgb,var(--kc) 28%,transparent);border-left-color:transparent}
-.kev .kt{color:var(--hv-dim);font-variant-numeric:tabular-nums;margin-right:5px}
-.kev ha-icon{--mdc-icon-size:14px;margin-right:4px;color:var(--kc);vertical-align:-2px}
-.kev small{display:block;color:var(--hv-dim);font-size:11.5px}
-.knone{color:var(--hv-faint);font-size:12px;padding:2px}
-.klist{display:flex;flex-direction:column;gap:10px}
-.klist .kday{min-height:0}
-.kmonth{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:8px}
-.kwd{text-align:center;font-size:12px;color:var(--hv-dim);padding:2px 0 4px}
-.kcell{min-height:96px;padding:5px;border-radius:10px;background:var(--hv-surface);display:flex;flex-direction:column;gap:3px;text-align:left;overflow:hidden;min-width:0}
+.kwrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start}
+.kmonth{display:flex;flex-direction:column;gap:4px;padding:8px}
+.kwds{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0 4px}
+.kwd{text-align:center;font-size:12px;color:var(--hv-dim);padding:2px 0 2px}
+.kwk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));column-gap:4px;row-gap:2px;min-height:max(96px,calc((100vh - 300px) / var(--kw)))}
+.kcell{padding:4px 6px;border-radius:10px;background:var(--hv-surface);display:flex;flex-direction:column;align-items:flex-start;text-align:left;min-width:0;border:0;color:inherit;font:inherit;cursor:pointer}
 .kcell:hover{background:var(--hv-surface-2)}
 .kcell.out{opacity:.4}
 .kcell.today{box-shadow:inset 0 0 0 1px var(--hv-accent)}
-.kcell .kn{font-size:13px}
+.kcell.sel{background:var(--hv-surface-2);box-shadow:inset 0 0 0 2px var(--hv-accent)}
+.kcell .kn{font-size:13px;line-height:16px}
 .kcell.today .kn{color:var(--hv-accent);font-weight:600}
-.kcell .kev{padding:2px 5px;font-size:11.5px;white-space:nowrap;border-left-width:2px}
-.kmore{font-size:11px;color:var(--hv-dim)}
-.kdots{display:flex;flex-wrap:wrap;gap:3px}
+.kev{display:block;padding:2px 6px;margin:0 4px;border-radius:6px;font-size:11.5px;line-height:1.35;background:color-mix(in srgb,var(--hv-surface-2) 70%,transparent);border-left:2px solid var(--kc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;pointer-events:none}
+.kev.ad{background:color-mix(in srgb,var(--kc) 30%,transparent);border-left-color:transparent}
+.kev.cl{margin-left:0;border-top-left-radius:0;border-bottom-left-radius:0}
+.kev.cr{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.kev .kt{color:var(--hv-dim);font-variant-numeric:tabular-nums;margin-right:5px}
+.kev ha-icon{--mdc-icon-size:13px;margin-right:4px;color:var(--kc);vertical-align:-2px}
+.kmore{font-size:11px;color:var(--hv-dim);padding:0 6px;pointer-events:none}
+.kdots{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
 .kdots i{width:7px;height:7px;border-radius:50%;background:var(--kc)}
-.narrow .kmonth{gap:3px;padding:6px}
-.narrow .kcell{min-height:52px;padding:4px;align-items:center}
-@media (max-width:1100px){.app:not(.narrow) .kday{padding:8px 6px}}
+.kmini{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.kmini .kcell{min-height:52px;padding:4px;align-items:center}
+.kdlist{padding:14px;display:flex;flex-direction:column;gap:8px}
+.kdlist h2{margin:0 0 4px;font-size:16px;font-weight:500;display:flex;gap:8px;align-items:baseline}
+.kdlist h2 small{color:var(--hv-accent);font-size:12px}
+.kdi{display:flex;gap:10px;padding:8px 10px;border-radius:10px;background:var(--hv-surface);border-left:3px solid var(--kc)}
+.kdi .kdt{flex:0 0 auto;min-width:74px;color:var(--hv-dim);font-size:13px;font-variant-numeric:tabular-nums}
+.kdi .kdx{min-width:0;word-break:break-word}
+.kdi .kdx ha-icon{--mdc-icon-size:15px;margin-right:4px;color:var(--kc);vertical-align:-2px}
+.kdi small{display:block;color:var(--hv-dim);font-size:12px}
+.knone{color:var(--hv-faint);font-size:13px}
+@media (max-width:1100px){.kwrap{grid-template-columns:minmax(0,1fr)}}
+.narrow .kwrap{grid-template-columns:minmax(0,1fr)}
+.narrow .kmonth{padding:6px}
 `;
 
 /* ---------- Zeit ---------- */
@@ -57,22 +65,17 @@ const monday = (d) => { const x = midnight(d); return addDays(x, -((x.getDay() +
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const fromYmd = (s) => { const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
 const hm = (d) => d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-/** Kalenderwoche nach ISO 8601 */
-function isoWeek(d) {
-  const x = midnight(d);
-  x.setDate(x.getDate() + 3 - ((x.getDay() + 6) % 7));
-  const w1 = new Date(x.getFullYear(), 0, 4);
-  return 1 + Math.round(((x - w1) / DAY - 3 + ((w1.getDay() + 6) % 7)) / 7);
-}
+/** Tage von a bis b (beide Tagesbeginn oder beliebige Zeit; Sommerzeit-fest) */
+const dayIdx = (a, b) => Math.round((midnight(b) - midnight(a)) / DAY);
+/** letzter Tag eines Termins (Ende um Mitternacht zählt zum Vortag) */
+const lastDay = (e) => midnight(new Date(Math.max(e.start.getTime(), e.end.getTime() - 1)));
 
-/** Sichtbarer Zeitraum: Woche Mo–So oder Monat als 6 Wochen ab dem Montag vor dem Ersten */
-function kalRange(mode, ref) {
-  if (mode === "monat") {
-    const first = new Date(ref.getFullYear(), ref.getMonth(), 1), start = monday(first);
-    return { start, end: addDays(start, 42), days: 42 };
-  }
-  const start = monday(ref);
-  return { start, end: addDays(start, 7), days: 7 };
+/** Sichtbarer Zeitraum: ganze Wochen (Mo–So) vom Montag vor dem Ersten bis zum Sonntag nach dem Letzten */
+function kalRange(ref) {
+  const first = new Date(ref.getFullYear(), ref.getMonth(), 1), start = monday(first);
+  const last = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+  const weeks = Math.ceil((dayIdx(start, last) + 1) / 7);
+  return { start, end: addDays(start, weeks * 7), weeks };
 }
 
 /* ---------- Kalender, Farben, Namen ---------- */
@@ -132,57 +135,90 @@ const onDay = (events, day) => { const d0 = day.getTime(), d1 = addDays(day, 1).
 
 /* ---------- Darstellung ---------- */
 function colorOf(e) { return e.kind === "waste" ? binOf(e.title).color : e.cal.color; }
-function tipOf(e) {
-  const fmt = (d) => d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric" });
-  const lastDay = e.allDay ? addDays(e.end, -1) : e.end;
-  const when = e.allDay
-    ? (ymd(e.start) === ymd(lastDay) ? `${fmt(e.start)}, ganztägig` : `${fmt(e.start)} – ${fmt(lastDay)}`)
-    : (ymd(e.start) === ymd(e.end) ? `${fmt(e.start)} ${hm(e.start)}–${hm(e.end)}` : `${fmt(e.start)} ${hm(e.start)} – ${fmt(e.end)} ${hm(e.end)}`);
-  return [e.title, when, [e.cal.name, e.where].filter(Boolean).join(" · ")].join("\n");
-}
-function evHTML(e, day, full) {
-  const ad = e.allDay || (e.start < day && e.end > addDays(day, 1));
-  const time = ad ? "" : e.start < day ? `bis ${hm(e.end)}` : hm(e.start);
-  const ic = e.kind === "waste" ? icon(binOf(e.title).icon) : "";
-  const where = full && e.where ? `<small>${esc(e.where)}</small>` : "";
-  return `<span class="kev${ad ? " ad" : ""}" style="--kc:${colorOf(e)}" title="${esc(tipOf(e))}">${ic}${time ? `<span class="kt">${time}</span>` : ""}${esc(e.title)}${where}</span>`;
-}
+const wasteIcon = (e) => (e.kind === "waste" ? icon(binOf(e.title).icon) : "");
+/** ganztägig an diesem Tag (ganztägiger oder den ganzen Tag überspannender Termin) */
+const wholeDay = (e, day) => e.allDay || (e.start <= day && e.end >= addDays(day, 1));
 
-function weekHTML(events, start, narrow, now) {
-  const today = ymd(now);
-  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  const col = (d) => {
-    const list = onDay(events, d), k = ymd(d);
-    const head = `<div class="khead"><b>${d.getDate()}.</b>${d.toLocaleDateString("de-DE", { weekday: narrow ? "long" : "short" })}${narrow && k === today ? " · heute" : ""}</div>`;
-    return `<div class="kday glass${k === today ? " today" : ""}${d < midnight(now) ? " past" : ""}" data-day="${k}">${head}
-      ${list.length ? list.map((e) => evHTML(e, d, true)).join("") : '<span class="knone">–</span>'}</div>`;
-  };
-  if (!narrow) return `<div class="kweek">${days.map(col).join("")}</div>`;
-  // Handy: Liste; leere Tage nur heute zeigen
-  const shown = days.filter((d) => onDay(events, d).length || ymd(d) === today);
-  return shown.length ? `<div class="klist">${shown.map(col).join("")}</div>` : `<div class="glass empty">${icon("mdi:calendar-blank-outline")}Keine Termine in dieser Woche.</div>`;
-}
-
-function monthHTML(events, start, ref, narrow, now) {
-  const today = ymd(now), month = ref.getMonth();
-  const cells = Array.from({ length: 42 }, (_, i) => addDays(start, i)).map((d) => {
-    const list = onDay(events, d), k = ymd(d);
-    const body = narrow
-      ? (list.length ? `<span class="kdots">${list.slice(0, 4).map((e) => `<i style="--kc:${colorOf(e)}"></i>`).join("")}</span>` : "")
-      : `${list.slice(0, 3).map((e) => evHTML(e, d, false)).join("")}${list.length > 3 ? `<span class="kmore">+${list.length - 3} weitere</span>` : ""}`;
-    const label = `${d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}: ${list.length ? `${list.length} ${list.length === 1 ? "Termin" : "Termine"}` : "keine Termine"}`;
-    return `<button class="kcell${d.getMonth() !== month ? " out" : ""}${k === today ? " today" : ""}" data-act="kal-day" data-day="${k}" aria-label="${esc(label)}"><span class="kn">${d.getDate()}</span>${body}</button>`;
-  }).join("");
-  return `<div class="kmonth glass">${WD.map((w) => `<div class="kwd">${w}</div>`).join("")}${cells}</div>`;
-}
-
-/** Ansicht (Woche/Monat) und Bezugstag der Seite; Ansicht bleibt je Gerät gemerkt */
-function kalState(p) {
-  if (!p._kal) {
-    let mode = "woche";
-    try { if (localStorage.getItem("hv-kal-mode") === "monat") mode = "monat"; } catch (err) { /* egal */ }
-    p._kal = { mode, ref: midnight(new Date()) };
+/** Eine Woche des Rasters: Tageszellen (Knöpfe) als Hintergrund, darüber Balken und Termine */
+function weekHTML(events, ws, month, today, sel) {
+  const we = addDays(ws, 7);
+  const inWeek = events.filter((e) => e.end > ws && e.start < we);
+  const multi = [], single = Array.from({ length: 7 }, () => []), more = Array(7).fill(0);
+  for (const e of inWeek) {
+    const a = Math.max(0, dayIdx(ws, e.start)), b = Math.min(6, dayIdx(ws, lastDay(e)));
+    if (dayIdx(e.start, lastDay(e)) > 0) multi.push({ e, a, b }); else single[a].push(e);
   }
+  // Balken auf Zeilen verteilen (früher und länger zuerst)
+  multi.sort((x, y) => x.a - y.a || (y.b - y.a) - (x.b - x.a));
+  const laneEnd = [], bars = [];
+  for (const m of multi) {
+    let l = laneEnd.findIndex((end) => end < m.a);
+    if (l < 0 && laneEnd.length < LANES) { l = laneEnd.length; laneEnd.push(-1); }
+    if (l < 0) { for (let i = m.a; i <= m.b; i++) more[i]++; continue; }
+    laneEnd[l] = m.b; bars.push({ ...m, l });
+  }
+  const L = laneEnd.length;
+  single.forEach((list, i) => { if (list.length > SINGLE) more[i] += list.length - SINGLE; });
+  const S = Math.min(SINGLE, Math.max(0, ...single.map((l) => l.length)));
+  const anyMore = more.some(Boolean);
+  const rows = 1 + L + S + (anyMore ? 1 : 0) + 1;
+  const tpl = `20px ${"auto ".repeat(rows - 2)}1fr`;
+  const cells = Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(ws, i), k = ymd(d), n = onDay(events, d).length;
+    const label = `${d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}: ${n ? `${n} ${n === 1 ? "Termin" : "Termine"}` : "keine Termine"}`;
+    return `<button class="kcell${d.getMonth() !== month ? " out" : ""}${k === today ? " today" : ""}${k === sel ? " sel" : ""}" style="grid-column:${i + 1};grid-row:1 / span ${rows}" data-act="kal-day" data-day="${k}" aria-label="${esc(label)}"><span class="kn">${d.getDate()}</span></button>`;
+  }).join("");
+  const barHTML = bars.map(({ e, a, b, l }) => {
+    const cl = e.start < addDays(ws, a) ? " cl" : "", cr = lastDay(e) > addDays(ws, b) ? " cr" : "";
+    const time = e.allDay || e.start < addDays(ws, a) ? "" : `<span class="kt">${hm(e.start)}</span>`;
+    return `<span class="kev ad kspan${cl}${cr}" data-day="${ymd(addDays(ws, a))}" style="grid-column:${a + 1} / span ${b - a + 1};grid-row:${2 + l};--kc:${colorOf(e)}">${wasteIcon(e)}${time}${esc(e.title)}</span>`;
+  }).join("");
+  const singleHTML = single.map((list, i) => list.slice(0, SINGLE).map((e, j) => {
+    const time = e.allDay ? "" : `<span class="kt">${hm(e.start)}</span>`;
+    return `<span class="kev${e.allDay ? " ad" : ""}" data-day="${ymd(addDays(ws, i))}" style="grid-column:${i + 1};grid-row:${2 + L + j};--kc:${colorOf(e)}">${wasteIcon(e)}${time}${esc(e.title)}</span>`;
+  }).join("")).join("");
+  const moreHTML = more.map((n, i) => (n ? `<span class="kmore" style="grid-column:${i + 1};grid-row:${2 + L + S}">+${n} weitere</span>` : "")).join("");
+  return `<div class="kwk" style="grid-template-rows:${tpl}">${cells}${barHTML}${singleHTML}${moreHTML}</div>`;
+}
+
+function monthHTML(events, range, ref, sel, narrow, now) {
+  const today = ymd(now), month = ref.getMonth();
+  if (narrow) {
+    // Handy: kompaktes Raster mit Punkten je Termin
+    const cells = Array.from({ length: range.weeks * 7 }, (_, i) => addDays(range.start, i)).map((d) => {
+      const list = onDay(events, d), k = ymd(d);
+      const dots = list.length ? `<span class="kdots">${list.slice(0, 4).map((e) => `<i style="--kc:${colorOf(e)}"></i>`).join("")}</span>` : "";
+      const label = `${d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}: ${list.length ? `${list.length} ${list.length === 1 ? "Termin" : "Termine"}` : "keine Termine"}`;
+      return `<button class="kcell${d.getMonth() !== month ? " out" : ""}${k === today ? " today" : ""}${k === sel ? " sel" : ""}" data-act="kal-day" data-day="${k}" aria-label="${esc(label)}"><span class="kn">${d.getDate()}</span>${dots}</button>`;
+    }).join("");
+    return `<div class="kmonth glass"><div class="kmini">${WD.map((w) => `<div class="kwd">${w}</div>`).join("")}${cells}</div></div>`;
+  }
+  const weeks = Array.from({ length: range.weeks }, (_, w) => weekHTML(events, addDays(range.start, 7 * w), month, today, sel)).join("");
+  return `<div class="kmonth glass" style="--kw:${range.weeks}"><div class="kwds">${WD.map((w) => `<div class="kwd">${w}</div>`).join("")}</div>${weeks}</div>`;
+}
+
+/** Alle Termine des gewählten Tages mit Zeit, Kalender und Ort */
+function dayHTML(events, day, now) {
+  const list = onDay(events, day), fmt = (d) => d.toLocaleDateString("de-DE", { day: "numeric", month: "numeric" });
+  const items = list.map((e) => {
+    let time;
+    if (wholeDay(e, day)) {
+      const ld = lastDay(e);
+      time = dayIdx(e.start, ld) > 0 ? (ymd(ld) === ymd(day) ? "letzter Tag" : `bis ${fmt(ld)}`) : "ganztägig";
+    } else if (e.start < day) time = `bis ${hm(e.end)}`;
+    else if (e.end > addDays(day, 1)) time = `ab ${hm(e.start)}`;
+    else time = `${hm(e.start)}–${hm(e.end)}`;
+    const sub = [e.cal.name, e.where].filter(Boolean).map(esc).join(" · ");
+    return `<div class="kdi" style="--kc:${colorOf(e)}"><span class="kdt">${time}</span><span class="kdx">${wasteIcon(e)}${esc(e.title)}<small>${sub}</small></span></div>`;
+  }).join("");
+  const head = day.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+  return `<div class="kdlist glass" data-day="${ymd(day)}"><h2>${esc(head)}${ymd(day) === ymd(now) ? "<small>heute</small>" : ""}</h2>
+    ${items || '<span class="knone">Keine Termine.</span>'}</div>`;
+}
+
+/** Monat (ref = Erster des Monats) und gewählter Tag der Seite */
+function kalState(p) {
+  if (!p._kal) { const t = midnight(new Date()); p._kal = { ref: new Date(t.getFullYear(), t.getMonth(), 1), sel: t }; }
   return p._kal;
 }
 
@@ -193,46 +229,42 @@ function kalPageHTML(p, now = new Date()) {
   const cals = kalCals(h, L);
   if (!cals.length) return `<style>${CSS}</style><div class="ptitle"><h1>Kalender</h1><span class="sp"></span>${edit}</div>
     <div class="glass empty">${icon("mdi:calendar-question")}Noch kein Kalender gewählt.<br><small>Apple-Kalender: in Home Assistant die Integration „CalDAV“ mit dem Server https://caldav.icloud.com, der Apple-ID und einem app-spezifischen Passwort einrichten, dann unter Einstellungen → Darstellung → Müllabfuhr und Termine den Kalender auf „Termine“ stellen.</small></div>`;
-  const { start, end } = kalRange(S.mode, S.ref);
+  const range = kalRange(S.ref);
+  if (!(S.sel >= range.start && S.sel < range.end)) S.sel = new Date(S.ref);
   // offene Seite (z. B. am Wandpanel) regelmäßig auffrischen: neue Termine und „heute“ nach Mitternacht
   clearTimeout(p._kalTimer);
   p._kalTimer = setTimeout(() => { if (p._view === "kalender" && p.isConnected) { p._dirty = true; p._schedule(); } }, REFRESH + 1000);
-  const { events, loading, errors } = rangeEvents(p, cals, start, end);
-  const last = addDays(end, -1);
-  const sub = S.mode === "monat"
-    ? S.ref.toLocaleDateString("de-DE", { month: "long", year: "numeric" })
-    : `KW ${isoWeek(start)} · ${start.getMonth() === last.getMonth() ? `${start.getDate()}.` : start.toLocaleDateString("de-DE", { day: "numeric", month: "short" })} – ${last.toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" })}`;
-  const tab = (m, t) => `<button class="altab${S.mode === m ? " on" : ""}" data-act="kal-mode" data-mode="${m}" aria-pressed="${S.mode === m}">${t}</button>`;
-  const bar = `<span class="kbar"><button class="pbtn" data-act="kal-shift" data-d="-1" aria-label="zurück">${icon("mdi:chevron-left")}</button>
+  const { events, loading, errors } = rangeEvents(p, cals, range.start, range.end);
+  const sub = S.ref.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  const bar = `<span class="kbar"><button class="pbtn" data-act="kal-shift" data-d="-1" aria-label="voriger Monat">${icon("mdi:chevron-left")}</button>
     <button class="pbtn" data-act="kal-today">Heute</button>
-    <button class="pbtn" data-act="kal-shift" data-d="1" aria-label="weiter">${icon("mdi:chevron-right")}</button>
-    ${tab("woche", "Woche")}${tab("monat", "Monat")}</span>`;
+    <button class="pbtn" data-act="kal-shift" data-d="1" aria-label="nächster Monat">${icon("mdi:chevron-right")}</button></span>`;
   const legend = cals.filter((c) => c.kind === "event").map((c) => `<span><i style="--kc:${c.color}"></i>${esc(c.name)}</span>`).join("")
     + (cals.some((c) => c.kind === "waste") ? `<span><i style="--kc:#9aa3b2"></i>Müllabfuhr</span>` : "");
-  const note = loading && !events.length ? `<div class="glass empty">${icon("mdi:loading", "spin")}Lade Termine …</div>`
-    : (S.mode === "monat" ? monthHTML(events, start, S.ref, !!p._isNarrow, now) : weekHTML(events, start, !!p._isNarrow, now));
+  const body = loading && !events.length ? `<div class="glass empty">${icon("mdi:loading", "spin")}Lade Termine …</div>`
+    : `<div class="kwrap">${monthHTML(events, range, S.ref, ymd(S.sel), !!p._isNarrow, now)}${dayHTML(events, S.sel, now)}</div>`;
   const err = errors.length ? `<p class="hint">${icon("mdi:alert-outline")}Nicht lesbar: ${esc(errors.join(", "))}</p>` : "";
   return `<style>${CSS}</style><div class="ptitle"><h1>Kalender</h1><span class="psub">${esc(sub)}</span><span class="sp"></span>${bar}${edit}</div>
-    <div class="kleg">${legend}</div>${err}${note}`;
+    <div class="kleg">${legend}</div>${err}${body}`;
 }
 
-/** Knöpfe der Seite: kal-mode, kal-shift, kal-today, kal-day */
+/** Knöpfe der Seite: kal-shift (Monat vor/zurück), kal-today, kal-day (Tag wählen) */
 function kalAction(p, act, t) {
-  const S = kalState(p);
-  if (act === "kal-mode") {
-    S.mode = t.dataset.mode === "monat" ? "monat" : "woche";
-    try { localStorage.setItem("hv-kal-mode", S.mode); } catch (err) { /* egal */ }
-  } else if (act === "kal-shift") {
-    const d = Number(t.dataset.d) || 0;
-    S.ref = S.mode === "monat" ? new Date(S.ref.getFullYear(), S.ref.getMonth() + d, 1) : addDays(S.ref, 7 * d);
-  } else if (act === "kal-today") S.ref = midnight(new Date());
+  const S = kalState(p), today = midnight(new Date());
+  const show = (ref) => {
+    S.ref = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    S.sel = S.ref.getFullYear() === today.getFullYear() && S.ref.getMonth() === today.getMonth() ? today : new Date(S.ref);
+  };
+  if (act === "kal-shift") show(new Date(S.ref.getFullYear(), S.ref.getMonth() + (Number(t.dataset.d) || 0), 1));
+  else if (act === "kal-today") show(today);
   else if (act === "kal-day") {
     const d = fromYmd(t.dataset.day);
     if (!d) return;
-    S.ref = d; S.mode = "woche";
-  }
+    if (d.getMonth() !== S.ref.getMonth() || d.getFullYear() !== S.ref.getFullYear()) S.ref = new Date(d.getFullYear(), d.getMonth(), 1);
+    S.sel = d;
+  } else return;
   p._dirty = true;
   p._flush();
 }
 
-export { isoWeek, kalAction, kalCals, kalOn, kalPageHTML, kalRange, PALETTE };
+export { kalAction, kalCals, kalOn, kalPageHTML, kalRange, PALETTE };

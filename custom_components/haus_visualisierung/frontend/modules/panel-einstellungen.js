@@ -233,7 +233,7 @@ const EinstellungenMixin = (Base) => class extends Base {
       ${tg("enabled", "Müllabfuhr und Termine zeigen")}
       ${tg("header", "In der Kopfzeile", "der wichtigste nächste Eintrag; am Handy nur die Abfuhr am Vorabend")}
       ${tg("saver", "Im Bildschirmschoner", "Abfuhr und bis zu drei Termine von heute und morgen")}
-      ${tg("page", "Seite „Kalender“", "Familienkalender als Woche oder Monat im Menü")}
+      ${tg("page", "Seite „Kalender“", "Familienkalender als Monat im Menü")}
       ${advanced(`
       <div class="srow"><span class="lbl">Abfuhr hervorheben ab<small>Uhr am Vorabend; am Morgen der Abfuhr bis 10 Uhr</small></span><input class="inp s" type="number" min="12" max="23" data-set="termine.evening" data-num="1" value="${esc(String(T.evening ?? 17))}"><span class="rl">Uhr</span></div>
       <div class="srow"><span class="lbl">Vorausschau<small>Tage, für den Tooltip in der Kopfzeile</small></span><input class="inp s" type="number" min="1" max="14" data-set="termine.days" data-num="1" value="${esc(String(T.days ?? 7))}"><span class="rl">Tage</span></div>`)}
