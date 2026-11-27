@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.0.0 – 2026-11-27
+
 ### Neu
 - **Einrichtungsassistent im Panel.** Startet beim ersten Öffnen (nur Administratoren) und geht Räume, Energie, Wetter, Sicherheit, Heizung & Wallbox, Kalender und Push durch. Jeder Schritt zeigt, was erkannt wurde und woher (Label, Energie-Dashboard, Integration, Name); zur Auswahl stehen nur passende Entitäten nach Art bzw. Einheit (z. B. Leistung in W/kW, Preis je kWh, Temperatur). Gespeichert wird beim Schrittwechsel, nur die Änderungen. Erneut starten zum Ergänzen: Einstellungen → „Assistent“. Bestehende Installationen sehen ihn nicht ungefragt.
 - **Erkennung ohne Namen.** Energiesensoren aus dem Energie-Dashboard von Home Assistant (Leistungssensor am Gerät des Zählers bzw. `stat_rate`), Wallboxen über ihre Integration (EVCC, go-e, Easee, Wallbox, KEBA, openWB, OCPP, Zaptec …) samt aller Entitäten des Geräts, Müllkalender über die Integration (z. B. Waste Collection Schedule), Klingeln über die Geräteklasse jeder Integration. Netz-Leistung wird jetzt ebenfalls automatisch gefunden; nach Namen nur noch als letzte Stufe.
