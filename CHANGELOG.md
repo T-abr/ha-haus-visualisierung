@@ -4,6 +4,17 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.1.1 – 2026-11-28
+
+### Behoben
+- **Bildschirmschoner: Querformat-Fotos blieben schwarz.** Das Vollbild-Foto trug die Klasse `fill`, die schon der Dimmbalken der Lichtkacheln belegt (`.fill{width:0}`). Dadurch war die Fläche des Fotos null Pixel breit, zu sehen waren nur Uhr und Infos auf Schwarz. Die Fotos tragen jetzt eigene Klassen (`svfill`, `svframe`).
+
+### Tests
+- Bedienprüfung `wandpanel_fotos`: Das Vollbild-Foto muss den ganzen Bildschirm füllen (vorher prüfte der Test nur, ob es da ist).
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 13–15 ms, Raumseite 15 ms, Licht 25 ms, Klima 26 ms, Energie 32 ms, Alarme 9 ms; hass-Setter Übersicht 22–25 µs, Unterseiten 0,3–20 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Abweichungen zu 2.1.0 liegen in der Messschwankung im Container; geändert haben sich nur zwei Klassennamen im Wandpanel-Schoner.
+
 ## 2.1.0 – 2026-11-28
 
 ### Geändert
