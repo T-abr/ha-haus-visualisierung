@@ -4,6 +4,8 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.2.0 – 2026-11-28
+
 ### Neu
 - **Echo-Modus für Amazon Echo Show** (Einstellungen → Wandpanel & Displays → „Dieses Gerät ist ein Echo Show“ oder Adresse mit `?echo=1`, schaltet den Wandpanel-Modus mit ein; im Browser Silk von selbst an, solange am Gerät nichts anderes gewählt ist): hält die Visualisierung im Browser Silk offen. Eine stumme Audio-Schleife startet mit dem ersten Tipp nach dem Laden; neu geladen wird, wenn die Verbindung zu Home Assistant über 2 Minuten fehlt, wenn die Seite hing und einmal nachts (3:30–3:40 Uhr), höchstens alle 5 Minuten. Anleitung mit Alexa-Routine und Alexa Media Player im README unter „Echo Show als Wandpanel“.
 
@@ -13,6 +15,9 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ### Tests
 - Neue Bedienprüfung `wandpanel_echo` (Einschalten je Gerät, Audio-Schleife, Neuladen bei Hänger, Verbindungsverlust und nachts, Schalter in den Einstellungen, Erkennung über Silk).
 - Bedienprüfung `wandpanel_fotos`: Im Rahmen muss zwischen größtmöglichem Foto und Infos ein Mindestabstand bleiben.
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 14–18 ms, Raumseite 10 ms, Licht 19 ms, Klima 29 ms, Energie 16 ms, Alarme 6 ms; hass-Setter Übersicht 23–26 µs, Unterseiten 0,3–16 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Im Rahmen der Messschwankung wie 2.1.1; im Frontend kamen der Echo-Modus (nur aktiv auf Echo-Geräten) und ein geänderter Fotorahmen im Schoner hinzu.
 
 ## 2.1.1 – 2026-11-28
 
