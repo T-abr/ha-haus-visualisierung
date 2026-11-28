@@ -960,6 +960,8 @@ details[open]>summary.shead{padding-bottom:2px}
 .saver[data-ph=fill] .svside{grid-column:2;grid-row:1/span 3;align-self:end;flex-direction:column;align-items:flex-end;text-align:right}
 .saver[data-ph=fill] .svside .svcal{justify-content:flex-end}
 .saver[data-ph=frame] .svbox{left:53vw;right:4vw;top:50%;transform:translateY(-50%)}
+/* Wandern (transition) nur ohne Fotos: sonst gleitet die Box 2 s von Rahmen- zu Vollbildlage, und solange sie transformiert ist, hängt die feste Beschriftung an ihr statt oben rechts */
+.saver.ph .svbox{transition:none}
 .saver[data-ph=frame] .svclock{font-size:clamp(56px,11vw,132px)}
 .saver[data-ph=frame] .svrow{flex-direction:column;gap:12px}
 .saver[data-ph=frame] .svside{flex-wrap:wrap;align-items:center;margin-top:16px}.saver[data-ph=frame] .svhint{flex-basis:100%}

@@ -11,6 +11,7 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ### Behoben
 - **Bildschirmschoner: Infos klebten an breiten Hochformat-Fotos.** Im Rahmen durfte ein Hochformat-Foto bis 51 % der Bildschirmbreite reichen, genau dort beginnen Uhr und Infos. Das Foto ist jetzt höchstens 44 % breit (bisher 46 %) und die Infos beginnen erst bei 53 %, so bleiben immer mindestens 4 % Abstand.
+- **Bildschirmschoner mit Fotos:** Beim Wechsel von einem Hochformat- zu einem Querformat-Foto glitt die Uhr-Box zwei Sekunden lang in ihre neue Lage, und die Beschriftung stand so lange mitten im Bild statt oben rechts. Das Wandern (Übergang) gilt jetzt nur noch ohne Fotos. Dadurch schlug auch die Bedienprüfung „Vollbild wie Entwurf“ zufällig fehl.
 
 ### Tests
 - Neue Bedienprüfung `wandpanel_echo` (Einschalten je Gerät, Audio-Schleife, Neuladen bei Hänger, Verbindungsverlust und nachts, Schalter in den Einstellungen, Erkennung über Silk).
