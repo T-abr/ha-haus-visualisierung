@@ -953,12 +953,21 @@ details[open]>summary.shead{padding-bottom:2px}
 .saver.ph .svbox{position:absolute;z-index:2;padding:0;align-items:flex-start;text-align:left;text-shadow:0 1px 8px rgba(0,0,0,.5)}
 .saver.ph .svrow,.saver.ph .svcal{justify-content:flex-start}
 .saver.ph .svstat span,.saver.ph .svcal .svwaste.hot{background:rgba(0,0,0,.35);backdrop-filter:blur(8px)}
-.saver[data-ph=fill] .svbox{left:4vw;right:4vw;bottom:5vh}
-.saver[data-ph=frame] .svbox{left:55vw;right:4vw;top:50%;transform:translateY(-50%)}
+.svside{display:contents}.saver.ph .svside{display:flex;gap:12px 14px}.saver.ph .svside>*{margin-top:0}
+.saver[data-ph=fill] .svbox{left:4vw;right:4vw;bottom:5vh;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:4vw;row-gap:10px;align-items:end}
+.saver[data-ph=fill] .svbox>*{grid-column:1}
+.saver[data-ph=fill] .svside{grid-column:2;grid-row:1/span 3;align-self:end;flex-direction:column;align-items:flex-end;text-align:right}
+.saver[data-ph=fill] .svside .svcal{justify-content:flex-end}
+.saver[data-ph=frame] .svbox{left:51vw;right:4vw;top:50%;transform:translateY(-50%)}
 .saver[data-ph=frame] .svclock{font-size:clamp(56px,11vw,132px)}
-.saver.ph .svcap{display:block;position:absolute;z-index:2;right:4vw;top:4vh;max-width:50vw;font-size:clamp(12px,1.6vw,16px);color:rgba(255,255,255,.75);text-shadow:0 1px 4px rgba(0,0,0,.6);text-align:right}
+.saver[data-ph=frame] .svrow{flex-direction:column;gap:12px}
+.saver[data-ph=frame] .svside{flex-wrap:wrap;align-items:center;margin-top:16px}.saver[data-ph=frame] .svhint{flex-basis:100%}
+.saver.ph .svcap{display:block;font-size:clamp(12px,1.6vw,16px);color:rgba(255,255,255,.75);text-shadow:0 1px 4px rgba(0,0,0,.6)}.saver.ph .svcap:empty{display:none}
+.saver[data-ph=fill] .svcap{position:fixed;right:4vw;top:4vh;max-width:50vw;text-align:right}
+.saver[data-ph=frame] .svcap{margin-top:14px;color:rgba(255,255,255,.6)}
 @media (orientation:portrait){.svslide img{left:50%;top:5vh;transform:translateX(-50%);max-width:90vw;max-height:52vh}
-  .saver[data-ph=frame] .svbox{left:6vw;right:6vw;top:auto;bottom:6vh;transform:none}}
+  .saver[data-ph=frame] .svbox{left:6vw;right:6vw;top:auto;bottom:6vh;transform:none}
+  .saver[data-ph=fill] .svbox{display:flex}.saver[data-ph=fill] .svside{align-items:flex-start;text-align:left}.saver[data-ph=fill] .svside .svcal{justify-content:flex-start}}
 @media (prefers-reduced-motion:reduce){.svslide .kb{animation:none}}
 .walldev.on .lbl{color:var(--hv-ok)}
 /* Technik: Heizung und Wallbox */

@@ -1413,11 +1413,19 @@ def wandpanel_fotos():
     check("FO: Vollbild zoomt langsam (Ken-Burns)", pg.locator(f"{P} .saver .svslide.fill .kb").count() >= 1)
     bg = lambda sel: pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver .svslide {sel}'); return e ? getComputedStyle(e).backgroundImage : ''; }})()")
     check("FO: Vollbild zeigt das Foto als Hintergrund", "image/svg" in bg(".kb"))
+    box = lambda sel: pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver {sel}'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }})()")
+    clk, stt, cp = box(".svclock"), box(".svstat"), box(".svcap")
+    check("FO: Vollbild wie Entwurf – Uhr links unten, Status rechts unten, Beschriftung oben rechts",
+          clk[0] < 100 and clk[3] > 500 and stt[0] > 900 and stt[3] > 650 and cp[0] > 900 and cp[3] < 120)
     for _ in range(3):
         if saver().get_attribute("data-ph") == "frame":
             break
         pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
     check("FO: Hochformat vor weichgezeichnetem Hintergrund", "image/svg" in bg(".blur") and pg.locator(f"{P} .saver .svslide.frame img").count() >= 1)
+    rw = pg.evaluate(f"(() => {{ const R = {PP}.shadowRoot; return [...R.querySelectorAll('.saver .svrow > span')].map(e => Math.round(e.getBoundingClientRect().left)); }})()")
+    clk, stt, rr, cp = box(".svclock"), box(".svstat"), box(".svrow"), box(".svcap")
+    check("FO: Rahmen wie Entwurf – Infos rechts untereinander, Status darunter, Beschriftung zuletzt",
+          clk[0] > 600 and len(rw) >= 2 and len(set(rw)) == 1 and stt[1] >= rr[3] and stt[0] > 600 and cp[1] >= stt[3])
     setwp("black_min: 1"); pg.evaluate(f"{PP}._saverUpdate(30, true)"); pg.wait_for_timeout(200)
     check("FO: im Schwarz-Modus keine Fotos", "ph" not in saver().get_attribute("class") and pg.locator(f"{P} .saver .svslide").count() == 0)
     setwp("black_min: 0"); pg.evaluate(f"{PP}._saverUpdate(6, true)"); pg.wait_for_timeout(500)

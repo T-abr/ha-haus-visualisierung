@@ -163,7 +163,8 @@ const WandpanelMixin = (Base) => class extends Base {
     d.className = "saver";
     d.setAttribute("role", "button");
     d.setAttribute("aria-label", "Bildschirmschoner – tippen zum Aufwecken");
-    d.innerHTML = `<div class="svph"></div><div class="svcap"></div><div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svhint"></div><div class="svcal"></div><div class="svstat"></div></div>`;
+    // .svside bündelt Hinweise, Termine und Status (mit Fotos: Vollbild rechts unten, Rahmen als Chip-Zeile)
+    d.innerHTML = `<div class="svph"></div><div class="svbox"><div class="svclock"></div><div class="svdate"></div><div class="svrow"></div><div class="svside"><div class="svhint"></div><div class="svcal"></div><div class="svstat"></div></div><div class="svcap"></div></div>`;
     this.shadowRoot.appendChild(d);
     this._saverMin = null;
     this._fotoCur = null;
