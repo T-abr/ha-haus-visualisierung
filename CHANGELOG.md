@@ -4,11 +4,24 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.2.0 – 2026-11-28
+
+### Neu
+- **Echo-Modus für Amazon Echo Show** (Einstellungen → Wandpanel & Displays → „Dieses Gerät ist ein Echo Show“ oder Adresse mit `?echo=1`, schaltet den Wandpanel-Modus mit ein; im Browser Silk von selbst an, solange am Gerät nichts anderes gewählt ist): hält die Visualisierung im Browser Silk offen. Eine stumme Audio-Schleife startet mit dem ersten Tipp nach dem Laden; neu geladen wird, wenn die Verbindung zu Home Assistant über 2 Minuten fehlt, wenn die Seite hing und einmal nachts (3:30–3:40 Uhr), höchstens alle 5 Minuten. Anleitung mit Alexa-Routine und Alexa Media Player im README unter „Echo Show als Wandpanel“.
+
 ### Behoben
 - **Bildschirmschoner: Infos klebten an breiten Hochformat-Fotos.** Im Rahmen durfte ein Hochformat-Foto bis 51 % der Bildschirmbreite reichen, genau dort beginnen Uhr und Infos. Das Foto ist jetzt höchstens 44 % breit (bisher 46 %) und die Infos beginnen erst bei 53 %, so bleiben immer mindestens 4 % Abstand.
+- **Bildschirmschoner mit Fotos:** Beim Wechsel von einem Hochformat- zu einem Querformat-Foto glitt die Uhr-Box zwei Sekunden lang in ihre neue Lage, und die Beschriftung stand so lange mitten im Bild statt oben rechts. Das Wandern (Übergang) gilt jetzt nur noch ohne Fotos. Dadurch schlug auch die Bedienprüfung „Vollbild wie Entwurf“ zufällig fehl.
+- **Bildschirmschoner mit Fotos: verspätet geladenes Foto überschrieb das aktuelle.** Lud ein älteres Foto erst nach dem nächsten fertig, wurde es trotzdem noch eingeblendet und stellte Lage und Beschriftung zurück. Jetzt zählt nur das zuletzt angeforderte Foto.
 
 ### Tests
+- Neue Bedienprüfung `wandpanel_echo` (Einschalten je Gerät, Audio-Schleife, Neuladen bei Hänger, Verbindungsverlust und nachts, Schalter in den Einstellungen, Erkennung über Silk).
 - Bedienprüfung `wandpanel_fotos`: Im Rahmen muss zwischen größtmöglichem Foto und Infos ein Mindestabstand bleiben.
+- Bedienprüfung `wandpanel_fotos` wartet nach jedem Fotowechsel, bis das Foto angezeigt wird, statt fest 400 ms.
+- Bedienprüfung „Vollbild wie Entwurf“ scheiterte seit 2.1.0 in der CI: Sie verlangte, dass der Status mehr als 900 px vom linken Rand beginnt. Mit der Schrift der CI (ohne Inter) ist der Status-Text breiter und begann bei 896 px. Die Prüfung misst die Lage jetzt relativ (rechte Hälfte, bündig am rechten Rand, rechts neben der Uhr).
+
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 14–18 ms, Raumseite 10 ms, Licht 19 ms, Klima 29 ms, Energie 16 ms, Alarme 6 ms; hass-Setter Übersicht 23–26 µs, Unterseiten 0,3–16 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Im Rahmen der Messschwankung wie 2.1.1; im Frontend kamen der Echo-Modus (nur aktiv auf Echo-Geräten) und ein geänderter Fotorahmen im Schoner hinzu.
 
 ## 2.1.1 – 2026-11-28
 

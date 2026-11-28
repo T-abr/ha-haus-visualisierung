@@ -1392,6 +1392,8 @@ def wandpanel_fotos():
     PP = f"document.querySelector('{P}')"
     saver = lambda: pg.locator(f"{P} .saver")
     setwp = lambda js: pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, wallpanel: {{ ...p._wallCfg(), {js} }} }}; }})()")
+    # Nächstes Foto und warten, bis es angezeigt wird (show() setzt den Timer neu); feste Wartezeit war auf langsamen Rechnern zu knapp
+    weiter = lambda: (pg.evaluate(f"{PP}._fotoNext()"), pg.wait_for_function(f"!!{PP}._fotoTimer", timeout=5000), pg.wait_for_timeout(100))
     setwp('photos: "https://www.icloud.com/sharedalbum/#B0aTEST1234", photo_sec: 60, black_min: 0, night_dim: false')
     pg.evaluate(f"(() => {{ const p = {PP}; p._wallActive = Date.now() - 6 * 60000; p._wallTick(); }})()"); pg.wait_for_timeout(600)
     check("FO: Schoner mit Fotos", saver().count() == 1 and "ph" in saver().get_attribute("class") and pg.locator(f"{P} .saver .svslide").count() >= 1)
@@ -1399,7 +1401,7 @@ def wandpanel_fotos():
     modes = set()
     for _ in range(2):
         modes.add(saver().get_attribute("data-ph"))
-        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+        weiter()
     check("FO: Querformat als Vollbild, Hochformat im Rahmen", modes == {"fill", "frame"})
     pg.wait_for_timeout(1900)
     check("FO: alte Bilder nach dem Überblenden entfernt", pg.locator(f"{P} .saver .svslide").count() == 1)
@@ -1409,7 +1411,7 @@ def wandpanel_fotos():
     for _ in range(3):
         if saver().get_attribute("data-ph") == "fill":
             break
-        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+        weiter()
     check("FO: Vollbild zoomt langsam (Ken-Burns)", pg.locator(f"{P} .saver .svslide.svfill .kb").count() >= 1)
     voll = pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver .svslide.svfill .kb'); if (!e) return false; const r = e.getBoundingClientRect(); return r.width >= innerWidth - 1 && r.height >= innerHeight - 1; }})()")
     check("FO: Vollbild-Foto füllt den ganzen Bildschirm", voll)
@@ -1418,11 +1420,12 @@ def wandpanel_fotos():
     box = lambda sel: pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver {sel}'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }})()")
     clk, stt, cp = box(".svclock"), box(".svstat"), box(".svcap")
     check("FO: Vollbild wie Entwurf – Uhr links unten, Status rechts unten, Beschriftung oben rechts",
-          clk[0] < 100 and clk[3] > 500 and stt[0] > 900 and stt[3] > 650 and cp[0] > 900 and cp[3] < 120)
+          # Schwellen relativ zur Breite (1280): die Breite des Status-Textes hängt von der Schrift ab (CI ohne Inter: breiter)
+          clk[0] < 100 and clk[3] > 500 and stt[0] > 640 and stt[0] > clk[2] and stt[2] > 1180 and stt[3] > 650 and cp[0] > 640 and cp[2] > 1180 and cp[3] < 120)
     for _ in range(3):
         if saver().get_attribute("data-ph") == "frame":
             break
-        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+        weiter()
     check("FO: Hochformat vor weichgezeichnetem Hintergrund", "image/svg" in bg(".blur") and pg.locator(f"{P} .saver .svslide.svframe img").count() >= 1)
     rw = pg.evaluate(f"(() => {{ const R = {PP}.shadowRoot; return [...R.querySelectorAll('.saver .svrow > span')].map(e => Math.round(e.getBoundingClientRect().left)); }})()")
     clk, stt, rr, cp = box(".svclock"), box(".svstat"), box(".svrow"), box(".svcap")
@@ -1453,6 +1456,55 @@ def wandpanel_fotos():
     pg.locator(f"{P} [data-act=s-fotos-refresh]").click(); pg.wait_for_timeout(400)
     check("FO: „Jetzt laden“ liest das Album neu", any(e[1] == "fotos_refresh" for e in pg.evaluate("window.__api.log")))
     pg.evaluate("localStorage.setItem('hv-wallpanel', '0')")
+
+@gruppe("wandpanel")
+def wandpanel_echo():
+    # ---------- Echo-Modus: Panel im Browser Silk eines Echo Show offen halten ----------
+    pg.set_viewport_size({"width": 1280, "height": 800})
+    PP = f"document.querySelector('{P}')"
+    pg.goto(dense + "?wandpanel=0&echo=0&view=licht"); pg.wait_for_timeout(400)
+    check("EC: ohne Echo-Modus keine Audio-Schleife", not pg.evaluate(f"!!{PP}._echoAudio"))
+    pg.goto(dense + "?echo=1&view=licht"); pg.wait_for_timeout(500)
+    check("EC: ?echo=1 schaltet Echo- und Wandpanel-Modus ein (je Gerät gemerkt)", pg.evaluate(f"{PP}._echoIsOn()") and pg.evaluate("[localStorage.getItem('hv-echo'), localStorage.getItem('hv-wallpanel')]") == ["1", "1"]
+          and pg.locator(f"{P} .wallbtn").count() == 1)
+    pg.mouse.click(640, 400); pg.wait_for_timeout(400)
+    check("EC: nach einer Berührung läuft die stumme Schleife, ohne Hinweis", pg.evaluate(f"(() => {{ const a = {PP}._echoAudio; return !a.paused && a.loop; }})()") and pg.locator(f"{P} .echohint").count() == 0)
+    wav = pg.evaluate("(async () => { const m = await import('/modules/echo.js'); const b = await (await fetch(m.silentWav())).arrayBuffer(); const v = new Uint8Array(b); let mx = 0; for (let i = 44; i < v.length; i++) mx = Math.max(mx, Math.abs(v[i] - 128)); return [new TextDecoder().decode(v.slice(0, 4)), v.length, mx]; })()")
+    check("EC: Audio ist WAV, 1 s, fast still (±1 Stufe)", wav == ["RIFF", 8044, 1])
+    pg.evaluate(f"{PP}._echoAudio.pause()"); pg.mouse.click(640, 400); pg.wait_for_timeout(300)
+    check("EC: hält Silk die Wiedergabe an, startet der nächste Tipp sie neu", not pg.evaluate(f"{PP}._echoAudio.paused"))
+    # Neuladen: Hänger, Verbindung weg, nachts – höchstens alle 5 Minuten
+    pg.evaluate(f"(() => {{ const p = {PP}; window.__rl = []; p._echoReloadFn = () => window.__rl.push(1); localStorage.removeItem('hv-echo-reload'); }})()")
+    pg.evaluate(f"(() => {{ const p = {PP}; p._echoBeat = Date.now() - 90e3; p._echoTick(); }})()")
+    check("EC: Seite hing über 1 Minute → neu laden", pg.evaluate("window.__rl.length") == 1)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._echoBeat = Date.now() - 90e3; p._echoTick(); }})()")
+    check("EC: nicht öfter als alle 5 Minuten", pg.evaluate("window.__rl.length") == 1)
+    pg.evaluate(f"(() => {{ const p = {PP}; localStorage.removeItem('hv-echo-reload'); p._hass.connected = false; p._echoTick(); }})()")
+    check("EC: kurz ohne Verbindung → nicht neu laden", pg.evaluate("window.__rl.length") == 1)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._echoOff = Date.now() - 130e3; p._echoTick(); p._hass.connected = true; }})()")
+    check("EC: über 2 Minuten ohne Verbindung → neu laden", pg.evaluate("window.__rl.length") == 2)
+    nr = pg.evaluate("(async () => { const m = await import('/modules/echo.js'); const d = (h, mi) => new Date(2026, 0, 1, h, mi); return [d(3, 29), d(3, 30), d(3, 39), d(3, 40), d(15, 30)].map(m.inNightReload); })()")
+    check("EC: nächtliches Neuladen 3:30–3:40", nr == [False, True, True, False, False])
+    # Einstellungen: Schalter je Gerät
+    pg.evaluate(f"{PP}._go('einstellungen/displays')"); pg.wait_for_timeout(400); auf(pg)
+    btn = pg.locator(f"{P} [data-act=s-echo-device]")
+    check("EC: Einstellungen – Schalter „Dieses Gerät ist ein Echo Show“ an", btn.count() == 1 and "Echo-Modus an" in btn.inner_text())
+    btn.click(); pg.wait_for_timeout(300)
+    check("EC: ausschalten – Schleife gestoppt, Wandpanel bleibt", not pg.evaluate(f"!!{PP}._echoAudio")
+          and pg.evaluate("localStorage.getItem('hv-echo')") == "0" and pg.evaluate(f"{PP}._wallIsOn()"))
+    pg.evaluate("localStorage.setItem('hv-wallpanel', '0'); localStorage.setItem('hv-echo', '0')")
+    # Erkennung über den Browser Silk (Echo Show): ohne eigene Wahl von selbst an, der Schalter gewinnt
+    silk = "Mozilla/5.0 (Linux; Android 9; AEOTH) AppleWebKit/537.36 (KHTML, like Gecko) Silk/126.1.1 like Chrome/126.0.6478.50 Safari/537.36"
+    ctx = b.new_context(viewport={"width": 1280, "height": 800}, user_agent=silk)
+    sp = ctx.new_page(); sp.on("pageerror", lambda e: errs.append(str(e)))
+    sp.goto(dense + "?view=licht"); sp.wait_for_timeout(500)
+    check("EC: Silk erkannt – Echo- und Wandpanel-Modus ohne Zutun an", sp.evaluate(f"{PP}._echoIsOn()") and sp.locator(f"{P} .wallbtn").count() == 1 and sp.evaluate(f"!!{PP}._echoAudio"))
+    sp.evaluate(f"{PP}._go('einstellungen/displays')"); sp.wait_for_timeout(400); auf(sp)
+    check("EC: Einstellungen nennen Silk", "Dieser Browser ist Silk" in sp.locator(f"{P} .echodev").inner_text())
+    sp.locator(f"{P} [data-act=s-echo-device]").click(); sp.wait_for_timeout(300)
+    sp.goto(dense + "?view=licht"); sp.wait_for_timeout(500)
+    check("EC: Silk – ausgeschaltet bleibt aus (Schalter gewinnt)", not sp.evaluate(f"{PP}._echoIsOn()") and sp.evaluate("localStorage.getItem('hv-echo')") == "0")
+    ctx.close()
 
 @gruppe("warnungen")
 def verzoegerung_heizen():
