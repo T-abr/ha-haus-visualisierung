@@ -59,6 +59,7 @@ const AktionenMixin = (Base) => class extends Base {
       case "s-bell-test": this._closeBell(); this._showBell(true, this._draft ? this._draft.doorbell : null); return;
       case "saver": this._saverShow(); return;
       case "s-wall-device": this._wallSet(!this._wallIsOn()); this._toast(this._wallIsOn() ? "Dieses Gerät ist jetzt ein Wandpanel" : "Wandpanel-Modus aus"); return;
+      case "s-echo-device": this._echoSet(!this._echoIsOn()); this._toast(this._echoIsOn() ? "Echo-Modus an" : "Echo-Modus aus"); return;
       case "s-fotos-refresh": {
         if (this._draft && (this._draft.wallpanel || {}).photos !== (this._layout.wallpanel || {}).photos) { this._toast("Bitte erst speichern"); return; }
         this._fotoStatus = { ...(this._fotoStatus || {}), busy: true, error: "" }; this._rerenderSettings();

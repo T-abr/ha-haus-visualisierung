@@ -1451,6 +1451,43 @@ def wandpanel_fotos():
     check("FO: „Jetzt laden“ liest das Album neu", any(e[1] == "fotos_refresh" for e in pg.evaluate("window.__api.log")))
     pg.evaluate("localStorage.setItem('hv-wallpanel', '0')")
 
+@gruppe("wandpanel")
+def wandpanel_echo():
+    # ---------- Echo-Modus: Panel im Browser Silk eines Echo Show offen halten ----------
+    pg.set_viewport_size({"width": 1280, "height": 800})
+    PP = f"document.querySelector('{P}')"
+    pg.goto(dense + "?wandpanel=0&echo=0&view=licht"); pg.wait_for_timeout(400)
+    check("EC: ohne Echo-Modus keine Audio-Schleife", not pg.evaluate(f"!!{PP}._echoAudio"))
+    pg.goto(dense + "?echo=1&view=licht"); pg.wait_for_timeout(500)
+    check("EC: ?echo=1 schaltet Echo- und Wandpanel-Modus ein (je Gerät gemerkt)", pg.evaluate(f"{PP}._echoIsOn()") and pg.evaluate("[localStorage.getItem('hv-echo'), localStorage.getItem('hv-wallpanel')]") == ["1", "1"]
+          and pg.locator(f"{P} .wallbtn").count() == 1)
+    pg.mouse.click(640, 400); pg.wait_for_timeout(400)
+    check("EC: nach einer Berührung läuft die stumme Schleife, ohne Hinweis", pg.evaluate(f"(() => {{ const a = {PP}._echoAudio; return !a.paused && a.loop; }})()") and pg.locator(f"{P} .echohint").count() == 0)
+    wav = pg.evaluate("(async () => { const m = await import('/modules/echo.js'); const b = await (await fetch(m.silentWav())).arrayBuffer(); const v = new Uint8Array(b); let mx = 0; for (let i = 44; i < v.length; i++) mx = Math.max(mx, Math.abs(v[i] - 128)); return [new TextDecoder().decode(v.slice(0, 4)), v.length, mx]; })()")
+    check("EC: Audio ist WAV, 1 s, fast still (±1 Stufe)", wav == ["RIFF", 8044, 1])
+    pg.evaluate(f"{PP}._echoAudio.pause()"); pg.mouse.click(640, 400); pg.wait_for_timeout(300)
+    check("EC: hält Silk die Wiedergabe an, startet der nächste Tipp sie neu", not pg.evaluate(f"{PP}._echoAudio.paused"))
+    # Neuladen: Hänger, Verbindung weg, nachts – höchstens alle 5 Minuten
+    pg.evaluate(f"(() => {{ const p = {PP}; window.__rl = []; p._echoReloadFn = () => window.__rl.push(1); localStorage.removeItem('hv-echo-reload'); }})()")
+    pg.evaluate(f"(() => {{ const p = {PP}; p._echoBeat = Date.now() - 90e3; p._echoTick(); }})()")
+    check("EC: Seite hing über 1 Minute → neu laden", pg.evaluate("window.__rl.length") == 1)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._echoBeat = Date.now() - 90e3; p._echoTick(); }})()")
+    check("EC: nicht öfter als alle 5 Minuten", pg.evaluate("window.__rl.length") == 1)
+    pg.evaluate(f"(() => {{ const p = {PP}; localStorage.removeItem('hv-echo-reload'); p._hass.connected = false; p._echoTick(); }})()")
+    check("EC: kurz ohne Verbindung → nicht neu laden", pg.evaluate("window.__rl.length") == 1)
+    pg.evaluate(f"(() => {{ const p = {PP}; p._echoOff = Date.now() - 130e3; p._echoTick(); p._hass.connected = true; }})()")
+    check("EC: über 2 Minuten ohne Verbindung → neu laden", pg.evaluate("window.__rl.length") == 2)
+    nr = pg.evaluate("(async () => { const m = await import('/modules/echo.js'); const d = (h, mi) => new Date(2026, 0, 1, h, mi); return [d(3, 29), d(3, 30), d(3, 39), d(3, 40), d(15, 30)].map(m.inNightReload); })()")
+    check("EC: nächtliches Neuladen 3:30–3:40", nr == [False, True, True, False, False])
+    # Einstellungen: Schalter je Gerät
+    pg.evaluate(f"{PP}._go('einstellungen/displays')"); pg.wait_for_timeout(400); auf(pg)
+    btn = pg.locator(f"{P} [data-act=s-echo-device]")
+    check("EC: Einstellungen – Schalter „Dieses Gerät ist ein Echo Show“ an", btn.count() == 1 and "Echo-Modus an" in btn.inner_text())
+    btn.click(); pg.wait_for_timeout(300)
+    check("EC: ausschalten – Schleife gestoppt, Wandpanel bleibt", not pg.evaluate(f"!!{PP}._echoAudio")
+          and pg.evaluate("localStorage.getItem('hv-echo')") == "0" and pg.evaluate(f"{PP}._wallIsOn()"))
+    pg.evaluate("localStorage.setItem('hv-wallpanel', '0'); localStorage.setItem('hv-echo', '0')")
+
 @gruppe("warnungen")
 def verzoegerung_heizen():
     # ---------- 1.3.1: Verzögerung gilt auch für „Fenster offen beim Heizen“ ----------

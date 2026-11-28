@@ -17,6 +17,7 @@ import { LOGO, STYLES } from "./stile.js";
 import { HvBase } from "./basis.js";
 import { KlingelMixin } from "./panel-klingel.js";
 import { WandpanelMixin } from "./panel-wandpanel.js";
+import { EchoMixin } from "./echo.js";
 import { AlarmseiteMixin } from "./panel-alarmseite.js";
 import { AnsichtenMixin } from "./panel-ansichten.js";
 import { KompaktMixin } from "./panel-kompakt.js";
@@ -31,7 +32,7 @@ import { activeLinks, energyPrefs } from "./erkennung.js";
 const ENTRY_URL = new URL("../haus-visualisierung.js", import.meta.url);
 
 class HausVisualisierungPanel extends AssistentMixin(SzenenMixin(GuteNachtMixin(AktionenMixin(EinstellungenMixin(KompaktMixin(AnsichtenMixin(
-  AlarmseiteMixin(WandpanelMixin(KlingelMixin(HvBase)))))))))) {
+  AlarmseiteMixin(EchoMixin(WandpanelMixin(KlingelMixin(HvBase))))))))))) {
   constructor() {
     super();
     this._view = null;
