@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Behoben
+- **Bildschirmschoner: Querformat-Fotos fehlten, Hochformat ohne weichgezeichneten Hintergrund.** Das Wandpanel schrieb das Foto als `background-image:url("…")` in ein `style`-Attribut, das selbst in doppelten Anführungszeichen stand. Das erste Anführungszeichen von `url("` beendete das Attribut, der Hintergrund blieb leer. Querformat-Fotos bestehen nur aus diesem Hintergrund (Vollbild mit Zoom) und blieben deshalb unsichtbar; bei Hochformat erschien nur das Bild im Rahmen. Hintergrund, Zoom-Richtung und Dauer werden jetzt direkt am Element gesetzt.
+
+### Tests
+- Bedienprüfung `wandpanel_fotos`: Vollbild und weichgezeichneter Hintergrund zeigen tatsächlich das Foto (vorher prüfte der Test nur, ob die Elemente da sind).
+
 ## 2.0.3 – 2026-11-27
 
 ### Behoben
