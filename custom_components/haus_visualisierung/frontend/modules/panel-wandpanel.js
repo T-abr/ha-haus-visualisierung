@@ -11,6 +11,7 @@ import { saverTermHTML } from "./termine.js";
 import { headerOf } from "./solar.js";
 import { outdoorTemp } from "./klima.js";
 import { applSaverHint } from "./geraete.js";
+import { isSilk } from "./echo.js";
 
 /** Liegt die Uhrzeit in der Nachtzeit „von–bis“ (HH:MM, auch über Mitternacht)? */
 const hm = (v, d) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || "")); return m ? +m[1] * 60 + +m[2] : d; };
@@ -53,7 +54,11 @@ const WandpanelMixin = (Base) => class extends Base {
         const sp = new URLSearchParams(location.search), e = sp.get("echo");
         const q = sp.get("wandpanel") ?? (e !== null && e !== "0" && e !== "false" ? "1" : null);
         if (q !== null) { v = q !== "0" && q !== "false"; localStorage.setItem("hv-wallpanel", v ? "1" : "0"); }
-        else v = localStorage.getItem("hv-wallpanel") === "1";
+        else {
+          // ohne eigene Wahl ist der Browser Silk (Echo Show) ein Wandpanel
+          const s = localStorage.getItem("hv-wallpanel");
+          v = s === null ? isSilk() : s === "1";
+        }
       } catch (err) { v = false; }
       this._wallFlag = !!v;
     }

@@ -3,7 +3,8 @@
  * - stumme Audio-Schleife (Silk bleibt im Vordergrund, solange „Musik“ läuft; startet erst nach einer Berührung),
  * - Neuladen, wenn die Verbindung zu Home Assistant über 2 Minuten fehlt oder die Seite hing, und einmal nachts.
  * Gegen Einbrennen sorgt der Bildschirmschoner (mit Fotos), daher keine eigene Pixelverschiebung.
- * Ob ein Gerät ein Echo ist, gilt je Browser (localStorage „hv-echo“, auch per Adresse ?echo=1 bzw. =0). */
+ * Ob ein Gerät ein Echo ist, gilt je Browser (localStorage „hv-echo“, auch per Adresse ?echo=1 bzw. =0). Ohne eigene
+ * Wahl gilt der Browser Silk (Amazon) als Echo: Echo- und Wandpanel-Modus sind dort von selbst an, der Schalter wirkt weiter. */
 
 const KEY = "hv-echo", RELOAD_KEY = "hv-echo-reload";
 const OFFLINE_MS = 120e3;      // so lange ohne Verbindung, dann neu laden
@@ -11,7 +12,7 @@ const STALL_MS = 60e3;         // so lange kein Takt (Seite eingefroren), dann n
 const MIN_GAP_MS = 300e3;      // höchstens alle 5 Minuten neu laden (keine Schleife bei dauerhaft fehlendem Netz)
 const NIGHT = [3 * 60 + 30, 3 * 60 + 40]; // nächtliches Neuladen 3:30–3:40 (einmal je Nacht)
 
-/** Ist dieser Browser ein Echo? ?echo=1 schaltet ein (und den Wandpanel-Modus mit), ?echo=0 aus. */
+/** Ist dieser Browser ein Echo? ?echo=1 schaltet ein (und den Wandpanel-Modus mit), ?echo=0 aus; ohne Wahl: Silk erkannt. */
 function echoFlag() {
   try {
     const q = new URLSearchParams(location.search).get("echo");
@@ -21,7 +22,8 @@ function echoFlag() {
       if (v) localStorage.setItem("hv-wallpanel", "1");
       return v;
     }
-    return localStorage.getItem(KEY) === "1";
+    const s = localStorage.getItem(KEY);
+    return s === null ? isSilk() : s === "1";
   } catch (err) { return false; }
 }
 
@@ -29,7 +31,7 @@ function echoStore(on) {
   try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (err) { /* egal */ }
 }
 
-/** Läuft der Browser auf einem Echo bzw. Fire-Gerät (Silk)? Nur für den Hinweis in den Einstellungen. */
+/** Läuft der Browser auf einem Echo bzw. Fire-Gerät (Silk)? Schaltet ohne eigene Wahl Echo- und Wandpanel-Modus ein. */
 const isSilk = () => /\bSilk\//.test(navigator.userAgent || "");
 
 /** Fast stille WAV-Datei (1 s, 8 kHz, 8 Bit) mit leisem Rauschen von ±1 Stufe: echte Stille erkennt manches System als „keine Wiedergabe“. */

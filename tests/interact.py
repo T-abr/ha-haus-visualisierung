@@ -1487,6 +1487,18 @@ def wandpanel_echo():
     check("EC: ausschalten – Schleife gestoppt, Wandpanel bleibt", not pg.evaluate(f"!!{PP}._echoAudio")
           and pg.evaluate("localStorage.getItem('hv-echo')") == "0" and pg.evaluate(f"{PP}._wallIsOn()"))
     pg.evaluate("localStorage.setItem('hv-wallpanel', '0'); localStorage.setItem('hv-echo', '0')")
+    # Erkennung über den Browser Silk (Echo Show): ohne eigene Wahl von selbst an, der Schalter gewinnt
+    silk = "Mozilla/5.0 (Linux; Android 9; AEOTH) AppleWebKit/537.36 (KHTML, like Gecko) Silk/126.1.1 like Chrome/126.0.6478.50 Safari/537.36"
+    ctx = b.new_context(viewport={"width": 1280, "height": 800}, user_agent=silk)
+    sp = ctx.new_page(); sp.on("pageerror", lambda e: errs.append(str(e)))
+    sp.goto(dense + "?view=licht"); sp.wait_for_timeout(500)
+    check("EC: Silk erkannt – Echo- und Wandpanel-Modus ohne Zutun an", sp.evaluate(f"{PP}._echoIsOn()") and sp.locator(f"{P} .wallbtn").count() == 1 and sp.evaluate(f"!!{PP}._echoAudio"))
+    sp.evaluate(f"{PP}._go('einstellungen/displays')"); sp.wait_for_timeout(400); auf(sp)
+    check("EC: Einstellungen nennen Silk", "Dieser Browser ist Silk" in sp.locator(f"{P} .echodev").inner_text())
+    sp.locator(f"{P} [data-act=s-echo-device]").click(); sp.wait_for_timeout(300)
+    sp.goto(dense + "?view=licht"); sp.wait_for_timeout(500)
+    check("EC: Silk – ausgeschaltet bleibt aus (Schalter gewinnt)", not sp.evaluate(f"{PP}._echoIsOn()") and sp.evaluate("localStorage.getItem('hv-echo')") == "0")
+    ctx.close()
 
 @gruppe("warnungen")
 def verzoegerung_heizen():

@@ -137,8 +137,8 @@ Entitäten mit dem Label `no_dboard` blendet die Visualisierung aus.
   Einstellungen → Wandpanel & Displays (oder im Assistenten). Die Integration holt die Bilder alle 6 Stunden und
   speichert sie unter `/config/haus_visualisierung/fotos`; Querformat läuft als Vollbild mit langsamem Zoom,
   Hochformat im Rahmen vor weichgezeichnetem Hintergrund, Uhr und Infos bleiben darüber. Nachts keine Fotos.
-- **Echo-Modus** für einen Amazon Echo Show im Browser Silk (Einstellungen → Wandpanel & Displays → „Dieses Gerät ist
-  ein Echo Show“ oder Adresse mit `?echo=1`): hält das Panel offen und lädt bei Hängern neu, siehe
+- **Echo-Modus** für einen Amazon Echo Show im Browser Silk (im Browser Silk von selbst an; sonst Einstellungen →
+  Wandpanel & Displays → „Dieses Gerät ist ein Echo Show“ oder Adresse mit `?echo=1`): hält das Panel offen und lädt bei Hängern neu, siehe
   [Echo Show als Wandpanel](#echo-show-als-wandpanel).
 - **Als Standard-Dashboard** (Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“): Home Assistant öffnet
   statt der Übersicht die Visualisierung, für den eigenen Benutzer, für alle oder nur auf diesem Gerät.
@@ -198,8 +198,9 @@ Einrichten:
 1. In Home Assistant einen eigenen Benutzer für den Echo anlegen (kein Administrator), damit die Anmeldung im Echo
    nicht an deinem Konto hängt.
 2. Am Echo „Alexa, öffne Silk“ sagen und die Adresse öffnen, z. B. `http://homeassistant.local:8123/haus-visualisierung?echo=1`
-   (bzw. die eigene Adresse von außen). Anmelden mit „Angemeldet bleiben“. `?echo=1` schaltet Wandpanel- und Echo-Modus
-   für diesen Browser ein; alternativ in den Einstellungen unter Wandpanel & Displays.
+   (bzw. die eigene Adresse von außen). Anmelden mit „Angemeldet bleiben“. Im Browser Silk sind Wandpanel- und
+   Echo-Modus von selbst an; abschalten bzw. von Hand einschalten in den Einstellungen unter Wandpanel & Displays
+   (die Wahl merkt sich der Browser), `?echo=1` bzw. `?echo=0` geht auch.
 3. Die Seite in Silk als Lesezeichen speichern und einmal auf den Bildschirm tippen.
 
 Silk wieder öffnen, wenn der Echo neu gestartet hat oder Alexa die Startseite zeigt (Silk öffnet die zuletzt offene Seite):

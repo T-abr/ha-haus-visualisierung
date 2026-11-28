@@ -5,10 +5,10 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ## Unveröffentlicht
 
 ### Neu
-- **Echo-Modus für Amazon Echo Show** (Einstellungen → Wandpanel & Displays → „Dieses Gerät ist ein Echo Show“ oder Adresse mit `?echo=1`, schaltet den Wandpanel-Modus mit ein): hält die Visualisierung im Browser Silk offen. Eine stumme Audio-Schleife startet mit dem ersten Tipp nach dem Laden; neu geladen wird, wenn die Verbindung zu Home Assistant über 2 Minuten fehlt, wenn die Seite hing und einmal nachts (3:30–3:40 Uhr), höchstens alle 5 Minuten. Anleitung mit Alexa-Routine und Alexa Media Player im README unter „Echo Show als Wandpanel“.
+- **Echo-Modus für Amazon Echo Show** (Einstellungen → Wandpanel & Displays → „Dieses Gerät ist ein Echo Show“ oder Adresse mit `?echo=1`, schaltet den Wandpanel-Modus mit ein; im Browser Silk von selbst an, solange am Gerät nichts anderes gewählt ist): hält die Visualisierung im Browser Silk offen. Eine stumme Audio-Schleife startet mit dem ersten Tipp nach dem Laden; neu geladen wird, wenn die Verbindung zu Home Assistant über 2 Minuten fehlt, wenn die Seite hing und einmal nachts (3:30–3:40 Uhr), höchstens alle 5 Minuten. Anleitung mit Alexa-Routine und Alexa Media Player im README unter „Echo Show als Wandpanel“.
 
 ### Tests
-- Neue Bedienprüfung `wandpanel_echo` (Einschalten je Gerät, Audio-Schleife, Neuladen bei Hänger, Verbindungsverlust und nachts, Schalter in den Einstellungen).
+- Neue Bedienprüfung `wandpanel_echo` (Einschalten je Gerät, Audio-Schleife, Neuladen bei Hänger, Verbindungsverlust und nachts, Schalter in den Einstellungen, Erkennung über Silk).
 
 ## 2.1.1 – 2026-11-28
 
