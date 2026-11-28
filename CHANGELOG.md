@@ -4,11 +4,19 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+## 2.1.0 – 2026-11-28
+
+### Geändert
+- **Bildschirmschoner mit Fotos: Anordnung wie in den Entwürfen.** Querformat (Vollbild): Uhr, Datum und Werte links unten, Müll-/Termin-Hinweis und Status rechts unten untereinander, Beschriftung oben rechts. Hochformat-Foto im Rahmen: rechts neben dem Foto Uhr und Datum, darunter Außen-, Innentemperatur und Vorhersage untereinander, dann Müll und Status nebeneinander, die Beschriftung des Fotos zuletzt. Ohne Fotos bleibt der Schoner unverändert.
+
 ### Behoben
 - **Bildschirmschoner: Querformat-Fotos fehlten, Hochformat ohne weichgezeichneten Hintergrund.** Das Wandpanel schrieb das Foto als `background-image:url("…")` in ein `style`-Attribut, das selbst in doppelten Anführungszeichen stand. Das erste Anführungszeichen von `url("` beendete das Attribut, der Hintergrund blieb leer. Querformat-Fotos bestehen nur aus diesem Hintergrund (Vollbild mit Zoom) und blieben deshalb unsichtbar; bei Hochformat erschien nur das Bild im Rahmen. Hintergrund, Zoom-Richtung und Dauer werden jetzt direkt am Element gesetzt.
 
 ### Tests
+- Bedienprüfung `wandpanel_fotos`: prüft die Anordnung von Uhr, Werten, Status und Beschriftung in Vollbild und Rahmen.
 - Bedienprüfung `wandpanel_fotos`: Vollbild und weichgezeichneter Hintergrund zeigen tatsächlich das Foto (vorher prüfte der Test nur, ob die Elemente da sind).
+### Performance
+- Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 12–14 ms, Raumseite 10 ms, Licht 20 ms, Klima 22 ms, Energie 42 ms, Alarme 6 ms; hass-Setter Übersicht 22–28 µs, Unterseiten 0,3–23 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Energie höher als bei 2.0.3 (20 ms), die übrigen Seiten gleich oder schneller – Messschwankung im Container; im Frontend änderten sich nur Wandpanel-Schoner und dessen Stile.
 
 ## 2.0.3 – 2026-11-27
 
