@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Behoben
+- **Bildschirmschoner: Infos klebten an breiten Hochformat-Fotos.** Im Rahmen durfte ein Hochformat-Foto bis 51 % der Bildschirmbreite reichen, genau dort beginnen Uhr und Infos. Das Foto ist jetzt höchstens 44 % breit (bisher 46 %) und die Infos beginnen erst bei 53 %, so bleiben immer mindestens 4 % Abstand.
+
+### Tests
+- Bedienprüfung `wandpanel_fotos`: Im Rahmen muss zwischen größtmöglichem Foto und Infos ein Mindestabstand bleiben.
+
 ## 2.1.1 – 2026-11-28
 
 ### Behoben
