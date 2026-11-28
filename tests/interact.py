@@ -1420,7 +1420,8 @@ def wandpanel_fotos():
     box = lambda sel: pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver {sel}'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }})()")
     clk, stt, cp = box(".svclock"), box(".svstat"), box(".svcap")
     check("FO: Vollbild wie Entwurf – Uhr links unten, Status rechts unten, Beschriftung oben rechts",
-          clk[0] < 100 and clk[3] > 500 and stt[0] > 900 and stt[3] > 650 and cp[0] > 900 and cp[3] < 120)
+          # Schwellen relativ zur Breite (1280): die Breite des Status-Textes hängt von der Schrift ab (CI ohne Inter: breiter)
+          clk[0] < 100 and clk[3] > 500 and stt[0] > 640 and stt[0] > clk[2] and stt[2] > 1180 and stt[3] > 650 and cp[0] > 640 and cp[2] > 1180 and cp[3] < 120)
     for _ in range(3):
         if saver().get_attribute("data-ph") == "frame":
             break
