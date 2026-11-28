@@ -196,15 +196,23 @@ const WandpanelMixin = (Base) => class extends Base {
     const img = new Image();
     const show = () => {
       if (!this._saverOn || !el.isConnected) return;
-      const fill = photoFills(ph, innerWidth, innerHeight), url = `url("${String(ph.url).replace(/"/g, "%22")}")`;
+      const fill = photoFills(ph, innerWidth, innerHeight), url = `url("${String(ph.url).replace(/["\\]/g, encodeURIComponent)}")`;
       const s = document.createElement("div");
       s.className = `svslide ${fill ? "fill" : "frame"}`;
+      // Hintergrund per DOM setzen: in einem style-Attribut per innerHTML beenden die Anführungszeichen von url("…") das Attribut
+      const bg = document.createElement("i");
+      bg.className = fill ? "kb" : "blur";
+      bg.style.backgroundImage = url;
+      s.appendChild(bg);
       if (fill) {
         // Ken-Burns: Richtung je Bild zufällig, Dauer = Anzeigedauer plus Überblendung
-        const k = Math.floor(Math.random() * 4), ox = [20, 80, 30, 70][k], oy = [30, 70, 75, 25][k];
-        s.innerHTML = `<i class="kb" style="background-image:${url};transform-origin:${ox}% ${oy}%;animation-duration:${sec + 3}s"></i>`;
+        const k = Math.floor(Math.random() * 4);
+        bg.style.transformOrigin = `${[20, 80, 30, 70][k]}% ${[30, 70, 75, 25][k]}%`;
+        bg.style.animationDuration = `${sec + 3}s`;
       } else {
-        s.innerHTML = `<i class="blur" style="background-image:${url}"></i><img src="${esc(ph.url)}" alt="">`;
+        const im = document.createElement("img");
+        im.alt = ""; im.src = ph.url;
+        s.appendChild(im);
       }
       const box = el.querySelector(".svph");
       box.appendChild(s);

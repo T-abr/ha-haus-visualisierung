@@ -1411,6 +1411,13 @@ def wandpanel_fotos():
             break
         pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
     check("FO: Vollbild zoomt langsam (Ken-Burns)", pg.locator(f"{P} .saver .svslide.fill .kb").count() >= 1)
+    bg = lambda sel: pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver .svslide {sel}'); return e ? getComputedStyle(e).backgroundImage : ''; }})()")
+    check("FO: Vollbild zeigt das Foto als Hintergrund", "image/svg" in bg(".kb"))
+    for _ in range(3):
+        if saver().get_attribute("data-ph") == "frame":
+            break
+        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+    check("FO: Hochformat vor weichgezeichnetem Hintergrund", "image/svg" in bg(".blur") and pg.locator(f"{P} .saver .svslide.frame img").count() >= 1)
     setwp("black_min: 1"); pg.evaluate(f"{PP}._saverUpdate(30, true)"); pg.wait_for_timeout(200)
     check("FO: im Schwarz-Modus keine Fotos", "ph" not in saver().get_attribute("class") and pg.locator(f"{P} .saver .svslide").count() == 0)
     setwp("black_min: 0"); pg.evaluate(f"{PP}._saverUpdate(6, true)"); pg.wait_for_timeout(500)
