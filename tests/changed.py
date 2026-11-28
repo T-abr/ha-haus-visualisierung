@@ -33,6 +33,7 @@ GRUPPEN_FUER = {
     "modules/panel-alarmseite.js": {"alarme"},
     "modules/panel-klingel.js": {"klingel"},
     "modules/panel-wandpanel.js": {"wandpanel", "wetter"},
+    "modules/echo.js": {"wandpanel"},  # Echo-Modus (Echo Show im Browser Silk)
     "modules/wetter.js": {"wetter", "wandpanel", "kopfzeile", "prognose"},
     "modules/prognose.js": {"prognose"},
     "modules/gutenacht.js": {"gutenacht"},

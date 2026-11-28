@@ -137,6 +137,9 @@ Entitäten mit dem Label `no_dboard` blendet die Visualisierung aus.
   Einstellungen → Wandpanel & Displays (oder im Assistenten). Die Integration holt die Bilder alle 6 Stunden und
   speichert sie unter `/config/haus_visualisierung/fotos`; Querformat läuft als Vollbild mit langsamem Zoom,
   Hochformat im Rahmen vor weichgezeichnetem Hintergrund, Uhr und Infos bleiben darüber. Nachts keine Fotos.
+- **Echo-Modus** für einen Amazon Echo Show im Browser Silk (im Browser Silk von selbst an; sonst Einstellungen →
+  Wandpanel & Displays → „Dieses Gerät ist ein Echo Show“ oder Adresse mit `?echo=1`): hält das Panel offen und lädt bei Hängern neu, siehe
+  [Echo Show als Wandpanel](#echo-show-als-wandpanel).
 - **Als Standard-Dashboard** (Einstellungen → Darstellung → „Beim Öffnen von Home Assistant“): Home Assistant öffnet
   statt der Übersicht die Visualisierung, für den eigenen Benutzer, für alle oder nur auf diesem Gerät.
 - **Einstellungen im Panel** mit Reitern (Räume, Alarme, Meldungen, Energie, Technik, Wandpanel & Displays, Darstellung, Prüfen & Sichern) mit Sprungleiste und Sortieren per Ziehen.
@@ -177,6 +180,47 @@ Die Visualisierung liest Kalender-Entitäten (`calendar.*`). Für den Apple-Kale
    und je Kalender Farbe und Namen wählen. Danach erscheint im Menü die Seite „Kalender“.
 
 Die CalDAV-Integration fragt iCloud etwa alle 15 Minuten ab; neue Termine erscheinen also mit etwas Verzögerung.
+
+## Echo Show als Wandpanel
+
+Beschrieben ist der Weg für den **Echo Show 15 (1. Generation, 2021)**. Eigene Apps lassen sich dort nicht installieren,
+die Visualisierung läuft daher im eingebauten Browser **Silk**. Ohne Hilfe kehrt der Echo nach einer Weile zur
+Alexa-Startseite zurück; der Echo-Modus hält Silk offen:
+
+- **Wachhalten:** eine stumme Audio-Schleife läuft im Hintergrund, solange Silk „Musik spielt“, bleibt die Seite vorn.
+  Browser erlauben Ton erst nach einer Berührung: nach jedem Laden startet der erste Tipp die Schleife (ohne Hinweis).
+- **Neuladen:** wenn die Verbindung zu Home Assistant über 2 Minuten fehlt, wenn die Seite hing (eingefroren oder im
+  Hintergrund) und einmal nachts zwischen 3:30 und 3:40 Uhr, höchstens alle 5 Minuten.
+- **Einbrennen:** dafür sorgt der Bildschirmschoner, am besten mit Fotos (siehe oben).
+
+Einrichten:
+
+1. In Home Assistant einen eigenen Benutzer für den Echo anlegen (kein Administrator), damit die Anmeldung im Echo
+   nicht an deinem Konto hängt.
+2. Am Echo „Alexa, öffne Silk“ sagen und die Adresse öffnen, z. B. `http://homeassistant.local:8123/haus-visualisierung?echo=1`
+   (bzw. die eigene Adresse von außen). Anmelden mit „Angemeldet bleiben“. Im Browser Silk sind Wandpanel- und
+   Echo-Modus von selbst an; abschalten bzw. von Hand einschalten in den Einstellungen unter Wandpanel & Displays
+   (die Wahl merkt sich der Browser), `?echo=1` bzw. `?echo=0` geht auch.
+3. Die Seite in Silk als Lesezeichen speichern und einmal auf den Bildschirm tippen.
+
+Silk wieder öffnen, wenn der Echo neu gestartet hat oder Alexa die Startseite zeigt (Silk öffnet die zuletzt offene Seite):
+
+- **Alexa-Routine** (Alexa-App → Mehr → Routinen → +): Auslöser z. B. Zeitplan täglich 6:00 Uhr oder ein Sprachbefehl
+  wie „Wandpanel“, Aktion „Benutzerdefiniert“ mit dem Text `öffne Silk`, Gerät: der Echo Show.
+- **Alexa Media Player** (HACS-Integration): Home Assistant kann denselben Befehl schicken, z. B. in einer Automation
+  beim Start von Home Assistant oder morgens:
+
+  ```yaml
+  action: media_player.play_media
+  target:
+    entity_id: media_player.echo_show_15
+  data:
+    media_content_type: custom
+    media_content_id: "öffne Silk"
+  ```
+
+Nach Updates von Amazon kann sich das Verhalten von Silk ändern; dann zuerst prüfen, ob die Seite nach dem Tipp
+weiterhin offen bleibt.
 
 ## Entwicklung
 

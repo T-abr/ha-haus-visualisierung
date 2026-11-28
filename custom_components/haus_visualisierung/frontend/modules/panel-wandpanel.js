@@ -11,6 +11,7 @@ import { saverTermHTML } from "./termine.js";
 import { headerOf } from "./solar.js";
 import { outdoorTemp } from "./klima.js";
 import { applSaverHint } from "./geraete.js";
+import { isSilk } from "./echo.js";
 
 /** Liegt die Uhrzeit in der Nachtzeit „von–bis“ (HH:MM, auch über Mitternacht)? */
 const hm = (v, d) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || "")); return m ? +m[1] * 60 + +m[2] : d; };
@@ -49,9 +50,15 @@ const WandpanelMixin = (Base) => class extends Base {
     if (this._wallFlag === undefined) {
       let v = null;
       try {
-        const q = new URLSearchParams(location.search).get("wandpanel");
+        // ?echo=1 (Echo-Modus) schaltet den Wandpanel-Modus mit ein
+        const sp = new URLSearchParams(location.search), e = sp.get("echo");
+        const q = sp.get("wandpanel") ?? (e !== null && e !== "0" && e !== "false" ? "1" : null);
         if (q !== null) { v = q !== "0" && q !== "false"; localStorage.setItem("hv-wallpanel", v ? "1" : "0"); }
-        else v = localStorage.getItem("hv-wallpanel") === "1";
+        else {
+          // ohne eigene Wahl ist der Browser Silk (Echo Show) ein Wandpanel
+          const s = localStorage.getItem("hv-wallpanel");
+          v = s === null ? isSilk() : s === "1";
+        }
       } catch (err) { v = false; }
       this._wallFlag = !!v;
     }
@@ -100,11 +107,13 @@ const WandpanelMixin = (Base) => class extends Base {
     }
     clearInterval(this._wallT);
     this._wallT = setInterval(() => this._wallTick(), 5000);
+    this._echoStart();
   }
 
   _wallStop() {
     clearInterval(this._wallT); this._wallT = 0;
     this._saverHide();
+    this._echoStop();
     if (this._wallWired) {
       window.removeEventListener("pointerdown", this._onWallAct, true);
       window.removeEventListener("click", this._onWallClick, true);
@@ -123,6 +132,7 @@ const WandpanelMixin = (Base) => class extends Base {
 
   _wallTick() {
     if (document.hidden || !this._wallIsOn() || !this._hass) return;
+    this._echoTick();
     const W = this._wallCfg(), now = Date.now();
     // Bewegungsmelder am Panel weckt wie eine Berührung
     const ws = W.wake_entity && this._hass.states[W.wake_entity];

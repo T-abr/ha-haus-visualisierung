@@ -4,10 +4,14 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Neu
+- **Echo-Modus für Amazon Echo Show** (Einstellungen → Wandpanel & Displays → „Dieses Gerät ist ein Echo Show“ oder Adresse mit `?echo=1`, schaltet den Wandpanel-Modus mit ein; im Browser Silk von selbst an, solange am Gerät nichts anderes gewählt ist): hält die Visualisierung im Browser Silk offen. Eine stumme Audio-Schleife startet mit dem ersten Tipp nach dem Laden; neu geladen wird, wenn die Verbindung zu Home Assistant über 2 Minuten fehlt, wenn die Seite hing und einmal nachts (3:30–3:40 Uhr), höchstens alle 5 Minuten. Anleitung mit Alexa-Routine und Alexa Media Player im README unter „Echo Show als Wandpanel“.
+
 ### Behoben
 - **Bildschirmschoner: Infos klebten an breiten Hochformat-Fotos.** Im Rahmen durfte ein Hochformat-Foto bis 51 % der Bildschirmbreite reichen, genau dort beginnen Uhr und Infos. Das Foto ist jetzt höchstens 44 % breit (bisher 46 %) und die Infos beginnen erst bei 53 %, so bleiben immer mindestens 4 % Abstand.
 
 ### Tests
+- Neue Bedienprüfung `wandpanel_echo` (Einschalten je Gerät, Audio-Schleife, Neuladen bei Hänger, Verbindungsverlust und nachts, Schalter in den Einstellungen, Erkennung über Silk).
 - Bedienprüfung `wandpanel_fotos`: Im Rahmen muss zwischen größtmöglichem Foto und Infos ein Mindestabstand bleiben.
 
 ## 2.1.1 – 2026-11-28

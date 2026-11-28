@@ -16,6 +16,7 @@ import { maintSettingsHTML } from "./wartung.js";
 import { assignDevice, displayInput, displaySettingsHTML } from "./wanddisplay.js";
 import { defaultSettingsHTML } from "./standard.js";
 import { pinSettingsHTML } from "./pin.js";
+import { isSilk } from "./echo.js";
 import { wxSettingsHTML } from "./wetterwarnung.js";
 import { problems, systemFile, systemSettingsHTML } from "./system.js";
 import { advanced, allLabel, markDirty, openSec, searchHTML, sectionize } from "./einstellungen.js";
@@ -260,7 +261,7 @@ const EinstellungenMixin = (Base) => class extends Base {
   }
 
   _setWall(D) {
-    const W = D.wallpanel, on = this._wallIsOn(), h = this._hass;
+    const W = D.wallpanel, on = this._wallIsOn(), echo = this._echoIsOn(), h = this._hass;
     const ids = Object.keys(h.states);
     const tg = (key, label, hint) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><label class="tgl"><input type="checkbox" data-set="wallpanel.${key}" data-bool="1" ${W[key] ? "checked" : ""}><span></span></label></div>`;
     const nm = (key, label, hint, max) => `<div class="srow"><span class="lbl">${label}${hint ? `<small>${hint}</small>` : ""}</span><input class="inp s" type="number" min="0" max="${max}" data-set="wallpanel.${key}" data-num="1" value="${W[key]}"></div>`;
@@ -269,6 +270,8 @@ const EinstellungenMixin = (Base) => class extends Base {
       <p class="hint">Für ein Tablet an der Wand: Vollbild ohne Seitenleiste, Bildschirmschoner mit Uhr, Wetter, Hausmodus und Meldungen, und nach einer Weile ohne Berührung zurück zur Startseite. Klingel, neue Alarme und ein Bewegungsmelder wecken das Panel.</p>
       <div class="srow walldev${on ? " on" : ""}"><span class="lbl">Dieses Gerät ist ein Wandpanel ${instant("sofort, nur dieser Browser")}<small>gilt ohne Speichern; alternativ Adresse mit <code>?wandpanel=1</code> öffnen (z. B. im Kiosk-Browser)</small></span>
         <button class="pbtn${on ? " primary" : ""}" data-act="s-wall-device">${icon(on ? "mdi:check" : "mdi:tablet")}${on ? "Wandpanel an" : "Als Wandpanel nutzen"}</button></div>
+      <div class="srow walldev echodev${echo ? " on" : ""}"><span class="lbl">Dieses Gerät ist ein Echo Show ${instant("sofort, nur dieser Browser")}<small>hält das Panel im Browser Silk offen: stumme Audio-Schleife (startet mit dem ersten Tipp), Neuladen bei Hängern, ohne Verbindung und nachts um 3:30; gegen Einbrennen den Bildschirmschoner mit Fotos nutzen. Alternativ Adresse mit <code>?echo=1</code> öffnen. Im Browser Silk von selbst an, bis du hier umschaltest. Anleitung im README unter „Echo Show als Wandpanel“${isSilk() ? ". <b>Dieser Browser ist Silk.</b>" : ""}</small></span>
+        <button class="pbtn${echo ? " primary" : ""}" data-act="s-echo-device">${icon(echo ? "mdi:check" : "mdi:amazon-alexa")}${echo ? "Echo-Modus an" : "Echo-Modus nutzen"}</button></div>
       <div class="fl-title">Zeiten</div>
       ${nm("saver_min", "Bildschirmschoner nach", "Minuten ohne Berührung; 0 = nie", 240)}
       ${nm("black_min", "Danach schwarz nach", "weitere Minuten; 0 = nie (schont OLED-Bildschirme)", 600)}
