@@ -948,7 +948,8 @@ details[open]>summary.shead{padding-bottom:2px}
 .svslide i{position:absolute;inset:0;background-size:cover;background-position:center}
 .svslide .kb{animation:svkb linear forwards}@keyframes svkb{from{transform:scale(1)}to{transform:scale(1.12)}}
 .svslide .blur{inset:-40px;filter:blur(36px) brightness(.5) saturate(1.2)}
-.svslide img{position:absolute;left:5vw;top:50%;transform:translateY(-50%);max-width:46vw;max-height:90vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+/* Rahmen: Bild endet spätestens bei 49vw, die Infos beginnen bei 53vw (mind. 4vw Abstand auch bei breiten Hochformaten) */
+.svslide img{position:absolute;left:5vw;top:50%;transform:translateY(-50%);max-width:44vw;max-height:90vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .saver[data-ph=fill] .svph::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(0,0,0,.72),rgba(0,0,0,.25) 38%,transparent 60%)}
 .saver.ph .svbox{position:absolute;z-index:2;padding:0;align-items:flex-start;text-align:left;text-shadow:0 1px 8px rgba(0,0,0,.5)}
 .saver.ph .svrow,.saver.ph .svcal{justify-content:flex-start}
@@ -958,7 +959,7 @@ details[open]>summary.shead{padding-bottom:2px}
 .saver[data-ph=fill] .svbox>*{grid-column:1}
 .saver[data-ph=fill] .svside{grid-column:2;grid-row:1/span 3;align-self:end;flex-direction:column;align-items:flex-end;text-align:right}
 .saver[data-ph=fill] .svside .svcal{justify-content:flex-end}
-.saver[data-ph=frame] .svbox{left:51vw;right:4vw;top:50%;transform:translateY(-50%)}
+.saver[data-ph=frame] .svbox{left:53vw;right:4vw;top:50%;transform:translateY(-50%)}
 .saver[data-ph=frame] .svclock{font-size:clamp(56px,11vw,132px)}
 .saver[data-ph=frame] .svrow{flex-direction:column;gap:12px}
 .saver[data-ph=frame] .svside{flex-wrap:wrap;align-items:center;margin-top:16px}.saver[data-ph=frame] .svhint{flex-basis:100%}

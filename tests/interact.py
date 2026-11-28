@@ -1428,6 +1428,9 @@ def wandpanel_fotos():
     clk, stt, rr, cp = box(".svclock"), box(".svstat"), box(".svrow"), box(".svcap")
     check("FO: Rahmen wie Entwurf – Infos rechts untereinander, Status darunter, Beschriftung zuletzt",
           clk[0] > 600 and len(rw) >= 2 and len(set(rw)) == 1 and stt[1] >= rr[3] and stt[0] > 600 and cp[1] >= stt[3])
+    # auch ein breites Hochformat (volle erlaubte Bildbreite) hält Abstand zu den Infos
+    gap = pg.evaluate(f"(() => {{ const R = {PP}.shadowRoot, im = R.querySelector('.saver .svslide.svframe img'), bx = R.querySelector('.saver .svbox'); return bx.getBoundingClientRect().left - (im.getBoundingClientRect().left + parseFloat(getComputedStyle(im).maxWidth)); }})()")
+    check("FO: Rahmen – Infos mit Mindestabstand zum Foto", gap >= 0.03 * 1280)
     setwp("black_min: 1"); pg.evaluate(f"{PP}._saverUpdate(30, true)"); pg.wait_for_timeout(200)
     check("FO: im Schwarz-Modus keine Fotos", "ph" not in saver().get_attribute("class") and pg.locator(f"{P} .saver .svslide").count() == 0)
     setwp("black_min: 0"); pg.evaluate(f"{PP}._saverUpdate(6, true)"); pg.wait_for_timeout(500)
