@@ -1392,6 +1392,8 @@ def wandpanel_fotos():
     PP = f"document.querySelector('{P}')"
     saver = lambda: pg.locator(f"{P} .saver")
     setwp = lambda js: pg.evaluate(f"(() => {{ const p = {PP}; p._layout = {{ ...p._layout, wallpanel: {{ ...p._wallCfg(), {js} }} }}; }})()")
+    # Nächstes Foto und warten, bis es angezeigt wird (show() setzt den Timer neu); feste Wartezeit war auf langsamen Rechnern zu knapp
+    weiter = lambda: (pg.evaluate(f"{PP}._fotoNext()"), pg.wait_for_function(f"!!{PP}._fotoTimer", timeout=5000), pg.wait_for_timeout(100))
     setwp('photos: "https://www.icloud.com/sharedalbum/#B0aTEST1234", photo_sec: 60, black_min: 0, night_dim: false')
     pg.evaluate(f"(() => {{ const p = {PP}; p._wallActive = Date.now() - 6 * 60000; p._wallTick(); }})()"); pg.wait_for_timeout(600)
     check("FO: Schoner mit Fotos", saver().count() == 1 and "ph" in saver().get_attribute("class") and pg.locator(f"{P} .saver .svslide").count() >= 1)
@@ -1399,7 +1401,7 @@ def wandpanel_fotos():
     modes = set()
     for _ in range(2):
         modes.add(saver().get_attribute("data-ph"))
-        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+        weiter()
     check("FO: Querformat als Vollbild, Hochformat im Rahmen", modes == {"fill", "frame"})
     pg.wait_for_timeout(1900)
     check("FO: alte Bilder nach dem Überblenden entfernt", pg.locator(f"{P} .saver .svslide").count() == 1)
@@ -1409,7 +1411,7 @@ def wandpanel_fotos():
     for _ in range(3):
         if saver().get_attribute("data-ph") == "fill":
             break
-        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+        weiter()
     check("FO: Vollbild zoomt langsam (Ken-Burns)", pg.locator(f"{P} .saver .svslide.svfill .kb").count() >= 1)
     voll = pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver .svslide.svfill .kb'); if (!e) return false; const r = e.getBoundingClientRect(); return r.width >= innerWidth - 1 && r.height >= innerHeight - 1; }})()")
     check("FO: Vollbild-Foto füllt den ganzen Bildschirm", voll)
@@ -1422,7 +1424,7 @@ def wandpanel_fotos():
     for _ in range(3):
         if saver().get_attribute("data-ph") == "frame":
             break
-        pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
+        weiter()
     check("FO: Hochformat vor weichgezeichnetem Hintergrund", "image/svg" in bg(".blur") and pg.locator(f"{P} .saver .svslide.svframe img").count() >= 1)
     rw = pg.evaluate(f"(() => {{ const R = {PP}.shadowRoot; return [...R.querySelectorAll('.saver .svrow > span')].map(e => Math.round(e.getBoundingClientRect().left)); }})()")
     clk, stt, rr, cp = box(".svclock"), box(".svstat"), box(".svrow"), box(".svcap")

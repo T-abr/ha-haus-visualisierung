@@ -204,9 +204,10 @@ const WandpanelMixin = (Base) => class extends Base {
     const W = this._wallCfg(), sec = Math.max(5, Number(W.photo_sec) || 30);
     const ph = list[(this._fotoIdx = ((this._fotoIdx || 0) + (this._fotoCur ? 1 : 0)) % list.length)];
     this._fotoCur = ph;
-    const img = new Image();
+    const img = new Image(), tok = (this._fotoTok = (this._fotoTok || 0) + 1);
     const show = () => {
-      if (!this._saverOn || !el.isConnected) return;
+      // nur das zuletzt angeforderte Foto zeigen: lädt ein älteres später fertig, überschriebe es sonst Lage und Beschriftung
+      if (!this._saverOn || !el.isConnected || tok !== this._fotoTok) return;
       const fill = photoFills(ph, innerWidth, innerHeight), url = `url("${String(ph.url).replace(/["\\]/g, encodeURIComponent)}")`;
       const s = document.createElement("div");
       // eigene Klassennamen: „.fill“ ist schon der Dimmbalken der Lichtkacheln (width:0) und machte das Vollbild unsichtbar
@@ -236,7 +237,7 @@ const WandpanelMixin = (Base) => class extends Base {
       this._fotoTimer = setTimeout(() => this._fotoNext(), sec * 1000);
     };
     img.onload = show;
-    img.onerror = () => { this._fotoTimer = setTimeout(() => this._fotoNext(), 3000); };
+    img.onerror = () => { if (tok === this._fotoTok) this._fotoTimer = setTimeout(() => this._fotoNext(), 3000); };
     img.src = ph.url;
   }
 

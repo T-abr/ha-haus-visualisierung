@@ -12,10 +12,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 ### Behoben
 - **Bildschirmschoner: Infos klebten an breiten Hochformat-Fotos.** Im Rahmen durfte ein Hochformat-Foto bis 51 % der Bildschirmbreite reichen, genau dort beginnen Uhr und Infos. Das Foto ist jetzt höchstens 44 % breit (bisher 46 %) und die Infos beginnen erst bei 53 %, so bleiben immer mindestens 4 % Abstand.
 - **Bildschirmschoner mit Fotos:** Beim Wechsel von einem Hochformat- zu einem Querformat-Foto glitt die Uhr-Box zwei Sekunden lang in ihre neue Lage, und die Beschriftung stand so lange mitten im Bild statt oben rechts. Das Wandern (Übergang) gilt jetzt nur noch ohne Fotos. Dadurch schlug auch die Bedienprüfung „Vollbild wie Entwurf“ zufällig fehl.
+- **Bildschirmschoner mit Fotos: verspätet geladenes Foto überschrieb das aktuelle.** Lud ein älteres Foto erst nach dem nächsten fertig, wurde es trotzdem noch eingeblendet und stellte Lage und Beschriftung zurück. Jetzt zählt nur das zuletzt angeforderte Foto.
 
 ### Tests
 - Neue Bedienprüfung `wandpanel_echo` (Einschalten je Gerät, Audio-Schleife, Neuladen bei Hänger, Verbindungsverlust und nachts, Schalter in den Einstellungen, Erkennung über Silk).
 - Bedienprüfung `wandpanel_fotos`: Im Rahmen muss zwischen größtmöglichem Foto und Infos ein Mindestabstand bleiben.
+- Bedienprüfung `wandpanel_fotos` wartet nach jedem Fotowechsel, bis das Foto angezeigt wird, statt fest 400 ms (schlug in der CI zufällig fehl).
 
 ### Performance
 - Gemessen mit `tests/perf/measure.py`: Aufbau Übersicht 14–18 ms, Raumseite 10 ms, Licht 19 ms, Klima 29 ms, Energie 16 ms, Alarme 6 ms; hass-Setter Übersicht 23–26 µs, Unterseiten 0,3–16 µs; Aktualisierer auf der Übersicht 480 pro Minute, keine Neuaufbauten. Im Rahmen der Messschwankung wie 2.1.1; im Frontend kamen der Echo-Modus (nur aktiv auf Echo-Geräten) und ein geänderter Fotorahmen im Schoner hinzu.
