@@ -4,10 +4,14 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Geändert
+- **Bildschirmschoner mit Fotos: Anordnung wie in den Entwürfen.** Querformat (Vollbild): Uhr, Datum und Werte links unten, Müll-/Termin-Hinweis und Status rechts unten untereinander, Beschriftung oben rechts. Hochformat-Foto im Rahmen: rechts neben dem Foto Uhr und Datum, darunter Außen-, Innentemperatur und Vorhersage untereinander, dann Müll und Status nebeneinander, die Beschriftung des Fotos zuletzt. Ohne Fotos bleibt der Schoner unverändert.
+
 ### Behoben
 - **Bildschirmschoner: Querformat-Fotos fehlten, Hochformat ohne weichgezeichneten Hintergrund.** Das Wandpanel schrieb das Foto als `background-image:url("…")` in ein `style`-Attribut, das selbst in doppelten Anführungszeichen stand. Das erste Anführungszeichen von `url("` beendete das Attribut, der Hintergrund blieb leer. Querformat-Fotos bestehen nur aus diesem Hintergrund (Vollbild mit Zoom) und blieben deshalb unsichtbar; bei Hochformat erschien nur das Bild im Rahmen. Hintergrund, Zoom-Richtung und Dauer werden jetzt direkt am Element gesetzt.
 
 ### Tests
+- Bedienprüfung `wandpanel_fotos`: prüft die Anordnung von Uhr, Werten, Status und Beschriftung in Vollbild und Rahmen.
 - Bedienprüfung `wandpanel_fotos`: Vollbild und weichgezeichneter Hintergrund zeigen tatsächlich das Foto (vorher prüfte der Test nur, ob die Elemente da sind).
 
 ## 2.0.3 – 2026-11-27
