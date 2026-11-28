@@ -4,6 +4,12 @@ Versionen nach Semantic Versioning. Einzige Quelle der Versionsnummer ist `manif
 
 ## Unveröffentlicht
 
+### Behoben
+- **Bildschirmschoner: Querformat-Fotos blieben schwarz.** Das Vollbild-Foto trug die Klasse `fill`, die schon der Dimmbalken der Lichtkacheln belegt (`.fill{width:0}`). Dadurch war die Fläche des Fotos null Pixel breit, zu sehen waren nur Uhr und Infos auf Schwarz. Die Fotos tragen jetzt eigene Klassen (`svfill`, `svframe`).
+
+### Tests
+- Bedienprüfung `wandpanel_fotos`: Das Vollbild-Foto muss den ganzen Bildschirm füllen (vorher prüfte der Test nur, ob es da ist).
+
 ## 2.1.0 – 2026-11-28
 
 ### Geändert

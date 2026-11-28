@@ -1410,7 +1410,9 @@ def wandpanel_fotos():
         if saver().get_attribute("data-ph") == "fill":
             break
         pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
-    check("FO: Vollbild zoomt langsam (Ken-Burns)", pg.locator(f"{P} .saver .svslide.fill .kb").count() >= 1)
+    check("FO: Vollbild zoomt langsam (Ken-Burns)", pg.locator(f"{P} .saver .svslide.svfill .kb").count() >= 1)
+    voll = pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver .svslide.svfill .kb'); if (!e) return false; const r = e.getBoundingClientRect(); return r.width >= innerWidth - 1 && r.height >= innerHeight - 1; }})()")
+    check("FO: Vollbild-Foto füllt den ganzen Bildschirm", voll)
     bg = lambda sel: pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver .svslide {sel}'); return e ? getComputedStyle(e).backgroundImage : ''; }})()")
     check("FO: Vollbild zeigt das Foto als Hintergrund", "image/svg" in bg(".kb"))
     box = lambda sel: pg.evaluate(f"(() => {{ const e = {PP}.shadowRoot.querySelector('.saver {sel}'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }})()")
@@ -1421,7 +1423,7 @@ def wandpanel_fotos():
         if saver().get_attribute("data-ph") == "frame":
             break
         pg.evaluate(f"{PP}._fotoNext()"); pg.wait_for_timeout(400)
-    check("FO: Hochformat vor weichgezeichnetem Hintergrund", "image/svg" in bg(".blur") and pg.locator(f"{P} .saver .svslide.frame img").count() >= 1)
+    check("FO: Hochformat vor weichgezeichnetem Hintergrund", "image/svg" in bg(".blur") and pg.locator(f"{P} .saver .svslide.svframe img").count() >= 1)
     rw = pg.evaluate(f"(() => {{ const R = {PP}.shadowRoot; return [...R.querySelectorAll('.saver .svrow > span')].map(e => Math.round(e.getBoundingClientRect().left)); }})()")
     clk, stt, rr, cp = box(".svclock"), box(".svstat"), box(".svrow"), box(".svcap")
     check("FO: Rahmen wie Entwurf – Infos rechts untereinander, Status darunter, Beschriftung zuletzt",

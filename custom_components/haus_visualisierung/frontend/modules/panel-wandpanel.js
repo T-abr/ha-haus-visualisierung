@@ -199,7 +199,8 @@ const WandpanelMixin = (Base) => class extends Base {
       if (!this._saverOn || !el.isConnected) return;
       const fill = photoFills(ph, innerWidth, innerHeight), url = `url("${String(ph.url).replace(/["\\]/g, encodeURIComponent)}")`;
       const s = document.createElement("div");
-      s.className = `svslide ${fill ? "fill" : "frame"}`;
+      // eigene Klassennamen: „.fill“ ist schon der Dimmbalken der Lichtkacheln (width:0) und machte das Vollbild unsichtbar
+      s.className = `svslide ${fill ? "svfill" : "svframe"}`;
       // Hintergrund per DOM setzen: in einem style-Attribut per innerHTML beenden die Anführungszeichen von url("…") das Attribut
       const bg = document.createElement("i");
       bg.className = fill ? "kb" : "blur";
